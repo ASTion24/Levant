@@ -52,7 +52,7 @@ Levant 将帮助您高效地管理宏大的世界观、追踪每个实体的动�
 
 ## 🚀 快速开始 | Quick Start
 
-本程序已打包为绿色软件，**普通用户无需安装 Python 或任何编程环境**。
+本程序已打包，**普通用户无需安装 Python 或任何编程环境**。
 
 ### 前提条件
 
@@ -144,5 +144,6 @@ Levant 的诞生离不开社区伙伴们的灵感碰撞、测试反馈与精神�
 **Levant Engine**
 *Developed by 絜矩*
 *Copyright © 2025. All Rights Reserved.*
+
 
 
