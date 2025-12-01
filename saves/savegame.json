@@ -1,0 +1,297 @@
+{
+  "global_vars": [
+    {
+      "key": "当前年份",
+      "value": "泰拉历 1098年"
+    },
+    {
+      "key": "天灾频率",
+      "value": "高危 (Rising)"
+    },
+    {
+      "key": "源石活性",
+      "value": "14.5% (↑)"
+    },
+    {
+      "key": "国际紧张度",
+      "value": "85/100"
+    }
+  ],
+  "stat_schema": [
+    {
+      "key": "leader",
+      "label": "最高领袖"
+    },
+    {
+      "key": "type",
+      "label": "政体类型"
+    },
+    {
+      "key": "policy",
+      "label": "当前国策"
+    },
+    {
+      "key": "treasury",
+      "label": "国库资金(亿)"
+    },
+    {
+      "key": "manpower",
+      "label": "动员兵力(万)"
+    },
+    {
+      "key": "stab",
+      "label": "社会稳定度"
+    },
+    {
+      "key": "tech_focus",
+      "label": "科研焦点"
+    },
+    {
+      "key": "dip_stance",
+      "label": "外交姿态"
+    }
+  ],
+  "lorebook": [
+    {
+      "keys": "源石, Originium",
+      "content": "泰拉大陆普遍使用的能源矿石，也是矿石病的致病源。拥有极高的能量密度，是现代工业与源石技艺的基础。",
+      "mode": "on"
+    },
+    {
+      "keys": "大静谧, Profound Silence",
+      "content": "伊比利亚沿海发生的神秘灾难，导致与阿戈尔的联系彻底中断，海岸线被不可名状的威胁封锁。",
+      "mode": "auto"
+    },
+    {
+      "keys": "移动城市, Mobile City",
+      "content": "泰拉文明的生存基石。为了躲避天灾，城市被建造在巨大的可移动地基上。",
+      "mode": "auto"
+    },
+    {
+      "keys": "天灾, Catastrophe",
+      "content": "泰拉世界频繁发生的自然灾害的总称，包括但不限于风暴、地震、陨石坠落等，往往伴随着高浓度的源石粉尘。",
+      "mode": "auto"
+    },
+    {
+      "keys": "感染者, Infected",
+      "content": "患有矿石病的人群。在大多数国家遭受严重的歧视与隔离，是社会动荡的主要根源。",
+      "mode": "auto"
+    }
+  ],
+  "players": [
+    {
+      "id": "p_victoria",
+      "name": "维多利亚",
+      "logo": "fa-solid fa-chess-rook",
+      "color": "#f59e0b",
+      "desc": "昔日的日不落帝国，如今因王位继承战争而四分五裂。虽然拥有泰拉最先进的移动城市技术，但伦蒂尼姆目前正处于卡兹戴尔摄政王的阴影控制之下。",
+      "stats": {
+        "leader": "摄政王特雷西斯",
+        "type": "空位期帝国",
+        "policy": "重铸荣光",
+        "treasury": "650.5",
+        "manpower": "45",
+        "stab": "暴乱(D)",
+        "tech_focus": "碎片大厦OS",
+        "dip_stance": "孤立主义"
+      }
+    },
+    {
+      "id": "p_ursus",
+      "name": "乌萨斯帝国",
+      "logo": "fa-solid fa-paw",
+      "color": "#ef4444",
+      "desc": "幅员辽阔的北境巨熊，依靠庞大的纠察队和先锋集团军维持统治。国内新旧贵族斗争极其惨烈，爱国者等老牌将领对现状深感绝望。",
+      "stats": {
+        "leader": "赫拉格",
+        "type": "军事集权",
+        "policy": "全面战争",
+        "treasury": "-250.0",
+        "manpower": "280",
+        "stab": "崩溃(F)",
+        "tech_focus": "单兵动力甲",
+        "dip_stance": "极端孤立"
+      }
+    },
+    {
+      "id": "p_laterano",
+      "name": "拉特兰教廷",
+      "logo": "fa-solid fa-cross",
+      "color": "#94a3b8",
+      "desc": "位于泰拉中部的神权国家，拥有绝对的中立权和铳械技术垄断权。其公证所的信使穿梭于泰拉各地，维护着脆弱的国际秩序。",
+      "stats": {
+        "leader": "教宗尤里西斯",
+        "type": "神权共和",
+        "policy": "万国和平",
+        "treasury": "2500.0",
+        "manpower": "0.5",
+        "stab": "神圣(S+)",
+        "tech_focus": "守护铳改型",
+        "dip_stance": "中立偏向"
+      }
+    },
+    {
+      "id": "p_columbia",
+      "name": "哥伦比亚联邦",
+      "logo": "fa-solid fa-flask",
+      "color": "#06b6d4",
+      "desc": "由拓荒者建立的新兴超级大国，推崇科学、资本与自由。正在秘密进行多项改变战争形态的实验（如莱茵生命）。",
+      "stats": {
+        "leader": "马克·麦克斯",
+        "type": "联邦共和",
+        "policy": "向西拓荒",
+        "treasury": "4200.0",
+        "manpower": "60",
+        "stab": "繁荣(A)",
+        "tech_focus": "动力装甲",
+        "dip_stance": "商业扩张"
+      }
+    },
+    {
+      "id": "p_rhodes",
+      "name": "罗德岛",
+      "logo": "fa-solid fa-chess-knight",
+      "color": "#3b82f6",
+      "desc": "致力于解决矿石病问题的制药公司，同时也是一支不可忽视的准军事力量。在各方势力间游走，寻找治愈大地的希望。",
+      "stats": {
+        "leader": "阿米娅/博士",
+        "type": "企业/方舟",
+        "policy": "救治感染者",
+        "treasury": "12.5",
+        "manpower": "0.2",
+        "stab": "团结(A+)",
+        "tech_focus": "矿石病抑制剂",
+        "dip_stance": "全境介入"
+      }
+    }
+  ],
+  "timeline": [
+    {
+      "id": 1,
+      "timeRange": "1098年 1月",
+      "events": [
+        {
+          "factionId": "p_victoria",
+          "timeStart": "1月3日",
+          "timeEnd": "1月15日",
+          "summary": "伦蒂尼姆碎片大厦启动，城防炮群进入预热阶段",
+          "content": "在漫长的沉寂之后，笼罩在伦蒂尼姆上空的阴云被更加不祥的光芒撕裂。摄政王特雷西斯无视维多利亚议会残部的激烈反对，强行划拨了200亿源石币的特别预算，用于启动名为**“碎片大厦”**的超级武器系统。\n\n据前线情报显示，碎片大厦的高能粒子流已经点亮了伦蒂尼姆的夜空，其主要打击范围理论上覆盖了半个维多利亚领土。此举被视为对周边公爵领地的最终通牒。为此，伦蒂尼姆下城区市民爆发了史无前例的大规模抗议，但旋即遭到萨卡兹雇佣兵的残酷镇压。",
+          "impacts": [
+            {
+              "targetId": "p_victoria",
+              "targetName": "维多利亚",
+              "attrKey": "treasury",
+              "attrLabel": "国库资金(亿)",
+              "change": "850.5 → 650.5"
+            },
+            {
+              "targetId": "p_victoria",
+              "targetName": "维多利亚",
+              "attrKey": "stab",
+              "attrLabel": "社会稳定度",
+              "change": "动荡(C-) → 暴乱(D)"
+            },
+            {
+              "targetId": "p_victoria",
+              "targetName": "维多利亚",
+              "attrKey": "tech_focus",
+              "attrLabel": "科研焦点",
+              "change": "城防重炮 → 碎片大厦OS"
+            }
+          ],
+          "isOpen": false
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "timeRange": "1098年 2月",
+      "events": [
+        {
+          "factionId": "p_ursus",
+          "timeStart": "2月2日",
+          "timeEnd": "2月4日",
+          "summary": "乌萨斯帝国宫廷政变：费奥多尔大帝遇刺，赫拉格将军掌权并宣战",
+          "content": "在泰拉世界进入1098年之际，北境巨熊乌萨斯帝国内部波澜骤起。一月伦蒂尼姆碎片大厦启动的余波未平，二月乌萨斯首都圣骏堡便陷入血腥风暴。\n\n一场酝酿已久的宫廷政变在暗中爆发，以**费奥多尔大帝**在冬宫遇刺身亡为标志，旧贵族与新势力之间的矛盾彻底激化。政变发生后的四十八小时内，内阁迅速宣布国家进入“一级战争状态”以稳定局势。\n\n在纷乱之中，以强硬著称的主战派将领、前阿撒兹勒诊所管理者**赫拉格**被推举为临时执政官，迅速掌握了帝国的最高权力。赫拉格上任伊始便发表了著名的《铁血宣言》，宣布帝国政策转向“全面战争”，命令全国进入总动员状态。同时，乌萨斯单方面切断了与包括炎国、卡西米尔在内的所有邻国的贸易线，将国家推向了**极端孤立**的境地。昔日内部清洗的国策被战争的号角取代，整个帝国在动荡中开始向一个庞大的战争机器转型。",
+          "impacts": [
+            {
+              "targetId": "p_ursus",
+              "targetName": "乌萨斯帝国",
+              "attrKey": "leader",
+              "attrLabel": "最高领袖",
+              "change": "费奥多尔大帝 → 赫拉格"
+            },
+            {
+              "targetId": "p_ursus",
+              "targetName": "乌萨斯帝国",
+              "attrKey": "policy",
+              "attrLabel": "当前国策",
+              "change": "内部清洗 → 全面战争"
+            },
+            {
+              "targetId": "p_ursus",
+              "targetName": "乌萨斯帝国",
+              "attrKey": "dip_stance",
+              "attrLabel": "外交姿态",
+              "change": "扩张施压 → 极端孤立"
+            },
+            {
+              "targetId": "p_ursus",
+              "targetName": "乌萨斯帝国",
+              "attrKey": "stab",
+              "attrLabel": "社会稳定度",
+              "change": "危机(E) → 崩溃(F)"
+            },
+            {
+              "targetId": "p_ursus",
+              "targetName": "乌萨斯帝国",
+              "attrKey": "treasury",
+              "attrLabel": "国库资金(亿)",
+              "change": "-120.0 → -250.0"
+            },
+            {
+              "targetId": "p_ursus",
+              "targetName": "乌萨斯帝国",
+              "attrKey": "manpower",
+              "attrLabel": "动员兵力(万)",
+              "change": "200 → 280"
+            }
+          ],
+          "isOpen": true
+        },
+        {
+          "factionId": "p_laterano",
+          "timeStart": "2月10日",
+          "timeEnd": "2月20日",
+          "summary": "拉特兰教廷对维多利亚难民实施人道主义援助，中立立场受质疑",
+          "content": "在维多利亚王位战争的持续动荡中，各地难民流离失所，人道危机日益严峻。鉴于此，**拉特兰教廷**决定打破沉默，展现其“万国和平”的国策。\n\n由教宗尤里西斯亲自下令，枢机院从教廷丰厚的国库中紧急拨款**五百亿源石币**的等价物资，用于支援维多利亚西部边境的受灾难民。同时，为确保援助物资能顺利穿过交战区，并尝试缓解地区冲突，教廷罕见地派遣了两支经验丰富的**公证人武装小队**前往前线执行“武装维和”任务。\n\n然而，这一史无前例的深度介入行动，也无可避免地引发了泰拉大陆各方势力——尤其是萨卡兹王庭——对拉特兰教廷长期以来所坚守的“绝对中立”立场的广泛质疑。有评论家指出，这标志着拉特兰正在从一个精神象征转向实质性的地缘政治参与者。",
+          "impacts": [
+            {
+              "targetId": "p_laterano",
+              "targetName": "拉特兰教廷",
+              "attrKey": "treasury",
+              "attrLabel": "国库资金(亿)",
+              "change": "3000.0 → 2500.0"
+            },
+            {
+              "targetId": "p_laterano",
+              "targetName": "拉特兰教廷",
+              "attrKey": "dip_stance",
+              "attrLabel": "外交姿态",
+              "change": "绝对中立 → 中立偏向"
+            },
+            {
+              "targetId": "p_victoria",
+              "targetName": "维多利亚",
+              "attrKey": "stab",
+              "attrLabel": "社会稳定度",
+              "change": "动荡(C-) → 不安(C)"
+            }
+          ],
+          "isOpen": true
+        }
+      ]
+    }
+  ],
+  "currentTurnPending": []
+}
