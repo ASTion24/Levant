@@ -134,7 +134,7 @@ Levant 的诞生离不开社区伙伴们的灵感碰撞、测试反馈与精神�
 
 ### 🕯️ 献给 | Dedication
 
-**尤其鸣谢：东方**
+**尤其鸣谢：拜占庭、东方**
 
 *“薪火相传，愿光指引方向。”*
 *衷心地盼望你归来。*
@@ -144,6 +144,7 @@ Levant 的诞生离不开社区伙伴们的灵感碰撞、测试反馈与精神�
 **Levant Engine**
 *Developed by 絜矩*
 *Copyright © 2025. All Rights Reserved.*
+
 
 
 
