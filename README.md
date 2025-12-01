@@ -1,6 +1,6 @@
 # LEVANT 自动化推演引擎 (Levant Engine) v1.0
 
-![Levant Logo](D:\Levant_Engine\logo.png)
+![Levant Logo](./logo.png)
 
 > **Powered by 絜矩 | 您的 AI 叙事沙盒与战略推演伙伴**
 
@@ -144,4 +144,5 @@ Levant 的诞生离不开社区伙伴们的灵感碰撞、测试反馈与精神�
 **Levant Engine**
 *Developed by 絜矩*
 *Copyright © 2025. All Rights Reserved.*
+
 
