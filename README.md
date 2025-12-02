@@ -1,4 +1,4 @@
-# LEVANT 自动化推演引擎 (Levant Engine) v1.0
+# LEVANT 自动化推演引擎 (Levant Engine) v1.01
 
 ![Levant Logo](./logo.png)
 
@@ -144,7 +144,3 @@ Levant 的诞生离不开社区伙伴们的灵感碰撞、测试反馈与精神�
 **Levant Engine**
 *Developed by 絜矩*
 *Copyright © 2025. All Rights Reserved.*
-
-
-
-
