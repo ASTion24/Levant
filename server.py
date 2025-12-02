@@ -2,7 +2,7 @@ import uvicorn
 import webbrowser
 from fastapi import FastAPI, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel
 from typing import List, Dict, Any
 import json
@@ -154,7 +154,10 @@ async def ai_generate(req: AIRequest):
     
     try:
         if req.provider.lower() == "gemini":
-            if not req.apiKey: raise HTTPException(status_code=400, detail="Missing API Key")
+            if not req.apiKey:
+                raise HTTPException(status_code=400, detail="Missing API Key")
+            # 关键一步：配置 API Key
+            genai.configure(api_key=req.apiKey)
             model = genai.GenerativeModel(model_name=req.model or "gemini-2.5-flash")
             prompt = f"{req.systemPrompt}\n\n=== CONTEXT ===\n{req.context}\n\n=== INSTRUCTION ===\n{req.userPrompt}"
             response = model.generate_content(prompt)
@@ -164,13 +167,31 @@ async def ai_generate(req: AIRequest):
         print(f"AI Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# --- 4. 托管网页 ---
+# --- 4. 托管网页 (已应用缓存失效策略) ---
 @app.get("/")
 async def read_index():
-    if os.path.exists("index.html"):
-        return FileResponse("index.html")
-    return {"error": "index.html not found"}
-
+    if not os.path.exists("index.html"):
+        return JSONResponse(status_code=404, content={"error": "index.html not found"})
+        
+    try:
+        # 1. 手动读取文件内容
+        with open("index.html", "r", encoding="utf-8") as f:
+            html_content = f.read()
+        
+        # 2. 定义缓存控制响应头
+        cache_headers = {
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0"
+        }
+        
+        # 3. 使用 Response 类返回内容和自定义头
+        return Response(content=html_content, media_type="text/html", headers=cache_headers)
+        
+    except Exception as e:
+        # 如果读取文件时发生错误，返回服务器错误
+        return JSONResponse(status_code=500, content={"error": f"Failed to read index.html: {str(e)}"})
+    
 @app.get("/logo.png")
 async def get_logo():
     if os.path.exists("logo.png"):

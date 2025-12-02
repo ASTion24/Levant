@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LEVANT 自动化推演 v1.0</title>
+    <title>LEVANT 自动化推演 v1.01</title>
     <link rel="icon" href="logo.png" type="image/png"> 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -391,7 +391,7 @@
             <div class="flex flex-col justify-center">
                 <div class="flex items-center">
                     <h1 class="font-black text-2xl text-[var(--text-main)] tracking-tight leading-none mr-2">{{ t('app_title') }}</h1>
-                    <span class="text-[var(--text-dim)] font-light text-sm font-mono-tech mr-4">v1.0</span>
+                    <span class="text-[var(--text-dim)] font-light text-sm font-mono-tech mr-4">v1.01</span>
                     <div class="h-4 w-px bg-[var(--border-dim)] mr-4"></div>
                     <div class="flex items-center gap-2 px-3 py-1 theme-rounded-sm bg-[var(--bg-badge)] border border-[var(--border-dim)] text-indigo-400 font-mono-tech text-xs font-bold tracking-wide backdrop-blur-sm mr-4 shrink-0">
                         <span>POWERED BY 絜矩 (QQ 2124223354)</span>
@@ -779,7 +779,7 @@
 
             <div class="poster-footer">
                 <div class="flex items-center gap-4"><i class="fa-solid fa-layer-group text-indigo-500"></i><span>LEVANT 自动化推演</span></div>
-                <div class="flex flex-col items-end"><span class="text-slate-500 text-sm mb-1 font-bold">POWERED BY 絜矩 (QQ 2124223354)</span><span class="text-emerald-500 font-bold">LEVANT v1.0</span></div>
+                <div class="flex flex-col items-end"><span class="text-slate-500 text-sm mb-1 font-bold">POWERED BY 絜矩 (QQ 2124223354)</span><span class="text-emerald-500 font-bold">LEVANT v1.01</span></div>
             </div>
         </div>
 
@@ -930,11 +930,26 @@
                                             <button @click="moveContextItem('history', 1)"><i class="fa-solid fa-arrow-down"></i></button>
                                         </div>
                                     </div>
-                                    <div v-if="contextConfig.includeHistory" class="p-4">
-                                        <div class="flex justify-between text-xs text-[var(--text-dim)] mb-2">
-                                            <span>Depth: {{ contextConfig.historyDepth }} Turns</span>
+                                    <div v-if="contextConfig.includeHistory" class="p-4 space-y-4">
+                                        <!-- 深记忆控制 -->
+                                        <div>
+                                            <div class="flex justify-between text-[10px] font-bold text-emerald-500 mb-1 uppercase tracking-wider">
+                                                <span>{{ t('ctx_hist_deep') }}</span>
+                                                <span>{{ contextConfig.historyDeepDepth }} Turns</span>
+                                            </div>
+                                            <input type="range" v-model.number="contextConfig.historyDeepDepth" min="0" max="5" class="w-full h-1 bg-[var(--border-dim)] theme-rounded-sm appearance-none cursor-pointer accent-emerald-500">
                                         </div>
-                                        <input type="range" v-model.number="contextConfig.historyDepth" min="0" max="20" class="w-full h-1 bg-[var(--border-dim)] theme-rounded-sm appearance-none cursor-pointer">
+                                        <!-- 浅记忆控制 -->
+                                        <div>
+                                            <div class="flex justify-between text-[10px] font-bold text-[var(--text-dim)] mb-1 uppercase tracking-wider">
+                                                <span>{{ t('ctx_hist_shallow') }}</span>
+                                                <span>{{ contextConfig.historyShallowDepth }} Turns</span>
+                                            </div>
+                                            <input type="range" v-model.number="contextConfig.historyShallowDepth" min="0" max="20" class="w-full h-1 bg-[var(--border-dim)] theme-rounded-sm appearance-none cursor-pointer">
+                                        </div>
+                                        <div class="text-[10px] text-[var(--text-dim)] italic border-t border-[var(--border-dim)] pt-2 mt-2">
+                                            Total Context: Past {{ contextConfig.historyShallowDepth + contextConfig.historyDeepDepth }} Turns <i class="fa-solid fa-arrow-right mx-1"></i> Present
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -1182,7 +1197,8 @@
                     ctx_rules: { zh: "属性规则定义", en: "Stat Rules", ja: "属性ルール" },
                     ctx_lore: { zh: "资料设定 (Lore)", en: "Lore Entries", ja: "資料設定" },
                     ctx_entities: { zh: "参与实体", en: "Active Entities", ja: "参加実体" },
-                    ctx_history: { zh: "历史回溯 (Turns)", en: "History", ja: "履歴" },
+                    ctx_hist_deep: { zh: "深层记忆 (近 - 含详情)", en: "Deep Mem (Recent - Full)", ja: "深層記憶 (詳細)" },
+                    ctx_hist_shallow: { zh: "浅层记忆 (远 - 仅摘要)", en: "Shallow Mem (Older - Summary)", ja: "浅層記憶 (要約)" },
                     settings_title: { zh: "系统配置", en: "System Settings", ja: "システム設定" },
                     settings_ui: { zh: "界面与语言", en: "Interface & Language", ja: "UIと言語" },
                     settings_theme: { zh: "界面风格", en: "Theme", ja: "テーマ" },
@@ -1221,7 +1237,8 @@
                 tempSystemPrompt: "",
                 contextConfig: {
                     includeGlobal: true, includeRules: true, includeHistory: true, includeCurrent: true,
-                    historyDepth: 3, loreList: [], playerList: [],
+                    historyDeepDepth: 1, historyShallowDepth: 3, // 修改此处：区分深浅记忆深度
+                    loreList: [], playerList: [],
                     order: ['global', 'rules', 'lore', 'players', 'history', 'current']
                 }
             }
@@ -1286,15 +1303,44 @@
                     }
                     if (type === 'history' && this.contextConfig.includeHistory) {
                         let historyContext = `【${this.t('ctx_history')}】\n`;
-                        const reversedTimeline = this.timeline.slice().reverse().slice(0, this.contextConfig.historyDepth);
-                        reversedTimeline.forEach((turn) => {
+                        
+                        // 1. 获取需要的总长度 (深 + 浅)
+                        const deepCount = this.contextConfig.historyDeepDepth;
+                        const shallowCount = this.contextConfig.historyShallowDepth;
+                        const totalNeeded = deepCount + shallowCount;
+                        
+                        // 2. 截取时间线尾部 (保持正序: 过去 -> 现在)
+                        // 例如: 总共10回合，要5回合。startIndex = 5。取 slice(5) 即 index 5,6,7,8,9
+                        const startIndex = Math.max(0, this.timeline.length - totalNeeded);
+                        const relevantTurns = this.timeline.slice(startIndex);
+                        
+                        // 3. 遍历并构建上下文
+                        relevantTurns.forEach((turn, idx) => {
+                            // 判断当前遍历的回合是否属于深层记忆
+                            // 逻辑: 如果切片长度是 5，Deep 是 2。那么索引 0,1,2 是 Shallow，3,4 是 Deep。
+                            // threshold = 5 - 2 = 3. idx >= 3 为 Deep.
+                            const thresholdIndex = relevantTurns.length - deepCount;
+                            const isDeep = idx >= thresholdIndex;
+
                             historyContext += `=== Turn ${turn.id} (${turn.timeRange}) ===\n`;
+                            
                             turn.events.forEach(e => {
+                                // 基础信息 (浅层)
                                 historyContext += `• [${e.timeStart}-${e.timeEnd}] ${e.summary}\n`;
-                                if (e.impacts.length) { historyContext += `  -> Impact: ${e.impacts.map(i => `${i.targetName}.${i.attrLabel}: ${i.change}`).join('; ')}\n`; }
+                                
+                                // 状态变更 (浅层也包含，这对推演很重要)
+                                if (e.impacts && e.impacts.length) { 
+                                    historyContext += `  -> Impact: ${e.impacts.map(i => `${i.targetName}.${i.attrLabel}: ${i.change}`).join('; ')}\n`; 
+                                }
+
+                                // 详细档案 (仅深层记忆)
+                                if (isDeep && e.content) {
+                                    historyContext += `  -> DETAILS:\n${e.content.replace(/^/gm, '    ')}\n`; // 缩进正文以区分层级
+                                }
                             });
+                            historyContext += `\n`; // 回合间空行
                         });
-                        preview += historyContext + "\n";
+                        preview += historyContext;
                     }
                     if (type === 'current' && this.contextConfig.includeCurrent) {
                         preview += `【${this.t('ctx_current')}】\n`;
