@@ -18,6 +18,7 @@ __pycache__/
 # -------------------------
 # 1. 默认忽略 saves 文件夹内的所有内容
 saves/*
+logs/
 
 # 2. 但是，不要忽略作为示例的 savegame.json 文件 (例外规则)
 !saves/savegame.json

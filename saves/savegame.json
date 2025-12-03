@@ -182,21 +182,24 @@
               "targetName": "维多利亚",
               "attrKey": "treasury",
               "attrLabel": "国库资金(亿)",
-              "change": "850.5 → 650.5"
+              "oldValue": "850.5",
+              "newValue": "650.5"
             },
             {
               "targetId": "p_victoria",
               "targetName": "维多利亚",
               "attrKey": "stab",
               "attrLabel": "社会稳定度",
-              "change": "动荡(C-) → 暴乱(D)"
+              "oldValue": "动荡(C-)",
+              "newValue": "暴乱(D)"
             },
             {
               "targetId": "p_victoria",
               "targetName": "维多利亚",
               "attrKey": "tech_focus",
               "attrLabel": "科研焦点",
-              "change": "城防重炮 → 碎片大厦OS"
+              "oldValue": "城防重炮",
+              "newValue": "碎片大厦OS"
             }
           ],
           "isOpen": false
@@ -219,42 +222,48 @@
               "targetName": "乌萨斯帝国",
               "attrKey": "leader",
               "attrLabel": "最高领袖",
-              "change": "费奥多尔大帝 → 赫拉格"
+              "oldValue": "费奥多尔大帝",
+              "newValue": "赫拉格"
             },
             {
               "targetId": "p_ursus",
               "targetName": "乌萨斯帝国",
               "attrKey": "policy",
               "attrLabel": "当前国策",
-              "change": "内部清洗 → 全面战争"
+              "oldValue": "内部清洗",
+              "newValue": "全面战争"
             },
             {
               "targetId": "p_ursus",
               "targetName": "乌萨斯帝国",
               "attrKey": "dip_stance",
               "attrLabel": "外交姿态",
-              "change": "扩张施压 → 极端孤立"
+              "oldValue": "扩张施压",
+              "newValue": "极端孤立"
             },
             {
               "targetId": "p_ursus",
               "targetName": "乌萨斯帝国",
               "attrKey": "stab",
               "attrLabel": "社会稳定度",
-              "change": "危机(E) → 崩溃(F)"
+              "oldValue": "危机(E)",
+              "newValue": "崩溃(F)"
             },
             {
               "targetId": "p_ursus",
               "targetName": "乌萨斯帝国",
               "attrKey": "treasury",
               "attrLabel": "国库资金(亿)",
-              "change": "-120.0 → -250.0"
+              "oldValue": "-120.0",
+              "newValue": "-250.0"
             },
             {
               "targetId": "p_ursus",
               "targetName": "乌萨斯帝国",
               "attrKey": "manpower",
               "attrLabel": "动员兵力(万)",
-              "change": "200 → 280"
+              "oldValue": "200",
+              "newValue": "280"
             }
           ],
           "isOpen": true
@@ -271,21 +280,24 @@
               "targetName": "拉特兰教廷",
               "attrKey": "treasury",
               "attrLabel": "国库资金(亿)",
-              "change": "3000.0 → 2500.0"
+              "oldValue": "3000.0",
+              "newValue": "2500.0"
             },
             {
               "targetId": "p_laterano",
               "targetName": "拉特兰教廷",
               "attrKey": "dip_stance",
               "attrLabel": "外交姿态",
-              "change": "绝对中立 → 中立偏向"
+              "oldValue": "绝对中立",
+              "newValue": "中立偏向"
             },
             {
               "targetId": "p_victoria",
               "targetName": "维多利亚",
               "attrKey": "stab",
               "attrLabel": "社会稳定度",
-              "change": "动荡(C-) → 不安(C)"
+              "oldValue": "动荡(C-)",
+              "newValue": "不安(C)"
             }
           ],
           "isOpen": true

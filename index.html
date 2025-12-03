@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LEVANT 自动化推演 v1.01</title>
+    <title>LEVANT 自动化推演 v1.02</title>
     <link rel="icon" href="logo.png" type="image/png"> 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -385,13 +385,13 @@
         <!-- 左侧区域 -->
         <div class="flex items-center gap-6 shrink-0">
             <div class="w-14 h-14 theme-rounded bg-[var(--bg-panel)] border border-[var(--border-dim)] flex items-center justify-center text-indigo-500 text-3xl shadow-sm shrink-0">
-                <i class="fa-solid fa-chess-rook"></i>
+                <img src="logo.png" class="w-15 h-15 object-contain">
             </div>
             
             <div class="flex flex-col justify-center">
                 <div class="flex items-center">
                     <h1 class="font-black text-2xl text-[var(--text-main)] tracking-tight leading-none mr-2">{{ t('app_title') }}</h1>
-                    <span class="text-[var(--text-dim)] font-light text-sm font-mono-tech mr-4">v1.01</span>
+                    <span class="text-[var(--text-dim)] font-light text-sm font-mono-tech mr-4">v1.02</span>
                     <div class="h-4 w-px bg-[var(--border-dim)] mr-4"></div>
                     <div class="flex items-center gap-2 px-3 py-1 theme-rounded-sm bg-[var(--bg-badge)] border border-[var(--border-dim)] text-indigo-400 font-mono-tech text-xs font-bold tracking-wide backdrop-blur-sm mr-4 shrink-0">
                         <span>POWERED BY 絜矩 (QQ 2124223354)</span>
@@ -583,7 +583,11 @@
                                             </div>
                                             <div class="font-mono-tech text-xs pl-2 text-[var(--text-main)]">
                                                 <span class="text-[var(--text-dim)] mr-1">{{ imp.attrLabel }}</span>
-                                                <span class="font-bold">{{ imp.change }}</span>
+                                                <span class="font-bold">
+                                                    {{ imp.oldValue }} 
+                                                    <i class="fa-solid fa-arrow-right text-[10px] mx-1 opacity-50"></i> 
+                                                    {{ imp.newValue }}
+                                                </span>
                                             </div>
                                         </div>
                                     </div>
@@ -613,6 +617,7 @@
             <div class="flex border-b border-[var(--border-dim)] bg-[var(--bg-sidebar)]">
                 <button @click="tabs.right = 'staging'" :class="tabs.right === 'staging' ? 'border-indigo-500 text-[var(--text-main)] bg-[var(--bg-panel)]' : 'border-transparent text-[var(--text-dim)] hover:text-[var(--text-main)]'" class="flex-1 py-4 border-b-4 font-bold transition text-sm tracking-wide"><i class="fa-solid fa-layer-group mr-2"></i> {{ t('tab_pending') }} <span v-if="pendingEvents.length" class="ml-2 bg-indigo-600 text-white text-[10px] px-2 py-0.5 rounded-full align-middle">{{pendingEvents.length}}</span></button>
                 <button @click="tabs.right = 'input'" :class="tabs.right === 'input' ? 'border-indigo-500 text-[var(--text-main)] bg-[var(--bg-panel)]' : 'border-transparent text-[var(--text-dim)] hover:text-[var(--text-main)]'" class="flex-1 py-4 border-b-4 font-bold transition text-sm tracking-wide"><i class="fa-solid fa-terminal mr-2"></i> {{ t('tab_console') }}</button>
+                <button @click="tabs.right = 'godmode'" :class="tabs.right === 'godmode' ? 'border-amber-500 text-[var(--text-main)] bg-[var(--bg-panel)]' : 'border-transparent text-[var(--text-dim)] hover:text-[var(--text-main)]'" class="flex-1 py-4 border-b-4 font-bold transition text-sm tracking-wide"><i class="fa-solid fa-hand-sparkles mr-2"></i> {{ t('tab_godmode') }}</button>
             </div>
 
             <div class="h-[30%] min-h-[250px] border-b border-[var(--border-dim)] bg-[var(--bg-header)] overflow-y-auto p-5 relative">
@@ -627,7 +632,7 @@
                             <div class="text-base font-bold text-[var(--text-main)] mb-2 truncate">{{ evt.summary }}</div>
                             <div class="flex flex-wrap gap-2">
                                 <span v-for="imp in evt.impacts" class="text-[10px] px-2 py-0.5 theme-rounded-sm border font-mono-tech" :style="{ borderColor: getFactionColor(imp.targetId), color: getFactionColor(imp.targetId), backgroundColor: getFactionColor(imp.targetId)+'10' }">
-                                    {{ imp.targetName }}: {{ imp.attrLabel }} {{ imp.change }}
+                                    {{ imp.targetName }}: {{ imp.attrLabel }} [{{ imp.oldValue }} → {{ imp.newValue }}]
                                 </span>
                             </div>
                         </div>
@@ -640,6 +645,17 @@
                 </div>
                 <div v-if="tabs.right === 'input'" class="h-full">
                     <textarea v-model="rawInput" class="w-full h-full bg-transparent border-none outline-none text-[var(--text-main)] font-mono-tech p-2 resize-none text-base leading-relaxed" :placeholder="t('placeholder_input')"></textarea>
+                </div>
+                <div v-if="tabs.right === 'godmode'" class="h-full flex flex-col p-5 relative">
+                    <div class="absolute inset-0 bg-amber-900/5 pointer-events-none"></div>
+                    <div class="text-[10px] text-amber-500 font-bold uppercase tracking-widest mb-2"><i class="fa-solid fa-database mr-1"></i> GLOBAL STATE MANIPULATION</div>
+                    <p class="text-xs text-[var(--text-dim)] mb-4 leading-relaxed">用自然语言直接修改世界状态。例如：“把所有名为‘帝国’的势力的兵力设为0”，“给所有人增加一个‘理智值’属性，默认为100”。</p>
+                    <textarea v-model="godModeInput" class="flex-1 bg-[var(--bg-input)] border border-amber-500/30 theme-rounded-sm p-3 text-sm font-mono text-[var(--text-main)] resize-none outline-none focus:border-amber-500 transition" placeholder="Enter divine command..."></textarea>
+                    <div class="mt-4 flex justify-end">
+                        <button @click="executeGodMode" :disabled="isThinking || !godModeInput.trim()" class="px-6 py-2 bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs uppercase tracking-widest theme-rounded-sm shadow-lg flex items-center gap-2 disabled:opacity-50">
+                            <i :class="isThinking ? 'fa-solid fa-circle-notch fa-spin' : 'fa-solid fa-bolt'"></i> Execute
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -697,7 +713,9 @@
                                 </div>
                                 <div class="font-mono-tech text-xs text-[var(--text-main)]">
                                     <span class="text-[var(--text-dim)] mr-1">{{ imp.attrLabel }}</span>
-                                    <span class="font-bold">{{ imp.change }}</span>
+                                    <span class="font-bold">
+                                        {{ imp.oldValue }} <i class="fa-solid fa-arrow-right mx-1"></i> {{ imp.newValue }}
+                                    </span>
                                 </div>
                                 <button @click="removeImpact(idx)" class="ml-1 text-[var(--text-dim)] hover:text-red-400"><i class="fa-solid fa-times"></i></button>
                             </div>
@@ -779,7 +797,7 @@
 
             <div class="poster-footer">
                 <div class="flex items-center gap-4"><i class="fa-solid fa-layer-group text-indigo-500"></i><span>LEVANT 自动化推演</span></div>
-                <div class="flex flex-col items-end"><span class="text-slate-500 text-sm mb-1 font-bold">POWERED BY 絜矩 (QQ 2124223354)</span><span class="text-emerald-500 font-bold">LEVANT v1.01</span></div>
+                <div class="flex flex-col items-end"><span class="text-slate-500 text-sm mb-1 font-bold">POWERED BY 絜矩 (QQ 2124223354)</span><span class="text-emerald-500 font-bold">LEVANT v1.02</span></div>
             </div>
         </div>
 
@@ -788,7 +806,7 @@
             <div class="paper-grain"></div>
             
             <div class="news-header">
-                <div class="brand">THE CHRONICLE</div>
+                <div class="brand">NEWS</div>
                 <div class="meta">
                     <span>Vol. {{ timeline.length + 1 }}</span>
                     <span>{{ posterData.timeDisplay }}</span>
@@ -1010,14 +1028,39 @@
                     </section>
                     
                     <section>
-                        <h3 class="text-xs font-bold text-indigo-400 uppercase tracking-widest mb-4 pb-2 border-b border-[var(--border-dim)]">LLM API</h3>
+                        <h3 class="text-xs font-bold text-indigo-400 uppercase tracking-widest mb-4 pb-2 border-b border-[var(--border-dim)]">LLM API Configuration</h3>
+                        
+                        <!-- 快速预设按钮 -->
+                        <div class="mb-4 flex gap-2 overflow-x-auto pb-2">
+                            <button @click="applyPreset('Gemini')" class="px-3 py-1 theme-rounded-sm border border-[var(--border-dim)] text-[10px] font-bold hover:bg-emerald-600 hover:text-white transition">Gemini</button>
+                            <button @click="applyPreset('DeepSeek')" class="px-3 py-1 theme-rounded-sm border border-[var(--border-dim)] text-[10px] font-bold hover:bg-blue-600 hover:text-white transition">DeepSeek</button>
+                            <button @click="applyPreset('Qwen')" class="px-3 py-1 theme-rounded-sm border border-[var(--border-dim)] text-[10px] font-bold hover:bg-purple-600 hover:text-white transition">Qwen</button>
+                            <button @click="applyPreset('OpenAI')" class="px-3 py-1 theme-rounded-sm border border-[var(--border-dim)] text-[10px] font-bold hover:bg-gray-600 hover:text-white transition">OpenAI</button>
+                            <button @click="applyPreset('SiliconFlow')" class="px-3 py-1 theme-rounded-sm border border-[var(--border-dim)] text-[10px] font-bold hover:bg-orange-600 hover:text-white transition">SiliconFlow</button>
+                        </div>
+
                         <div class="space-y-4">
-                            <div><label class="block text-xs font-bold text-[var(--text-dim)] mb-2">Provider</label><select v-model="settings.api.provider" class="w-full input-tech theme-rounded-sm p-3 text-sm outline-none"><option value="Gemini">Gemini (Google)</option><option value="OpenAI">OpenAI Compatible</option></select></div>
-                            <div class="grid grid-cols-2 gap-4">
-                                <div><label class="block text-xs font-bold text-[var(--text-dim)] mb-2">Base URL</label><input v-model="settings.api.baseUrl" class="w-full input-tech theme-rounded-sm p-3 text-sm outline-none"></div>
-                                <div><label class="block text-xs font-bold text-[var(--text-dim)] mb-2">Model</label><input v-model="settings.api.model" class="w-full input-tech theme-rounded-sm p-3 text-sm outline-none"></div>
+                            <div>
+                                <label class="block text-xs font-bold text-[var(--text-dim)] mb-2">Provider Type</label>
+                                <select v-model="settings.api.provider" class="w-full input-tech theme-rounded-sm p-3 text-sm outline-none">
+                                    <option value="Gemini">Gemini (Google)</option>
+                                    <option value="OpenAI">OpenAI Compatible (General)</option>
+                                </select>
                             </div>
-                            <div><label class="block text-xs font-bold text-[var(--text-dim)] mb-2">API Key</label><input v-model="settings.api.key" type="password" class="w-full input-tech theme-rounded-sm p-3 text-sm outline-none"></div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div class="col-span-2">
+                                    <label class="block text-xs font-bold text-[var(--text-dim)] mb-2">Base URL <span class="text-[10px] opacity-50">(Required for DeepSeek/Qwen)</span></label>
+                                    <input v-model="settings.api.baseUrl" placeholder="e.g. https://api.deepseek.com" class="w-full input-tech theme-rounded-sm p-3 text-sm outline-none font-mono">
+                                </div>
+                                <div class="col-span-2">
+                                    <label class="block text-xs font-bold text-[var(--text-dim)] mb-2">Model Name</label>
+                                    <input v-model="settings.api.model" placeholder="e.g. deepseek-chat" class="w-full input-tech theme-rounded-sm p-3 text-sm outline-none font-mono">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-[var(--text-dim)] mb-2">API Key</label>
+                                <input v-model="settings.api.key" type="password" class="w-full input-tech theme-rounded-sm p-3 text-sm outline-none">
+                            </div>
                         </div>
                     </section>
                     
@@ -1113,9 +1156,25 @@
         <div v-if="showScriptGenModal" class="modal-mask" @click.self="showScriptGenModal = false">
             <div class="glass-panel theme-rounded w-[600px] flex flex-col overflow-hidden text-[var(--text-main)]" @click.stop>
                 <div class="p-6 border-b border-[var(--border-dim)] bg-[var(--bg-header)] flex justify-between items-center"><h3 class="text-xl font-bold">{{ t('modal_script_gen') }}</h3><button @click="showScriptGenModal = false" class="text-[var(--text-dim)] hover:text-[var(--text-main)]"><i class="fa-solid fa-times"></i></button></div>
-                <div class="p-8 bg-[var(--bg-panel)] gap-6 flex flex-col">
-                    <p class="text-sm text-[var(--text-dim)] leading-relaxed bg-[var(--bg-badge)] p-4 theme-rounded-sm border border-[var(--border-dim)]">{{ t('msg_script_gen_hint') }}</p>
-                    <textarea v-model="scriptGenPrompt" class="w-full h-40 input-tech p-4 theme-rounded-sm text-base resize-none outline-none" placeholder="Cyberpunk... Magic..."></textarea>
+                <div class="p-8 bg-[var(--bg-panel)] gap-4 flex flex-col max-h-[70vh] overflow-y-auto">
+                    <p class="text-sm text-[var(--text-dim)] bg-[var(--bg-badge)] p-4 theme-rounded-sm border border-[var(--border-dim)]">{{ t('msg_script_gen_hint') }}</p>
+                    
+                    <!-- 文件上传区域 -->
+                    <div class="border-2 border-dashed border-[var(--border-dim)] theme-rounded-sm p-4 hover:border-indigo-500/50 transition bg-[var(--bg-badge)]">
+                        <label class="cursor-pointer flex flex-col items-center justify-center gap-2">
+                            <i class="fa-solid fa-cloud-arrow-up text-2xl text-[var(--text-dim)]"></i>
+                            <span class="text-xs font-bold text-[var(--text-dim)] uppercase tracking-wide">Upload Reference Docs / Images</span>
+                            <input type="file" multiple @change="handleScriptFiles" class="hidden" accept=".txt,.md,.json,.png,.jpg,.jpeg">
+                        </label>
+                        <div v-if="scriptAttachments.length > 0" class="mt-3 grid grid-cols-2 gap-2">
+                            <div v-for="(file, idx) in scriptAttachments" :key="idx" class="text-[10px] bg-[var(--bg-deep)] p-2 border border-[var(--border-dim)] truncate flex justify-between items-center text-[var(--text-main)]">
+                                <span><i :class="file.type.includes('image') ? 'fa-regular fa-image' : 'fa-regular fa-file-lines'" class="mr-1"></i>{{ file.name }}</span>
+                                <button @click="scriptAttachments.splice(idx,1)" class="text-red-400 hover:text-red-300"><i class="fa-solid fa-times"></i></button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <textarea v-model="scriptGenPrompt" class="w-full h-32 input-tech p-4 theme-rounded-sm text-base resize-none outline-none" placeholder="Prompt (e.g., 'A grimdark fantasy world where magic consumes the soul...')"></textarea>
                 </div>
                 <div class="p-6 border-t border-[var(--border-dim)] bg-[var(--bg-header)] flex justify-end">
                     <button @click="generateScript" :disabled="isThinking || !scriptGenPrompt.trim()" class="w-full py-4 theme-rounded-sm bg-gradient-to-r from-indigo-600 to-indigo-700 text-white font-bold text-lg tracking-widest shadow-lg hover:from-indigo-500 hover:to-indigo-600 flex justify-center items-center gap-3 disabled:opacity-50"><i :class="isThinking ? 'fa-solid fa-circle-notch fa-spin' : 'fa-solid fa-meteor'"></i> {{ isThinking ? t('status_generating') : t('btn_start_gen') }}</button>
@@ -1134,21 +1193,168 @@
             return {
                 serverConnected: false, isThinking: false, currentSaveFile: 'savegame.json',
                 showSettings: false, showFactionModal: false, showSaveLoadModal: false, showScriptGenModal: false, showContextModal: false,
-                saveFiles: [], newSaveFilename: '', scriptGenPrompt: '', rawInput: '',
+                saveFiles: [], newSaveFilename: '', 
+                
+                // --- 输入相关 ---
+                scriptGenPrompt: '', 
+                rawInput: '',
+                godModeInput: '', // [新增] 上帝模式输入
+                scriptAttachments: [], // [新增] 剧本生成附件列表
+                
                 editingFaction: { id: '', name: '', logo: '', stats: {} },
                 editingTurnId: null, editingEventId: null,
                 tabs: { left: 'players', right: 'input' },
                 
-                // --- New UI Settings ---
+                // --- UI Settings ---
                 ui: { theme: 'terminal', lang: 'zh' },
 
                 settings: {
                     api: { provider: 'Gemini', baseUrl: '', model: 'gemini-2.5-flash', key: '' },
-                    // 新增 proxy 设置
                     proxy: { enabled: true, port: '7890' }, 
-                    prompts: { 
-                        system: `你是一个高智能的战略推演引擎核心。任务：根据【世界设定】、【历史脉络】、【势力状态】和用户的【原始指令】，推演下一步事件。【核心原则】1. **连续性**：你拥有完整的历史记忆。2. **状态机**：根据【势力状态】中的当前值(Old Value)，结合剧情力度，计算出新值(New Value)。3. **数据化**：你的输出不仅仅是小说，更是数据库的更新指令。【输出格式】严格 JSON 对象（无Markdown）：{"factionId": "行动方ID (或 global)","timeStart": "推演开始时间","timeEnd": "推演结束时间","summary": "简报标题 (新闻标题风格)","content": "史实风格的详细正文 (Markdown格式)","impacts": [{ "targetId": "目标ID", "attrKey": "属性Key", "newValue": "新值" }]}`, 
-                        script_generator: `You are a JSON generation machine. Your ONLY task is to create a valid JSON object based on the user's request. DO NOT output ANY text, explanations, or markdown before or after the JSON object. Your entire response MUST be a single, valid JSON object. The JSON object MUST have these five top-level keys: "stat_schema", "lorebook", "players", "timeline", "global_vars". - "stat_schema": MUST be an array of objects. - "players": Each player object MUST have a "logo" property containing a Font Awesome 6 free icon class name (e.g., 'fa-solid fa-dragon'). - "global_vars": MUST be an array of objects like {"key": "Year", "value": "2024"}. - "timeline": MUST be an array containing at least one turn object. EXAMPLE RESPONSE STRUCTURE: { "stat_schema": [ { "key": "type", "label": "Type" } ], "global_vars": [{"key":"Era", "value":"Cyberpunk"}], "lorebook": [], "players": [ { "id": "p_1", "name": "Corp", "logo": "fa-solid fa-building", "color": "#00aaff", "desc": "Desc", "stats": { "type": "Corp" } } ], "timeline": [ { "id": 1, "timeRange": "Start", "events": [ { "factionId": "global", "timeStart": "Day 1", "timeEnd": "Day 1", "summary": "Start", "content": "Text", "impacts": [], "isOpen": false } ] } ] }`
+                    prompts: {
+                        // --- 1. 日常推演 (Daily Deduction) - v2 优化版 ---
+                        system: `你是一个辅助世界推演的 AI 引擎。
+                    【任务】
+                    根据提供的“世界上下文”和“用户指令”，推演下一个时间段发生的事件。
+
+                    【输出规则】
+                    1. **只输出纯 JSON**：不要包含 \`\`\`json 或 markdown 标记。
+                    2. **语言与篇幅**：内容描述请使用中文。**"content" 字段的详细描述必须超过 100 字**，以保证剧情的丰富性。
+                    3. **属性值多样性（关键）**：实体的属性值 (stats) 不必是纯数值。**请优先使用8个字以内的描述性文本**来表达状态，例如 "政策": "重铸荣光", "稳定度": "暴乱(D)", "外交立场": "孤立主义"。
+                    4. **状态变更逻辑**：impacts 中的 "oldValue" 必须等于当前状态，"newValue" 是推演后的新状态（可以是数值也可以是文本）。
+                    5. **属性键名**：attrKey 必须严格对应 stat_schema 中定义的 key。
+
+                    【JSON 结构模板】
+                    {
+                    "factionId": "行动方ID (如 'p1' 或 'global')",
+                    "timeStart": "开始时间",
+                    "timeEnd": "结束时间",
+                    "summary": "事件简短标题",
+                    "content": "详细剧情描述 (支持 Markdown, 必须超过 100 字)",
+                    "impacts": [
+                        {
+                        "targetId": "受影响实体ID",
+                        "targetName": "实体名称",
+                        "attrKey": "属性Key (如 'stab')",
+                        "oldValue": "戒严(C)",
+                        "newValue": "暴乱(D)"
+                        }
+                    ]
+                    }`,
+
+                        // --- 2. 剧本生成 (Script Generator) - v4 优化版 ---
+                        script_generator: `你是一个世界设定生成器，严格按照指定的 JSON 结构输出。
+
+                    【输出规则】
+                    1. **只输出纯 JSON**：你的整个回应必须是一个单一、合法的 JSON 对象，不要包含任何解释或 markdown 标记。
+                    2. **严格遵守结构**：必须严格按照下面【JSON 结构详解】中定义的字段名和数据类型进行输出。
+                    3. **语言与篇幅**：所有描述性内容请使用中文。**timeline 中每个 event 的 "content" 字段必须超过 100 字**。
+                    4. **属性值多样性（关键）**：为 players 的 stats 赋值时，**请大胆使用8个字以内的描述性文本而非纯数值**，以创造一个更生动、非量化的世界。
+
+                    【JSON 结构与范例】
+
+                    {
+                    "stat_schema": [
+                        { "key": "leader", "label": "领袖" },
+                        { "key": "policy", "label": "当前国策" },
+                        { "key": "stab", "label": "稳定度" },
+                        { "key": "dip_stance", "label": "外交立场" }
+                    ],
+                    "global_vars": [
+                        { "key": "当前年份", "value": "1096" }
+                    ],
+                    "lorebook": [
+                        {
+                        "keys": "碎片大厦,OS", 
+                        "content": "一座耸入云端的巨型建筑，其操作系统连接着整个城市...",
+                        "mode": "auto"
+                        }
+                    ],
+                    "players": [
+                        {
+                        "id": "p_kazdel",
+                        "name": "卡兹戴尔",
+                        "logo": "fa-solid fa-chess-rook",
+                        "color": "#881c1c",
+                        "desc": "一个历经战火、寻求复兴的移动城邦。",
+                        "stats": {
+                            "leader": "摄政王特雷西斯",
+                            "policy": "重铸荣光",
+                            "stab": "暴乱(D)",
+                            "dip_stance": "孤立主义"
+                        }
+                        }
+                    ],
+                    "timeline": [
+                        {
+                        "id": 1,
+                        "timeRange": "1096年 冬",
+                        "events": [
+                            {
+                            "factionId": "p_kazdel",
+                            "timeStart": "冬初",
+                            "timeEnd": "冬末",
+                            "summary": "摄政王颁布《荣光法典》",
+                            "content": "（此处应有超过 100 字的详细描述）在凛冬的寒风中，摄政王特雷西斯于王庭之内正式颁布了《荣光法典》。该法典旨在重塑卡兹戴尔的军事与社会结构，强调纪律与集体主义，要求所有公民为即将到来的“最终胜利”贡献一切。此举在军队中获得了广泛支持，但也激化了与主张维持传统的萨卡兹部族长老之间的矛盾。",
+                            "impacts": [
+                                {
+                                "targetId": "p_kazdel",
+                                "targetName": "卡兹戴尔",
+                                "attrKey": "stab",
+                                "attrLabel": "稳定度",
+                                "newValue": "紧张(C-)"
+                                }
+                            ]
+                            }
+                        ]
+                        }
+                    ]
+                    }`,
+
+                        // --- 3. 上帝模式 (God Mode) - 保持不变 ---
+                        god_mode: `你是一个智能数据库管理员，能够理解并执行对 JSON 数据的关联修改。
+
+                        【核心指令】
+                        根据用户的自然语言指令，修改当前的 JSON 状态。你必须返回一个包含所有被修改的顶层字段的 JSON 对象。
+
+                        【关键规则：关联修改】
+                        **当用户的指令涉及到添加一个新的实体属性时，你必须同时执行以下两个操作：**
+                        1.  在 \`stat_schema\` 数组中，为这个新属性添加一个新的定义对象，格式为 \`{ "key": "英文ID", "label": "中文名" }\`。
+                        2.  在 \`players\` 数组中，为每一个实体对象的 \`stats\` 添加这个新的属性键值对。
+
+                        【严重警告：数组完整性】
+                        当你修改任何数组（如 \`players\`, \`stat_schema\`）时，**必须返回该数组的完整内容**（包括未修改的项），否则数据会丢失。
+
+                        【输出规则】
+                        1. **只输出纯 JSON**。
+                        2. 返回一个包含**所有**被修改的顶层字段的 JSON 对象。例如，如果同时修改了 \`stat_schema\` 和 \`players\`，你的输出就必须是 \`{ "stat_schema": [...], "players": [...] }\`。
+
+                        【示例】
+                        用户指令: "给所有实体增加一个'忠诚度(loyalty)'属性，默认为'普通'"
+                        正确输出:
+                        {
+                        "stat_schema": [
+                            { "key": "leader", "label": "领袖" }, 
+                            // ... 其他旧属性 ...
+                            { "key": "loyalty", "label": "忠诚度" } // ★ 新增的属性定义
+                        ],
+                        "players": [
+                            { 
+                            "id": "p1", 
+                            "stats": { 
+                                "leader": "...", 
+                                "loyalty": "普通" // ★ 为 p1 新增的属性
+                            } 
+                            },
+                            { 
+                            "id": "p2", 
+                            "stats": { 
+                                "leader": "...", 
+                                "loyalty": "普通" // ★ 为 p2 新增的属性
+                            }
+                            }
+                        ]
+                        }`
                     }
                 },
                 
@@ -1175,6 +1381,7 @@
                     btn_delete: { zh: "删除", en: "Delete", ja: "削除" },
                     tab_pending: { zh: "待决", en: "Pending", ja: "保留中" },
                     tab_console: { zh: "指令台", en: "Console", ja: "コンソール" },
+                    tab_godmode: { zh: "上帝模式", en: "God Mode", ja: "神モード" }, // [新增]
                     msg_empty_queue: { zh: "队列为空", en: "Queue Empty", ja: "キューが空です" },
                     placeholder_input: { zh: "// 输入原始指令...\n例如: #Cortex 试图入侵 #NeoTokyo", en: "// Input raw command...\ne.g., #Cortex attempts to hack #NeoTokyo", ja: "// コマンドを入力...\n例: #Cortex が #NeoTokyo に侵入を試みる" },
                     ai_core_label: { zh: "AI 智能核心 (Active)", en: "AI CORE (Active)", ja: "AI コア (稼働中)" },
@@ -1220,7 +1427,7 @@
                     btn_overwrite: { zh: "覆盖", en: "Overwrite", ja: "上書" },
                     msg_no_files: { zh: "无存档", en: "No Files", ja: "ファイルなし" },
                     modal_script_gen: { zh: "AI 剧本生成", en: "AI Script Generation", ja: "AI シナリオ生成" },
-                    msg_script_gen_hint: { zh: "描述您想要的世界观。AI 将自动生成实体、设定和开场。", en: "Describe your world. AI will generate entities, lore, and intro.", ja: "世界観を記述してください。AIが実体、設定、オープニングを自動生成します。" },
+                    msg_script_gen_hint: { zh: "上传设定集、地图图片或描述您想要的世界观。AI 将自动生成实体、属性规则和开场。", en: "Upload lore, maps, or describe your world. AI will generate entities, rules, and intro.", ja: "設定資料、地図をアップロード、または世界観を記述。AIが実体、ルール、オープニングを生成します。" },
                     status_generating: { zh: "正在构建世界...", en: "Constructing World...", ja: "世界構築中..." },
                     btn_start_gen: { zh: "初始化剧本生成", en: "Initialize Generation", ja: "生成開始" }
                 },
@@ -1237,7 +1444,7 @@
                 tempSystemPrompt: "",
                 contextConfig: {
                     includeGlobal: true, includeRules: true, includeHistory: true, includeCurrent: true,
-                    historyDeepDepth: 1, historyShallowDepth: 3, // 修改此处：区分深浅记忆深度
+                    historyDeepDepth: 1, historyShallowDepth: 3, 
                     loreList: [], playerList: [],
                     order: ['global', 'rules', 'lore', 'players', 'history', 'current']
                 }
@@ -1257,7 +1464,7 @@
                 try {
                     const parsed = JSON.parse(savedSettings);
                     if(parsed.api) this.settings.api = { ...this.settings.api, ...parsed.api };
-                    if(parsed.proxy) this.settings.proxy = { ...this.settings.proxy, ...parsed.proxy }; // 新增
+                    if(parsed.proxy) this.settings.proxy = { ...this.settings.proxy, ...parsed.proxy }; 
                     if(parsed.prompts) this.settings.prompts = { ...this.settings.prompts, ...parsed.prompts };
                     if(parsed.ui) this.ui = { ...this.ui, ...parsed.ui }; 
                 } catch(e) { console.error("Failed to load settings", e); }
@@ -1303,42 +1510,28 @@
                     }
                     if (type === 'history' && this.contextConfig.includeHistory) {
                         let historyContext = `【${this.t('ctx_history')}】\n`;
-                        
-                        // 1. 获取需要的总长度 (深 + 浅)
                         const deepCount = this.contextConfig.historyDeepDepth;
                         const shallowCount = this.contextConfig.historyShallowDepth;
                         const totalNeeded = deepCount + shallowCount;
-                        
-                        // 2. 截取时间线尾部 (保持正序: 过去 -> 现在)
-                        // 例如: 总共10回合，要5回合。startIndex = 5。取 slice(5) 即 index 5,6,7,8,9
                         const startIndex = Math.max(0, this.timeline.length - totalNeeded);
                         const relevantTurns = this.timeline.slice(startIndex);
                         
-                        // 3. 遍历并构建上下文
                         relevantTurns.forEach((turn, idx) => {
-                            // 判断当前遍历的回合是否属于深层记忆
-                            // 逻辑: 如果切片长度是 5，Deep 是 2。那么索引 0,1,2 是 Shallow，3,4 是 Deep。
-                            // threshold = 5 - 2 = 3. idx >= 3 为 Deep.
                             const thresholdIndex = relevantTurns.length - deepCount;
                             const isDeep = idx >= thresholdIndex;
 
                             historyContext += `=== Turn ${turn.id} (${turn.timeRange}) ===\n`;
                             
                             turn.events.forEach(e => {
-                                // 基础信息 (浅层)
                                 historyContext += `• [${e.timeStart}-${e.timeEnd}] ${e.summary}\n`;
-                                
-                                // 状态变更 (浅层也包含，这对推演很重要)
                                 if (e.impacts && e.impacts.length) { 
-                                    historyContext += `  -> Impact: ${e.impacts.map(i => `${i.targetName}.${i.attrLabel}: ${i.change}`).join('; ')}\n`; 
+                                    historyContext += `  -> Impact: ${e.impacts.map(i => `${i.targetName}.${i.attrLabel}: ${i.oldValue} -> ${i.newValue}`).join('; ')}\n`; 
                                 }
-
-                                // 详细档案 (仅深层记忆)
                                 if (isDeep && e.content) {
-                                    historyContext += `  -> DETAILS:\n${e.content.replace(/^/gm, '    ')}\n`; // 缩进正文以区分层级
+                                    historyContext += `  -> DETAILS:\n${e.content.replace(/^/gm, '    ')}\n`; 
                                 }
                             });
-                            historyContext += `\n`; // 回合间空行
+                            historyContext += `\n`; 
                         });
                         preview += historyContext;
                     }
@@ -1350,7 +1543,7 @@
                         if (this.editor.summary) preview += `> Title Draft: ${this.editor.summary}\n`;
                         if (this.editor.content) preview += `> Content Draft: ${this.editor.content}\n`;
                         if (this.editor.impacts.length) {
-                            preview += `> Planned Impacts: ${JSON.stringify(this.editor.impacts)}\n`;
+                            preview += `> Planned Impacts: ${this.editor.impacts.map(i => `${i.targetName}.${i.attrLabel}: ${i.oldValue} -> ${i.newValue}`).join('; ')}\n`;
                         }
                         preview += `\n`;
                     }
@@ -1359,6 +1552,29 @@
             }
         },
         methods: {
+            applyPreset(type) {
+                if (type === 'Gemini') {
+                    this.settings.api.provider = 'Gemini';
+                    this.settings.api.baseUrl = ''; 
+                    this.settings.api.model = 'gemini-2.5-flash';
+                } else if (type === 'DeepSeek') {
+                    this.settings.api.provider = 'OpenAI';
+                    this.settings.api.baseUrl = 'https://api.deepseek.com';
+                    this.settings.api.model = 'deepseek-chat';
+                } else if (type === 'Qwen') {
+                    this.settings.api.provider = 'OpenAI';
+                    this.settings.api.baseUrl = 'https://dashscope.aliyuncs.com/compatible-mode/v1';
+                    this.settings.api.model = 'qwen-plus';
+                } else if (type === 'OpenAI') {
+                    this.settings.api.provider = 'OpenAI';
+                    this.settings.api.baseUrl = 'https://api.openai.com/v1';
+                    this.settings.api.model = 'gpt-4o';
+                } else if (type === 'SiliconFlow') {
+                    this.settings.api.provider = 'OpenAI';
+                    this.settings.api.baseUrl = 'https://api.siliconflow.cn/v1';
+                    this.settings.api.model = 'deepseek-ai/DeepSeek-V3';
+                }
+            },
             t(key) {
                 if (!this.translations[key]) return key;
                 return this.translations[key][this.ui.lang] || this.translations[key]['zh'];
@@ -1391,7 +1607,18 @@
                     this.posterData.content = this.renderMarkdown(data.content);
                     this.posterData.timeDisplay = this.formatTimeSpan(data);
                     if(data.impacts) {
-                        data.impacts.forEach(imp => { this.posterData.badges.push({ name: imp.targetName, icon: this.getFactionLogo(imp.targetId), color: this.getFactionColor(imp.targetId), label: imp.attrLabel, val: imp.change }); });
+                        data.impacts.forEach(imp => {
+                            // ★ 核心修复：手动拼接数值变化字符串
+                            const changeString = `${imp.oldValue} → ${imp.newValue}`;
+                            
+                            this.posterData.badges.push({
+                                name: imp.targetName,
+                                icon: this.getFactionLogo(imp.targetId),
+                                color: this.getFactionColor(imp.targetId),
+                                label: imp.attrLabel,
+                                val: changeString // ★ 使用拼接好的字符串
+                            });
+                        });
                     }
                 } else if (type === 'lore') {
                     this.posterData.title = data.keys;
@@ -1441,16 +1668,30 @@
             async saveGame(filename) {
                 if (!filename || !filename.trim()) return;
                 if (!filename.endsWith('.json')) filename += '.json';
+                
                 try {
                     const stateData = { 
-                        stat_schema: this.stat_schema, lorebook: this.lorebook, players: this.players, 
-                        timeline: this.timeline, global_vars: this.global_vars, currentTurnPending: this.pendingEvents 
+                        stat_schema: this.stat_schema, 
+                        lorebook: this.lorebook, 
+                        players: this.players, 
+                        timeline: this.timeline, 
+                        global_vars: this.global_vars, 
+                        currentTurnPending: this.pendingEvents 
                     };
+                    
                     await axios.post(`${API_BASE}/api/state?filename=${filename}`, stateData);
                     this.currentSaveFile = filename;
                     this.serverConnected = true;
-                    if (this.showSaveLoadModal) { this.openSaveLoadModal(); this.newSaveFilename = ''; }
-                } catch (e) { console.error(e); }
+                    if (this.showSaveLoadModal) { this.showSaveLoadModal = false; this.newSaveFilename = ''; }
+                } catch (e) { 
+                    console.error(e);
+                    // 修复报错显示，把对象转成字符串
+                    let errorMsg = e.message;
+                    if (e.response && e.response.data) {
+                        errorMsg = JSON.stringify(e.response.data, null, 2);
+                    }
+                    alert("Save Failed:\n" + errorMsg);
+                }
             },
             async deleteSave(filename) {
                 if (!confirm(`Delete "${filename}"?`)) return;
@@ -1504,19 +1745,52 @@
                 }
             },
 
+            // --- 新增: 处理文件上传 ---
+            async handleScriptFiles(event) {
+                const files = event.target.files;
+                if (!files.length) return;
+                for (let i = 0; i < files.length; i++) {
+                    const file = files[i];
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const rawData = e.target.result; 
+                        let payload = { name: file.name, type: file.type, data: '' };
+                        if (file.type.startsWith('image')) {
+                            payload.data = rawData.split(',')[1]; // 去除 data:image/png;base64, 前缀
+                        } else {
+                            payload.data = rawData; // 文本内容
+                        }
+                        this.scriptAttachments.push(payload);
+                    };
+                    if (file.type.startsWith('image')) {
+                        reader.readAsDataURL(file);
+                    } else {
+                        reader.readAsText(file);
+                    }
+                }
+            },
+
+            // --- 核心推演 (修改后支持 baseUrl 和 Attachments 接口) ---
             async runAiInference() {
                 this.isThinking = true;
                 const finalContext = this.finalContextPreview;
+                
                 const payload = { 
-                    provider: this.settings.api.provider, apiKey: this.settings.api.key, model: this.settings.api.model, 
-                    useProxy: this.settings.proxy.enabled, proxyPort: this.settings.proxy.port, // 新增参数
-                    systemPrompt: this.tempSystemPrompt, context: finalContext, userPrompt: `Generate next turn JSON based on Context and Action.` 
+                    provider: this.settings.api.provider, 
+                    apiKey: this.settings.api.key, 
+                    baseUrl: this.settings.api.baseUrl, 
+                    model: this.settings.api.model, 
+                    useProxy: this.settings.proxy.enabled, 
+                    proxyPort: this.settings.proxy.port, 
+                    systemPrompt: this.settings.prompts.system, 
+                    context: finalContext, 
+                    userPrompt: `Generate next turn JSON.` 
                 };
 
                 try {
                     const res = await axios.post(`${API_BASE}/api/ai/generate`, payload);
                     const match = res.data.result.match(/\{[\s\S]*\}/);
-                    if (!match) throw new Error("AI did not return a valid JSON object.");
+                    if (!match) throw new Error("AI output invalid JSON");
                     
                     const parsed = JSON.parse(match[0]);
                     this.editor.content = parsed.content || ""; 
@@ -1528,13 +1802,23 @@
                     if(parsed.impacts && Array.isArray(parsed.impacts)) {
                         this.editor.impacts = []; 
                         parsed.impacts.forEach(imp => {
-                            let target = this.players.find(p => p.id === imp.targetId) || this.players.find(p => p.name.includes(imp.targetId));
+                            let target = this.players.find(p => p.id === imp.targetId) || this.players.find(p => p.name === imp.targetName);
                             if (target) {
-                                let schema = this.stat_schema.find(s => s.key === imp.attrKey) || this.stat_schema.find(s => s.label === imp.attrKey);
-                                if (schema) {
-                                    const oldVal = target.stats[schema.key] || '?'; 
-                                    this.editor.impacts.push({ targetId: target.id, targetName: target.name, attrKey: schema.key, attrLabel: schema.label, change: `${oldVal} → ${imp.newValue}` }); 
-                                }
+                                let oldV = imp.oldValue;
+                                if (oldV === undefined || oldV === null) oldV = target.stats[imp.attrKey] || "?";
+
+                                // --- 核心修正 ---
+                                const schemaDef = this.stat_schema.find(s => s.key === imp.attrKey);
+                                const finalLabel = schemaDef ? schemaDef.label : imp.attrKey; // 如果找不到规则，就用Key作为Label
+
+                                this.editor.impacts.push({ 
+                                    targetId: target.id, 
+                                    targetName: target.name, 
+                                    attrKey: imp.attrKey, 
+                                    attrLabel: finalLabel, // ★ 总是使用我们自己查表得到的结果
+                                    oldValue: oldV, 
+                                    newValue: imp.newValue 
+                                }); 
                             }
                         });
                     }
@@ -1543,27 +1827,54 @@
                 finally { this.isThinking = false; }
             },
 
-            addImpact() { if(!this.impactForm.targetId || !this.impactForm.attrKey || this.impactForm.newValue === '') return; const t = this.players.find(p => p.id === this.impactForm.targetId); const s = this.stat_schema.find(k => k.key === this.impactForm.attrKey); const oldValue = t.stats[this.impactForm.attrKey] || '-'; this.editor.impacts.push({ targetId: this.impactForm.targetId, targetName: t.name, attrKey: this.impactForm.attrKey, attrLabel: s ? s.label : this.impactForm.attrKey, change: `${oldValue} → ${this.impactForm.newValue}` }); this.impactForm.targetId = ''; this.impactForm.attrKey = ''; this.impactForm.newValue = ""; },
+            addImpact() { 
+                if(!this.impactForm.targetId || !this.impactForm.attrKey || this.impactForm.newValue === '') return; 
+                
+                const t = this.players.find(p => p.id === this.impactForm.targetId); 
+                const s = this.stat_schema.find(k => k.key === this.impactForm.attrKey); 
+                const currentVal = t.stats[this.impactForm.attrKey] || '-'; 
+                
+                this.editor.impacts.push({ 
+                    targetId: this.impactForm.targetId, 
+                    targetName: t.name, 
+                    attrKey: this.impactForm.attrKey, 
+                    attrLabel: s ? s.label : this.impactForm.attrKey, 
+                    oldValue: currentVal,     // 直接存
+                    newValue: this.impactForm.newValue // 直接存
+                }); 
+                
+                this.impactForm.targetId = ''; 
+                this.impactForm.attrKey = ''; 
+                this.impactForm.newValue = ""; 
+            },
             removeImpact(idx) { this.editor.impacts.splice(idx, 1); },
             addToStaging() { if (!this.editor.summary) return; this.pendingEvents.push(JSON.parse(JSON.stringify({ ...this.editor, factionId: this.editor.factionId || 'global', timeStart: this.editor.timeStart || '?', timeEnd: this.editor.timeEnd || '?', content: this.editor.content || this.editor.summary, isOpen: false }))); this.editor.summary = ""; this.editor.content = ""; this.editor.impacts = []; this.editor.factionId = ""; this.editor.timeStart = ""; this.editor.timeEnd = ""; this.tabs.right = 'staging'; this.saveGame('autosave.json'); },
             loadFromStaging(i) { Object.assign(this.editor, JSON.parse(JSON.stringify(this.pendingEvents[i]))); this.pendingEvents.splice(i,1); this.tabs.right = 'input'; this.saveGame('autosave.json'); },
             commitTurn() {
                 if(this.pendingEvents.length === 0) return;
-                const range = this.pendingTurnRange || "New Turn";
+                
                 const numericIds = this.timeline.map(t => parseInt(t.id, 10)).filter(id => !isNaN(id));
                 const maxId = numericIds.length > 0 ? Math.max(...numericIds) : 0;
+                const range = this.pendingTurnRange || `Turn ${maxId + 1}`;
+                
+                // 深拷贝，断开引用
                 const newEvents = JSON.parse(JSON.stringify(this.pendingEvents));
-                this.timeline.push({ id: maxId + 1, timeRange: range, events: newEvents });
+                
+                // 更新玩家状态
                 newEvents.forEach(evt => {
                     if (evt.impacts) evt.impacts.forEach(imp => {
-                        if (imp.change && imp.change.includes('→')) {
-                            const newVal = imp.change.split('→')[1].trim();
-                            const player = this.players.find(p => p.id === imp.targetId);
-                            if (player && player.stats.hasOwnProperty(imp.attrKey)) { player.stats[imp.attrKey] = newVal; }
+                        const player = this.players.find(p => p.id === imp.targetId);
+                        if (player && imp.newValue !== undefined) { 
+                            // 直接赋值新值
+                            player.stats[imp.attrKey] = imp.newValue; 
                         }
                     });
                 });
-                this.pendingEvents = []; this.pendingTurnRange = ""; this.saveGame('autosave.json');
+
+                this.timeline.push({ id: maxId + 1, timeRange: range, events: newEvents });
+                this.pendingEvents = []; 
+                this.pendingTurnRange = ""; 
+                this.saveGame('autosave.json');
                 this.$nextTick(() => { const el = document.getElementById('timeline-scroll'); if(el) el.scrollTop = el.scrollHeight; });
             },
             deleteTurn(tIdx) { if (confirm(`Delete Turn?`)) { this.timeline.splice(tIdx, 1); this.saveGame('autosave.json'); } },
@@ -1587,24 +1898,150 @@
             closeFactionModal() { this.showFactionModal = false; },
             saveFaction() { if(!this.editingFaction.name) return; if(this.editingFaction.id) { const i = this.players.findIndex(p => p.id === this.editingFaction.id); if(i !== -1) this.players[i] = JSON.parse(JSON.stringify(this.editingFaction)); } else { this.editingFaction.id = 'p'+Date.now(); this.players.push(JSON.parse(JSON.stringify(this.editingFaction))); } this.closeFactionModal(); this.saveGame('autosave.json'); },
             deleteFaction() { const i = this.players.findIndex(p => p.id === this.editingFaction.id); if(i !== -1 && confirm("Destroy Entity?")) { this.players.splice(i,1); this.closeFactionModal(); this.saveGame('autosave.json'); } },
-            openScriptGenModal() { this.scriptGenPrompt = ''; this.showScriptGenModal = true; },
+            openScriptGenModal() { this.scriptGenPrompt = ''; this.scriptAttachments = []; this.showScriptGenModal = true; },
+            
+            // --- 查找并替换 methods 中的 generateScript ---
+
             async generateScript() {
                 if (!this.settings.api.key) return alert("API Key missing");
-                if (!confirm("This will overwrite current progress. Continue?")) return;
+                if (!confirm("确定覆盖当前进度？")) return;
                 this.isThinking = true;
+                
                 const payload = { 
-                    provider: this.settings.api.provider, apiKey: this.settings.api.key, model: this.settings.api.model, 
-                    useProxy: this.settings.proxy.enabled, proxyPort: this.settings.proxy.port, // 新增参数
-                    systemPrompt: this.settings.prompts.script_generator, context: `Req: "${this.scriptGenPrompt}"`, userPrompt: "Generate JSON." 
+                    provider: this.settings.api.provider, 
+                    apiKey: this.settings.api.key, 
+                    baseUrl: this.settings.api.baseUrl, 
+                    model: this.settings.api.model, 
+                    useProxy: this.settings.proxy.enabled, 
+                    proxyPort: this.settings.proxy.port, 
+                    systemPrompt: this.settings.prompts.script_generator, 
+                    context: `Req: "${this.scriptGenPrompt}"`, 
+                    userPrompt: "Generate JSON.",
+                    attachments: this.scriptAttachments 
                 };
+
                 try {
                     const res = await axios.post(`${API_BASE}/api/ai/generate`, payload);
                     const match = res.data.result.match(/\{[\s\S]*\}/);
-                    if (!match) throw new Error("Invalid JSON");
-                    this.applyState(JSON.parse(match[0]));
+                    if (!match) throw new Error("JSON Error");
+                    
+                    let newState = JSON.parse(match[0]);
+
+                    // --- ★★★ 核心后处理逻辑开始 ★★★ ---
+                    if (newState.timeline && newState.players) {
+                        // 1. 创建一个玩家初始状态的快速查找表 (Map)
+                        const playerStatsMap = new Map();
+                        newState.players.forEach(p => playerStatsMap.set(p.id, p.stats));
+
+                        // 2. 遍历 timeline 中的所有事件和 impact
+                        newState.timeline.forEach(turn => {
+                            turn.events?.forEach(event => {
+                                event.impacts?.forEach(impact => {
+                                    const initialStats = playerStatsMap.get(impact.targetId);
+                                    
+                                    // 3. 如果找到了对应的玩家和初始状态
+                                    if (initialStats) {
+                                        // 4. 将初始状态值赋给 oldValue
+                                        impact.oldValue = initialStats[impact.attrKey] ?? "?";
+                                    } else {
+                                        // 如果没找到，则设为 '?'
+                                        impact.oldValue = "?";
+                                    }
+
+                                    // 5. 确保 newValue 存在，防止 AI 遗漏
+                                    if (impact.newValue === undefined) {
+                                        impact.newValue = "?";
+                                    }
+                                });
+                            });
+                        });
+                    }
+                    // --- ★★★ 核心后处理逻辑结束 ★★★ ---
+
+
+                    // (保留之前的 lorebook 容错处理)
+                    if (newState.lorebook) {
+                        newState.lorebook.forEach(entry => {
+                            if (!entry.keys) {
+                                entry.keys = entry.title || entry.key || entry.name || "未命名条目";
+                            }
+                            delete entry.title;
+                        });
+                    }
+
+                    // (保留之前的 attrLabel 容错处理)
+                    if(newState.timeline) {
+                        const labelMap = {};
+                        if(newState.stat_schema) newState.stat_schema.forEach(s => labelMap[s.key] = s.label);
+                        
+                        newState.timeline.forEach(t => {
+                            if(t.events) t.events.forEach(e => {
+                                if(e.impacts) e.impacts.forEach(i => {
+                                    if(!i.attrLabel && labelMap[i.attrKey]) i.attrLabel = labelMap[i.attrKey];
+                                });
+                            });
+                        });
+                    }
+
+                    this.applyState(newState);
                     this.showScriptGenModal = false;
-                } catch(e) { alert("Generation failed: " + e.message); } 
-                finally { this.isThinking = false; }
+                    this.scriptAttachments = []; 
+                    this.scriptGenPrompt = '';
+                } catch(e) { 
+                    alert("Gen Failed: " + e.message); 
+                } finally { this.isThinking = false; }
+            },
+            // --- 新增: 上帝模式执行逻辑 ---
+            async executeGodMode() {
+                if (!this.settings.api.key) return alert("API Key missing");
+                this.isThinking = true;
+
+                const currentStateSlice = {
+                    stat_schema: this.stat_schema,
+                    global_vars: this.global_vars,
+                    players: this.players,
+                    lorebook: this.lorebook
+                };
+
+                const payload = {
+                    provider: this.settings.api.provider,
+                    apiKey: this.settings.api.key,
+                    baseUrl: this.settings.api.baseUrl,
+                    model: this.settings.api.model,
+                    useProxy: this.settings.proxy.enabled,
+                    proxyPort: this.settings.proxy.port,
+                    systemPrompt: this.settings.prompts.god_mode,
+                    context: JSON.stringify(currentStateSlice),
+                    userPrompt: `INSTRUCTION: ${this.godModeInput}`
+                };
+
+                try {
+                    const res = await axios.post(`${API_BASE}/api/ai/generate`, payload);
+                    const match = res.data.result.match(/\{[\s\S]*\}/);
+                    if (!match) throw new Error("Invalid JSON returned by AI");
+                    
+                    const changes = JSON.parse(match[0]);
+                    
+                    // --- ★★★ 核心升级：智能合并所有返回的变更 ★★★ ---
+                    // 遍历 AI 返回的所有 key
+                    for (const key in changes) {
+                        // 检查当前 Vue 实例中是否存在这个 key
+                        if (Object.prototype.hasOwnProperty.call(this, key)) {
+                            // 如果存在，就用 AI 返回的数据覆盖它
+                            this[key] = changes[key];
+                            console.log(`[God Mode] Updated '${key}' successfully.`);
+                        }
+                    }
+                    // --- 核心升级结束 ---
+
+                    this.godModeInput = '';
+                    this.saveGame('autosave.json');
+                    alert("World Reality Rewritten.");
+                } catch(e) {
+                    alert("God Mode Failed: " + e.message);
+                } finally {
+                    this.isThinking = false;
+                }
             }
         }
     }).mount('#app');

@@ -84,6 +84,8 @@ Levant 将帮助您高效地管理宏大的世界观、追踪每个实体的动�
    ```bash
    # 创建
    python -m venv venv
+   # 激活 (macOS/Linux)
+   source venv/bin/activate
    # 激活 (Windows)
    .\venv\Scripts\activate
    ```
