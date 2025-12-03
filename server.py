@@ -14,6 +14,7 @@ from logging.handlers import RotatingFileHandler
 # --- 新增依赖 ---
 import google.generativeai as genai
 from openai import OpenAI  # 用于支持 DeepSeek, Qwen, Yi, Local LLM 等
+import anthropic # 新增 Claude 支持
 
 # --- 0. 目录与日志设置 ---
 SAVES_DIR = "saves"
@@ -74,11 +75,24 @@ class LoreEntry(BaseModel):
 
 class Faction(BaseModel):
     id: str = "unknown_id"
+    parentId: str = ""  # <--- [新增] 父级实体 ID
     name: str = "Unknown Faction"
     logo: str = "fa-solid fa-users"
     color: str = "#000000"
     desc: str = ""
     stats: Dict[str, Any] = {}
+
+# --- [新增] 地图相关模型 ---
+class MapPin(BaseModel):
+    id: str
+    x: float
+    y: float
+    label: str
+    linkId: str = "" # 关联的 FactionID 或 LoreID
+
+class MapData(BaseModel):
+    image: str = "" # Base64 格式存储地图图片，保持单文件存档的便携性
+    pins: List[MapPin] = []
 
 class EventImpact(BaseModel):
     targetId: str = "?"
@@ -107,6 +121,7 @@ class GameState(BaseModel):
     stat_schema: List[StatSchema] = []
     lorebook: List[LoreEntry] = []
     players: List[Faction] = []
+    map_data: MapData = MapData() # <--- [新增] 地图数据
     timeline: List[Turn] = []
     currentTurnPending: List[TimelineEvent] = []
     
@@ -231,7 +246,7 @@ async def ai_generate(req: AIRequest):
             return {"result": result_text}
 
         # === 分支 B: OpenAI Compatible (DeepSeek, GPT-4o, etc) ===
-        elif req.provider.lower() in ["openai", "deepseek", "qwen", "custom", "siliconflow"]:
+        elif req.provider.lower() in ["openai", "deepseek", "qwen", "custom", "siliconflow", "others"]:
             if not req.apiKey: raise HTTPException(status_code=400, detail="Missing API Key")
             base_url = req.baseUrl.strip() or "https://api.openai.com/v1"
             client = OpenAI(api_key=req.apiKey, base_url=base_url)
@@ -259,15 +274,48 @@ async def ai_generate(req: AIRequest):
                 temperature=0.7,
             )
             result_text = completion.choices[0].message.content
+            logger.info(f"AI Response Generated. Raw result:\n---\n{result_text}\n---")
+            return {"result": result_text}
 
-            # --- ★ 修改 3: 同样记录 OpenAI 兼容模型的原始响应 ★ ---
+        # === 分支 C: Claude (Anthropic) ===
+        elif req.provider.lower() == "claude":
+            if not req.apiKey: raise HTTPException(status_code=400, detail="Missing API Key")
+            client = anthropic.Anthropic(api_key=req.apiKey)
+            
+            # 构建消息
+            message_content = []
+            text_payload = f"=== CONTEXT ===\n{req.context}\n\n=== INSTRUCTION ===\n{req.userPrompt}"
+            
+            # 处理附件 (Claude 支持 image/jpeg, image/png, image/gif, image/webp)
+            for att in req.attachments:
+                if "image" in att["type"]:
+                    media_type = att["type"]
+                    message_content.append({
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": media_type,
+                            "data": att["data"]
+                        }
+                    })
+                else:
+                    text_payload += f"\n\n[ATTACHMENT: {att.get('name', 'file')}]\n{att['data']}"
+
+            message_content.append({"type": "text", "text": text_payload})
+
+            message = client.messages.create(
+                model=req.model or "claude-3-5-sonnet-20240620",
+                max_tokens=4096,
+                temperature=0.7,
+                system=req.systemPrompt,
+                messages=[{"role": "user", "content": message_content}]
+            )
+            result_text = message.content[0].text
             logger.info(f"AI Response Generated. Raw result:\n---\n{result_text}\n---")
             return {"result": result_text}
 
         else:
-            # 对于不支持的 provider，也记录一下
             logger.warning(f"Unsupported provider requested: {req.provider}")
-            return {"result": "Provider not supported"}
             
     except Exception as e:
         logger.error(f"AI Generation Failed: {str(e)}", exc_info=True)
