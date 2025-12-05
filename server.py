@@ -66,6 +66,12 @@ class StatSchema(BaseModel):
     key: str = "unknown"
     label: str = "未知属性"
 
+# [新增] 定义规则集的数据模型
+class RuleSet(BaseModel):
+    id: str
+    name: str
+    fields: List[StatSchema]
+
 class LoreEntry(BaseModel):
     keys: str = "Unknown" # 以前是必填，现在给默认值
     content: str = ""
@@ -75,32 +81,60 @@ class LoreEntry(BaseModel):
 
 class Faction(BaseModel):
     id: str = "unknown_id"
-    parentId: str = ""  # <--- [新增] 父级实体 ID
+    parentId: str = ""
     name: str = "Unknown Faction"
     logo: str = "fa-solid fa-users"
     color: str = "#000000"
     desc: str = ""
+    # 【核心修复】必须有这一行，否则保存时实体的规则关联会被丢弃！
+    schemaId: str = "default" 
     stats: Dict[str, Any] = {}
 
-# --- [新增] 地图相关模型 ---
 class MapPin(BaseModel):
     id: str
     x: float
     y: float
-    label: str
-    linkId: str = "" # 关联的 FactionID 或 LoreID
+    type: str = "custom"
+    label: str = "Marker"   # 给默认值防止报错
+    linkId: str = ""
+    icon: str = "" 
+    color: str = ""
 
+class MapRegion(BaseModel):
+    id: str
+    # 几何信息
+    x: float 
+    y: float
+    w: float
+    h: float
+    centerX: float
+    centerY: float
+    maskData: str 
+    
+    # [修改] 这里必须匹配前端 saveMapPin 生成的 JSON 字段
+    type: str = "territory"
+    name: str = "New Region"  # 前端用的是 name
+    ownerId: str = ""         # 前端用的是 ownerId
+    
+    # 视觉
+    icon: str = ""
+    color: str = ""
+
+# [修改] 地图总数据
 class MapData(BaseModel):
-    image: str = "" # Base64 格式存储地图图片，保持单文件存档的便携性
+    image: str = "" 
     pins: List[MapPin] = []
+    regions: List[MapRegion] = []
 
 class EventImpact(BaseModel):
+    type: str = "STAT_CHANGE"  # [新增] 关键字段：保存事件类型
     targetId: str = "?"
     targetName: str = "?"
     attrKey: str = "?"
     attrLabel: str = "?"
     oldValue: Any = "?"
     newValue: Any = "?"
+    data: Dict[str, Any] = {}  # [新增] 用于存储 ENTITY_CREATE 等复杂数据
 
 class TimelineEvent(BaseModel):
     factionId: str = "global"
@@ -118,10 +152,14 @@ class Turn(BaseModel):
 
 class GameState(BaseModel):
     global_vars: List[GlobalVar] = []
-    stat_schema: List[StatSchema] = []
+    
+    # 【核心修复】这里必须是 rule_sets！
+    # 如果这里写的是 stat_schema，前端发来的 rule_sets 会被扔进垃圾桶
+    rule_sets: List[RuleSet] = [] 
+    
     lorebook: List[LoreEntry] = []
     players: List[Faction] = []
-    map_data: MapData = MapData() # <--- [新增] 地图数据
+    map_data: MapData = MapData()
     timeline: List[Turn] = []
     currentTurnPending: List[TimelineEvent] = []
     
@@ -164,11 +202,40 @@ def get_state(filename: str):
     try:
         with open(filepath, "r", encoding="utf-8") as f:
             data = json.load(f)
-            # 兼容性处理
-            if "schema" in data: data["stat_schema"] = data.pop("schema")
-            for player in data.get("players", []):
-                if "type" in player and "stats" in player and "type" not in player["stats"]:
-                    player["stats"]["type"] = player.pop("type")
+            
+            # --- 【强力兼容补丁】 ---
+            
+            # 1. 如果存档里有 stat_schema 但没有 rule_sets (旧存档升级)
+            if "rule_sets" not in data:
+                # 尝试找旧的字段
+                old_schema = data.get("stat_schema", data.get("schema", []))
+                
+                # 如果旧字段也没有，那就给个空的默认值
+                if not old_schema:
+                    old_schema = []
+                    
+                # 构造默认规则集
+                data["rule_sets"] = [{
+                    "id": "default",
+                    "name": "通用实体 (Default)",
+                    "fields": old_schema
+                }]
+                
+                # 给所有实体打上默认标签
+                for player in data.get("players", []):
+                    if "schemaId" not in player:
+                        player["schemaId"] = "default"
+            
+            # 2. 如果存档里有 schemaId 字段丢失的情况 (针对你刚才遇到的 bug)
+            # 强制检查所有 rule_sets 的 ID，如果没有匹配的，就回落到第一个规则集
+            if data.get("rule_sets"):
+                valid_ids = [r["id"] for r in data["rule_sets"]]
+                fallback_id = valid_ids[0] if valid_ids else "default"
+                
+                for player in data.get("players", []):
+                    if "schemaId" not in player or player["schemaId"] not in valid_ids:
+                        player["schemaId"] = fallback_id
+
             logger.info(f"Game state loaded: {filename}")
             return data
     except Exception as e:
