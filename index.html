@@ -19,6 +19,42 @@
     <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
     
     <style>
+/* --- 截图模式专用样式 --- */
+        .screenshot-overlay {
+            position: fixed;
+            pointer-events: none; /* 让鼠标事件穿透，以便 JS 计算下方的元素 */
+            z-index: 99999;
+            border: 2px solid #00ff00; /* 亮绿色边框 */
+            background-color: rgba(0, 255, 0, 0.1); /* 淡淡的绿色遮罩 */
+            box-shadow: 0 0 15px rgba(0, 255, 0, 0.5), inset 0 0 10px rgba(0, 255, 0, 0.2);
+            transition: all 0.1s ease-out; /* 平滑跟随 */
+            border-radius: 4px;
+        }
+
+        /* 截图时的提示文字 */
+        .screenshot-label {
+            position: absolute;
+            top: -24px;
+            left: 0;
+            background: #00ff00;
+            color: #000;
+            font-size: 10px;
+            font-weight: bold;
+            padding: 2px 6px;
+            border-radius: 2px;
+            font-family: monospace;
+            white-space: nowrap;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+        }
+
+        /* 截图时的全屏遮罩，防止误触其他按钮 */
+        .screenshot-backdrop {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            cursor: crosshair; /* 十字准星光标 */
+            z-index: 99998;
+            background: rgba(0,0,0,0.01); /* 几乎透明，用于捕获点击 */
+        }
         /* --- 核心配色 (CSS Variables) --- */
         :root {
             /* 默认 (Terminal / Dark) */
@@ -391,7 +427,7 @@
     <div class="app-texture"></div>
 
     <!-- 顶部导航 -->
-    <header class="h-24 bg-[var(--bg-header)] border-b border-[var(--border-dim)] flex items-center px-8 justify-between shrink-0 z-50 shadow-sm relative w-full transition-colors duration-300">
+    <header role="banner" aria-label="Top Navigation" class="h-24 bg-[var(--bg-header)] border-b border-[var(--border-dim)] flex items-center px-8 justify-between shrink-0 z-50 shadow-sm relative w-full transition-colors duration-300">
         <!-- 左侧区域 -->
         <div class="flex items-center gap-6 shrink-0">
             <div class="w-14 h-14 theme-rounded bg-[var(--bg-panel)] border border-[var(--border-dim)] flex items-center justify-center text-indigo-500 text-3xl shadow-sm shrink-0">
@@ -443,6 +479,10 @@
             <button @click="showSettings = true" class="h-11 w-11 theme-rounded-sm bg-[var(--bg-panel)] hover:bg-[var(--bg-hover)] text-[var(--text-dim)] border border-[var(--border-dim)] transition flex items-center justify-center">
                 <i class="fa-solid fa-gear text-lg"></i>
             </button>
+            <!-- [新增] 截图模式按钮 -->
+            <button @click="toggleScreenshotMode" :class="isScreenshotMode ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-[var(--bg-panel)] text-[var(--text-dim)]'" class="h-11 w-11 theme-rounded-sm hover:bg-[var(--bg-hover)] border border-[var(--border-dim)] transition flex items-center justify-center ml-2" title="截图模式">
+                <i class="fa-solid fa-crop-simple text-lg"></i>
+            </button>
             <button @click="openSaveLoadModal" class="h-11 px-6 theme-rounded-sm bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-900/40 transition font-bold text-sm border-t border-indigo-400/30 flex items-center gap-2">
                 <i class="fa-solid fa-folder-open"></i> {{ t('btn_files') }}
             </button>
@@ -452,7 +492,7 @@
     <main class="flex-1 flex overflow-hidden z-10">
         
         <!-- 左侧：资料库 -->
-        <aside class="w-1/5 min-w-[380px] bg-[var(--bg-sidebar)] border-r border-[var(--border-dim)] flex flex-col shrink-0 z-30 relative shadow-lg transition-colors duration-300">
+        <aside role="region" aria-label="Library Panel" class="w-1/5 min-w-[380px] bg-[var(--bg-sidebar)] border-r border-[var(--border-dim)] flex flex-col shrink-0 z-30 relative shadow-lg transition-colors duration-300">
             <div class="grid grid-cols-4 p-2 bg-[var(--bg-header)] border-b border-[var(--border-dim)] gap-1">
                 <button @click="tabs.left = 'world'" :class="tabs.left==='world' ? 'bg-[var(--bg-panel)] text-[var(--text-main)] border-[var(--border-dim)]' : 'text-[var(--text-dim)] border-transparent hover:text-[var(--text-main)]'" class="py-2 theme-rounded-sm border transition text-xs font-bold tracking-wide"><i class="fa-solid fa-globe mr-1"></i>{{ t('tab_world') }}</button>
                 <button @click="tabs.left = 'players'" :class="tabs.left==='players' ? 'bg-[var(--bg-panel)] text-indigo-400 border-[var(--border-dim)]' : 'text-[var(--text-dim)] border-transparent hover:text-[var(--text-main)]'" class="py-2 theme-rounded-sm border transition text-xs font-bold tracking-wide"><i class="fa-solid fa-users mr-1"></i>{{ t('tab_entity') }}</button>
@@ -465,8 +505,8 @@
                 <div class="text-xs text-[var(--text-dim)] font-bold uppercase tracking-widest mb-2 px-1">{{ t('header_global_vars') }}</div>
                 <div v-for="(gVar, idx) in global_vars" :key="idx" class="bg-[var(--bg-panel)] p-3 theme-rounded-sm border border-[var(--border-dim)] flex flex-col gap-2 group">
                     <div class="flex gap-2">
-                        <input v-model="gVar.key" @change="saveGame('autosave.json')" class="w-1/3 bg-[var(--bg-badge)] text-sm text-indigo-400 p-2 theme-rounded-sm border border-[var(--border-dim)] outline-none font-bold font-mono-tech" placeholder="变量名">
-                        <input v-model="gVar.value" @change="saveGame('autosave.json')" class="flex-1 bg-[var(--bg-badge)] text-sm text-[var(--text-main)] p-2 theme-rounded-sm border border-[var(--border-dim)] outline-none" placeholder="当前状态">
+                        <input v-model="gVar.key" @change="debouncedSave('autosave.json')" class="w-1/3 bg-[var(--bg-badge)] text-sm text-indigo-400 p-2 theme-rounded-sm border border-[var(--border-dim)] outline-none font-bold font-mono-tech" placeholder="变量名">
+                        <input v-model="gVar.value" @change="debouncedSave('autosave.json')" class="flex-1 bg-[var(--bg-badge)] text-sm text-[var(--text-main)] p-2 theme-rounded-sm border border-[var(--border-dim)] outline-none" placeholder="当前状态">
                         <button @click="global_vars.splice(idx,1); saveGame('autosave.json')" class="text-[var(--text-dim)] hover:text-red-400 px-2 opacity-0 group-hover:opacity-100 transition"><i class="fa-solid fa-trash"></i></button>
                     </div>
                 </div>
@@ -476,7 +516,7 @@
             <!-- 2. 实体列表 (已优化层级显示) -->
             <div v-if="tabs.left === 'players'" class="flex-1 overflow-y-auto p-5 space-y-4">
                  <!-- [修改] 遍历 sortedPlayers 而不是 players -->
-                 <div v-for="player in sortedPlayers" :key="player.id" @click="openFactionModal(player)" 
+                 <div role="group" :aria-label="player.name" v-for="player in sortedPlayers" :key="player.id" @click="openFactionModal(player)" 
                       class="info-card cursor-pointer theme-rounded p-5 relative group transition-all duration-300"
                       :style="{ marginLeft: (player._depth * 24) + 'px', borderLeft: player._depth > 0 ? '4px solid ' + player.color : '' }">
                     
@@ -523,13 +563,13 @@
             <div v-if="tabs.left === 'lore'" class="flex-1 overflow-y-auto p-5 space-y-4">
                 <div v-for="(entry, idx) in lorebook" :key="idx" class="info-card theme-rounded p-4">
                     <div class="flex justify-between items-center mb-3 pb-2 border-b border-[var(--border-highlight)]">
-                        <input v-model="entry.keys" @change="saveGame('autosave.json')" class="bg-transparent text-sm font-bold text-emerald-400 w-full outline-none placeholder-[var(--text-dim)]" placeholder="关键词...">
+                        <input v-model="entry.keys" @change="debouncedSave('autosave.json')" class="bg-transparent text-sm font-bold text-emerald-400 w-full outline-none placeholder-[var(--text-dim)]" placeholder="关键词...">
                         <div class="flex items-center gap-2">
                             <button @click="exportAsImage('lore', entry)" class="text-[var(--text-dim)] hover:text-emerald-400 transition text-xs" title="导出资料卡"><i class="fa-solid fa-camera"></i></button>
                             <button @click="cycleLoreMode(entry)" class="px-2 py-1 theme-rounded-sm text-[10px] font-bold uppercase tracking-wider min-w-[50px] transition-all border" :class="{'bg-emerald-900/40 text-emerald-400 border-emerald-500/40': entry.mode==='on', 'bg-indigo-900/40 text-indigo-400 border-indigo-500/40': entry.mode==='auto', 'bg-[var(--bg-badge)] text-[var(--text-dim)] border-[var(--border-dim)]': entry.mode==='off'}">{{ entry.mode === 'on' ? '常驻' : (entry.mode === 'auto' ? '自动' : '禁用') }}</button>
                         </div>
                     </div>
-                    <textarea v-model="entry.content" @change="saveGame('autosave.json')" class="w-full bg-[var(--bg-badge)] theme-rounded-sm p-3 text-xs text-[var(--text-main)] resize-none h-20 border border-[var(--border-dim)] focus:border-emerald-500/50 outline-none leading-relaxed" placeholder="设定内容..."></textarea>
+                    <textarea v-model="entry.content" @change="debouncedSave('autosave.json')" class="w-full bg-[var(--bg-badge)] theme-rounded-sm p-3 text-xs text-[var(--text-main)] resize-none h-20 border border-[var(--border-dim)] focus:border-emerald-500/50 outline-none leading-relaxed" placeholder="设定内容..."></textarea>
                     <div class="flex justify-end mt-1"><button @click="lorebook.splice(idx,1); saveGame('autosave.json')" class="text-xs text-[var(--text-dim)] hover:text-red-400"><i class="fa-solid fa-trash"></i></button></div>
                 </div>
                 <button @click="addLoreEntry" class="w-full py-3 bg-[var(--bg-panel)] hover:bg-[var(--bg-header)] text-emerald-500 theme-rounded-sm border border-[var(--border-dim)] transition font-bold text-sm"><i class="fa-solid fa-database mr-2"></i> {{ t('btn_add_lore') }}</button>
@@ -546,7 +586,7 @@
                              <button @click="deleteActiveRuleSet" class="text-[var(--text-dim)] hover:text-red-400"><i class="fa-solid fa-trash"></i></button>
                          </div>
                     </div>
-                    <select v-model="activeSchemaId" @change="saveGame('autosave.json')" class="w-full input-tech p-2 theme-rounded-sm text-xs font-bold outline-none border-l-4 border-amber-500">
+                    <select v-model="activeSchemaId" @change="debouncedSave('autosave.json')" class="w-full input-tech p-2 theme-rounded-sm text-xs font-bold outline-none border-l-4 border-amber-500">
                         <option v-for="rs in rule_sets" :key="rs.id" :value="rs.id">{{ rs.name }}</option>
                     </select>
                 </div>
@@ -559,11 +599,11 @@
                     <div v-for="(field, idx) in getActiveSchemaFields()" :key="idx" class="bg-[var(--bg-panel)] p-3 theme-rounded-sm border border-[var(--border-dim)] flex gap-3 items-center group">
                         <div class="flex-1">
                              <div class="text-[9px] text-[var(--text-dim)] uppercase mb-0.5">Label</div>
-                             <input v-model="field.label" @change="saveGame('autosave.json')" class="w-full bg-[var(--bg-badge)] text-sm text-[var(--text-main)] p-1 theme-rounded-sm outline-none border border-transparent focus:border-[var(--border-dim)]">
+                             <input v-model="field.label" @change="debouncedSave('autosave.json')" class="w-full bg-[var(--bg-badge)] text-sm text-[var(--text-main)] p-1 theme-rounded-sm outline-none border border-transparent focus:border-[var(--border-dim)]">
                         </div>
                         <div class="w-20">
                              <div class="text-[9px] text-[var(--text-dim)] uppercase mb-0.5">Key</div>
-                             <input v-model="field.key" @change="saveGame('autosave.json')" class="w-full bg-[var(--bg-badge)] text-sm text-amber-500 font-mono p-1 theme-rounded-sm outline-none text-center border border-transparent focus:border-[var(--border-dim)]">
+                             <input v-model="field.key" @change="debouncedSave('autosave.json')" class="w-full bg-[var(--bg-badge)] text-sm text-amber-500 font-mono p-1 theme-rounded-sm outline-none text-center border border-transparent focus:border-[var(--border-dim)]">
                         </div>
                         <button @click="getActiveSchemaFields().splice(idx,1); saveGame('autosave.json')" class="text-[var(--text-dim)] hover:text-red-400 px-1 opacity-0 group-hover:opacity-100 transition"><i class="fa-solid fa-times"></i></button>
                     </div>
@@ -575,7 +615,7 @@
 
         <!-- 中间：情报流 / 地图 -->
 <!-- 中间：情报流 / 地图 -->
-        <section class="w-2/5 bg-[var(--bg-deep)] flex flex-col relative border-r border-[var(--border-dim)] transition-colors duration-300">
+        <section role="main" aria-label="Main View" class="w-2/5 bg-[var(--bg-deep)] flex flex-col relative border-r border-[var(--border-dim)] transition-colors duration-300">
             
             <!-- [新增 1] 视图切换栏 (这是关键，没有它你无法进入地图模式) -->
             <div class="h-12 bg-[var(--bg-header)] border-b border-[var(--border-dim)] flex shrink-0 z-20">
@@ -592,12 +632,22 @@
             
             <!-- [修改 2] 原 Timeline 容器 (增加了 v-show="!showMap") -->
             <div v-show="!showMap" id="timeline-scroll" class="flex-1 overflow-y-auto p-10 pr-4 scroll-smooth z-10">
+                
+                <!-- [优化] 加载更多按钮 -->
+                <div v-if="timeline.length > timelinePageSize && !showAllTimeline" class="flex justify-center mb-10">
+                    <button @click="showAllTimeline = true" class="px-6 py-2 bg-[var(--bg-panel)] border border-[var(--border-dim)] text-[var(--text-dim)] hover:text-[var(--text-main)] theme-rounded-sm text-xs font-bold uppercase tracking-widest transition">
+                        <i class="fa-solid fa-clock-rotate-left mr-2"></i> Show All History ({{ timeline.length }} Turns)
+                    </button>
+                </div>
+
                 <div v-if="timeline.length === 0" class="h-full flex flex-col items-center justify-center text-[var(--text-dim)] opacity-50">
                     <i class="fa-regular fa-file-lines text-6xl mb-6"></i>
                     <p class="text-lg font-mono-tech font-bold uppercase tracking-widest">{{ t('msg_no_events') }}</p>
                 </div>
 
-                <div v-for="(turn, tIdx) in timeline" :key="tIdx" class="mb-20">
+                <!-- [优化] 遍历 visibleTimeline 而不是 timeline -->
+                <!-- 注意：key 必须保持唯一，这里假设 turn.id 是唯一的 -->
+                <div v-for="(turn, tIdx) in visibleTimeline" :key="turn.id" class="mb-20">
                     <div class="flex items-center gap-6 mb-8 group/turn">
                         <div class="h-px bg-[var(--border-dim)] flex-1"></div>
                         <div class="text-center cursor-pointer group/edit" @click="editingTurnId = turn.id">
@@ -618,7 +668,7 @@
                             <div class="absolute -left-[34px] top-10 w-6 h-0.5 bg-[var(--border-dim)] group-hover/event:bg-indigo-500 group-hover/event:w-8 transition-all"></div>
                             
                             <!-- 新闻卡片本体 -->
-                            <div class="glass-panel theme-rounded border-0 border-l-[6px] transition-all duration-300 relative overflow-hidden hover:shadow-[0_10px_50px_var(--shadow-color)]" :style="{ borderLeftColor: getFactionColor(event.factionId) }">
+                            <div role="article" aria-label="News Event" class="glass-panel theme-rounded border-0 border-l-[6px] transition-all duration-300 relative overflow-hidden hover:shadow-[0_10px_50px_var(--shadow-color)]" :style="{ borderLeftColor: getFactionColor(event.factionId) }">
                                 <!-- [修改] 背景 Logo: 支持图片 -->
                                 <img v-if="isImage(getFactionLogo(event.factionId))" :src="getFactionLogo(event.factionId)" class="event-card-bg-logo opacity-[0.05] grayscale" style="object-fit: contain;">
                                 <i v-else :class="getFactionLogo(event.factionId)" class="event-card-bg-logo" :style="{ color: getFactionColor(event.factionId) }"></i>
@@ -684,6 +734,33 @@
                                                     <button @click="removeEventImpact(event, i)" class="ml-2 w-5 h-5 flex items-center justify-center theme-rounded-sm hover:bg-red-500/20 hover:text-red-500 text-[var(--text-dim)] transition"><i class="fa-solid fa-times"></i></button>
                                                 </div>
                                             </div>
+                                            <!-- [新增] 时间轴内的安科选项编辑器 -->
+                                            <div class="bg-[var(--bg-badge)] p-3 theme-rounded-sm border border-[var(--border-dim)] mt-4">
+                                                <!-- 标题行：左对齐 -->
+                                                <div class="flex items-center gap-3 mb-3">
+                                                    <div class="text-[10px] font-bold text-pink-500 uppercase tracking-widest">ANKO OPTIONS (DECISIONS)</div>
+                                                    <button @click="addOptionToEvent(event)" class="text-[10px] bg-pink-900/20 text-pink-400 border border-pink-500/30 px-2 py-0.5 theme-rounded-sm hover:bg-pink-600 hover:text-white transition flex items-center gap-1">
+                                                        <i class="fa-solid fa-plus"></i> Add
+                                                    </button>
+                                                </div>
+                                                
+                                                <div class="space-y-2">
+                                                    <div v-for="(opt, oi) in event.options" :key="oi" class="bg-[var(--bg-deep)] p-2 theme-rounded-sm border border-[var(--border-dim)] flex gap-2 items-start">
+                                                        <div class="flex-1 space-y-1">
+                                                            <div class="flex items-center gap-2">
+                                                                <span class="text-[9px] text-pink-500 font-bold uppercase w-8 text-right">Label</span>
+                                                                <input v-model="opt.label" placeholder="Option Label" class="flex-1 bg-transparent text-xs font-bold text-pink-400 px-1 border-b border-[var(--border-dim)] outline-none focus:border-pink-500">
+                                                            </div>
+                                                            <div class="flex items-center gap-2">
+                                                                <span class="text-[9px] text-[var(--text-dim)] font-bold uppercase w-8 text-right">Desc</span>
+                                                                <textarea v-model="opt.desc" placeholder="Consequence..." class="flex-1 bg-transparent text-[10px] text-[var(--text-dim)] px-1 h-6 resize-none outline-none focus:text-[var(--text-main)] border-b border-transparent focus:border-[var(--border-dim)]"></textarea>
+                                                            </div>
+                                                        </div>
+                                                        <button @click="event.options.splice(oi,1)" class="text-[var(--text-dim)] hover:text-red-400 mt-1"><i class="fa-solid fa-times"></i></button>
+                                                    </div>
+                                                    <div v-if="!event.options || event.options.length === 0" class="text-center text-[10px] text-[var(--text-dim)] italic opacity-50">No options available.</div>
+                                                </div>
+                                            </div>
                                             <!-- [修改 2] 新的添加表单 -->
                                             <div class="flex flex-col gap-2">
                                                 <!-- 类型切换按钮 -->
@@ -699,7 +776,7 @@
                                                     <!-- 1. 属性变更 -->
                                                     <template v-if="editImpactForm.type === 'STAT_CHANGE'">
                                                         <select v-model="editImpactForm.targetId" class="input-tech h-8 text-xs font-bold theme-rounded-sm outline-none w-1/3"><option value="" disabled selected>Target</option><option v-for="p in players" :value="p.id">{{ p.name }}</option></select>
-                                                        <select v-model="editImpactForm.attrKey" class="input-tech h-8 text-xs font-bold theme-rounded-sm outline-none w-1/4"><option value="" disabled selected>Attr</option><option v-for="field in stat_schema" :value="field.key">{{ field.label }}</option></select>
+                                                        <select v-model="editImpactForm.attrKey" class="input-tech h-8 text-xs font-bold theme-rounded-sm outline-none w-1/4"><option value="" disabled selected>Attr</option><option v-for="field in getFieldsForImpactTarget(editImpactForm.targetId)" :value="field.key">{{ field.label }}</option></select>
                                                         <input v-model="editImpactForm.newValue" placeholder="Val" class="input-tech h-8 flex-1 text-xs font-bold theme-rounded-sm outline-none px-2 text-center" @keyup.enter="addEventImpact(event)">
                                                     </template>
 
@@ -726,64 +803,74 @@
                                     </div>
                                     <!-- 浏览模式 -->
                                     <h3 v-else class="text-2xl font-black text-[var(--text-main)] mb-6 leading-tight tracking-tight">{{ event.summary }}</h3>
-                                    <div v-for="(imp, i) in event.impacts" :key="i" class="impact-badge" 
-                                        :style="{ borderColor: getImpactColor(imp), backgroundColor: getImpactColor(imp) + '15' }">
-                                        
-                                        <!-- 1. 属性变更 (默认) -->
-                                        <template v-if="!imp.type || imp.type === 'STAT_CHANGE'">
-                                            <div class="flex items-center gap-2 pr-2 border-r" :style="{ borderColor: getFactionColor(imp.targetId) + '40' }">
-                                                <!-- [修改] 小徽章支持图片 (矩形旗帜版) -->
-                                                <img v-if="isImage(getFactionLogo(imp.targetId))" :src="getFactionLogo(imp.targetId)" class="h-4 w-auto max-w-[24px] object-contain rounded-[1px] border border-white/10">
-                                                <i v-else :class="getFactionLogo(imp.targetId)" :style="{ color: getFactionColor(imp.targetId) }"></i>
-                                                <span class="font-bold text-xs" :style="{ color: getFactionColor(imp.targetId) }">{{ imp.targetName }}</span>
-                                            </div>
-                                            <div class="font-mono-tech text-xs pl-2 text-[var(--text-main)]">
-                                                <span class="text-[var(--text-dim)] mr-1">{{ imp.attrLabel }}</span>
-                                                <!-- [修改] 使用 resolveVal -->
-                                                <span class="font-bold">{{ resolveVal(imp.oldValue) }} <i class="fa-solid fa-arrow-right text-[10px] mx-1 opacity-50"></i> {{ resolveVal(imp.newValue) }}</span>
-                                            </div>
-                                        </template>
-
-                                        <!-- 2. 地块转移 -->
-                                        <template v-else-if="imp.type === 'REGION_TRANSFER'">
-                                            <div class="flex items-center gap-2">
-                                                <i class="fa-solid fa-map-location-dot text-indigo-400"></i>
-                                                <span class="text-[var(--text-dim)] text-xs">{{ imp.targetName }}</span>
-                                                <i class="fa-solid fa-arrow-right text-[10px] mx-1 opacity-50"></i>
-                                                <div class="flex items-center gap-1">
-                                                    <i :class="getFactionLogo(imp.newValue)" :style="{color: getFactionColor(imp.newValue)}"></i>
-                                                    <span class="font-bold text-xs" :style="{color: getFactionColor(imp.newValue)}">{{ getFactionName(imp.newValue) }}</span>
+                                    
+                                    <!-- [修复开始] 添加 Flex 容器 wrapper -->
+                                    <div class="flex flex-wrap gap-2 items-center">
+                                        <div v-for="(imp, i) in event.impacts" :key="i" class="impact-badge" 
+                                            :style="{ borderColor: getImpactColor(imp), backgroundColor: getImpactColor(imp) + '15' }">
+                                            
+                                            <!-- 1. 属性变更 (默认) -->
+                                            <template v-if="!imp.type || imp.type === 'STAT_CHANGE'">
+                                                <!-- ... (内容保持不变) ... -->
+                                                <div class="flex items-center gap-2 pr-2 border-r" :style="{ borderColor: getFactionColor(imp.targetId) + '40' }">
+                                                    <img v-if="isImage(getFactionLogo(imp.targetId))" :src="getFactionLogo(imp.targetId)" class="h-4 w-auto max-w-[24px] object-contain rounded-[1px] border border-white/10">
+                                                    <i v-else :class="getFactionLogo(imp.targetId)" :style="{ color: getFactionColor(imp.targetId) }"></i>
+                                                    <span class="font-bold text-xs" :style="{ color: getFactionColor(imp.targetId) }">{{ imp.targetName }}</span>
                                                 </div>
-                                            </div>
-                                        </template>
+                                                <div class="font-mono-tech text-xs pl-2 text-[var(--text-main)]">
+                                                    <span class="text-[var(--text-dim)] mr-1">{{ imp.attrLabel }}</span>
+                                                    <span class="font-bold">{{ resolveVal(imp.oldValue) }} <i class="fa-solid fa-arrow-right text-[10px] mx-1 opacity-50"></i> {{ resolveVal(imp.newValue) }}</span>
+                                                </div>
+                                            </template>
 
-                                        <!-- 3. 创建实体 -->
-                                        <template v-else-if="imp.type === 'ENTITY_CREATE'">
-                                            <div class="flex items-center gap-2">
-                                                <i class="fa-solid fa-user-plus text-emerald-400"></i>
-                                                <span class="text-xs opacity-70">New:</span>
-                                                <span class="font-bold text-xs text-emerald-400">{{ imp.data?.name || 'New Entity' }}</span>
-                                            </div>
-                                        </template>
+                                            <!-- 2. 地块转移 -->
+                                            <template v-else-if="imp.type === 'REGION_TRANSFER'">
+                                                <!-- ... (内容保持不变) ... -->
+                                                <div class="flex items-center gap-2">
+                                                    <i class="fa-solid fa-map-location-dot text-indigo-400"></i>
+                                                    <span class="text-[var(--text-dim)] text-xs">{{ imp.targetName }}</span>
+                                                    <i class="fa-solid fa-arrow-right text-[10px] mx-1 opacity-50"></i>
+                                                    <div class="flex items-center gap-1">
+                                                        <i :class="getFactionLogo(imp.newValue)" :style="{color: getFactionColor(imp.newValue)}"></i>
+                                                        <span class="font-bold text-xs" :style="{color: getFactionColor(imp.newValue)}">{{ getFactionName(imp.newValue) }}</span>
+                                                    </div>
+                                                </div>
+                                            </template>
 
-                                        <!-- 4. 移除实体 -->
-                                        <template v-else-if="imp.type === 'ENTITY_REMOVE'">
-                                            <div class="flex items-center gap-2">
-                                                <i class="fa-solid fa-user-minus text-red-400"></i>
-                                                <span class="text-xs opacity-70">Removed:</span>
-                                                <span class="font-bold text-xs text-red-400 decoration-line-through">{{ getFactionName(imp.targetId) }}</span>
-                                            </div>
-                                        </template>
-                                        <!-- 5. 移动标记 [新增] -->
-                                        <template v-else-if="imp.type === 'PIN_MOVE'">
-                                            <div class="flex items-center gap-2">
-                                                <i class="fa-solid fa-arrows-up-down-left-right text-pink-400"></i>
-                                                <span class="text-xs opacity-70">Move:</span>
-                                                <span class="font-bold text-xs text-pink-400">{{ imp.targetName }}</span>
-                                                <span class="font-mono text-[10px] bg-black/20 px-1 rounded">{{ imp.oldValue }} <i class="fa-solid fa-arrow-right opacity-50"></i> {{ imp.newValue }}</span>
-                                            </div>
-                                        </template>
+                                            <!-- 3. 创建实体 -->
+                                            <template v-else-if="imp.type === 'ENTITY_CREATE'">
+                                                <!-- ... (内容保持不变) ... -->
+                                                <div class="flex items-center gap-2">
+                                                    <i class="fa-solid fa-user-plus text-emerald-400"></i>
+                                                    <span class="text-xs opacity-70">New:</span>
+                                                    <span class="font-bold text-xs text-emerald-400">{{ imp.data?.name || 'New Entity' }}</span>
+                                                </div>
+                                            </template>
+
+                                            <!-- 4. 移除实体 -->
+                                            <template v-else-if="imp.type === 'ENTITY_REMOVE'">
+                                                <!-- ... (内容保持不变) ... -->
+                                                <div class="flex items-center gap-2">
+                                                    <i class="fa-solid fa-user-minus text-red-400"></i>
+                                                    <span class="text-xs opacity-70">Removed:</span>
+                                                    <span class="font-bold text-xs text-red-400 decoration-line-through">{{ getFactionName(imp.targetId) }}</span>
+                                                </div>
+                                            </template>
+                                            
+                                            <!-- 5. 移动标记 -->
+                                            <template v-else-if="imp.type === 'PIN_MOVE'">
+                                                <!-- ... (内容保持不变) ... -->
+                                                <div class="flex items-center gap-2">
+                                                    <i class="fa-solid fa-arrows-up-down-left-right text-pink-400"></i>
+                                                    <span class="text-xs opacity-70">Move:</span>
+                                                    <span class="font-bold text-xs text-pink-400">{{ imp.targetName }}</span>
+                                                    <span class="font-mono text-[10px] bg-black/20 px-1 rounded">{{ imp.oldValue }} <i class="fa-solid fa-arrow-right opacity-50"></i> {{ imp.newValue }}</span>
+                                                </div>
+                                            </template>
+                                        </div>
                                     </div>
+                                    <!-- [修复结束] -->
+
                                     <div class="mt-4 flex justify-center"><i class="fa-solid text-xl transition-transform duration-300" :class="event.isOpen ? 'fa-chevron-up text-indigo-500' : 'fa-chevron-down text-[var(--text-dim)]'"></i></div>
                                 </div>
 
@@ -791,6 +878,28 @@
                                     <div v-if="event.isOpen" class="bg-[var(--bg-glass)] border-t border-[var(--border-highlight)] p-8 relative z-10">
                                         <div v-if="isEditingEvent(tIdx, eIdx)" @click.stop><textarea v-model="event.content" class="w-full h-96 input-tech p-4 font-mono-tech rounded"></textarea></div>
                                         <div v-else class="md-content text-lg" v-html="renderMarkdown(event.content)"></div>
+                                        
+                                        <!-- [修改] 选项交互区 (智能渲染) -->
+                                        <div v-if="event.options && event.options.length > 0" class="mt-8 pt-6 border-t border-[var(--border-dim)]">
+                                            <div class="text-[10px] font-bold text-pink-500 uppercase tracking-widest mb-3"><i class="fa-solid fa-diamond-turn-right mr-1"></i> SELECT NEXT ACTION</div>
+                                            <div class="flex flex-col gap-2"> <!-- 改为纵向排列以显示详情 -->
+                                                <button v-for="(opt, optIdx) in event.options" :key="optIdx" 
+                                                        @click.stop="selectOption(event, opt)"
+                                                        class="group relative w-full px-4 py-3 bg-[var(--bg-badge)] hover:bg-pink-900/10 border border-[var(--border-dim)] hover:border-pink-500/50 text-left theme-rounded-sm transition">
+                                                    
+                                                    <!-- A. 对象模式 (严格匹配 label/desc) -->
+                                                    <div v-if="typeof opt === 'object'">
+                                                        <div class="text-sm font-bold text-pink-400 group-hover:text-pink-300 mb-1">{{ opt.label }}</div>
+                                                        <div class="text-xs text-[var(--text-dim)] leading-relaxed opacity-80">{{ opt.desc }}</div>
+                                                    </div>
+                                                    <!-- B. 字符串模式 -->
+                                                    <div v-else class="text-sm font-bold text-[var(--text-main)]">
+                                                        {{ opt }}
+                                                    </div>
+                                                </button>
+                                            </div>
+                                        </div>
+
                                         <div class="pt-6 border-t border-[var(--border-dim)] flex justify-end gap-4 mt-8">
                                             <button @click.stop="copyToClipboard(event.content)" class="px-5 py-2 theme-rounded-sm border border-[var(--border-dim)] text-[var(--text-dim)] hover:text-[var(--text-main)] hover:bg-[var(--bg-panel)] transition font-bold text-xs uppercase tracking-widest"><i class="fa-regular fa-copy mr-2"></i> {{ t('btn_copy') }}</button>
                                             <button @click.stop="deleteEvent(tIdx, eIdx)" class="px-5 py-2 theme-rounded-sm border border-[var(--border-dim)] text-[var(--text-dim)] hover:text-red-400 hover:bg-red-900/20 transition font-bold text-xs uppercase tracking-widest"><i class="fa-solid fa-trash mr-2"></i> {{ t('btn_delete') }}</button>
@@ -871,7 +980,7 @@
 
                 <!-- 地图画布容器 -->
                 <!-- 关键样式: overflow-hidden (隐藏超出部分), cursor-move (提示可拖拽) -->
-                <div class="flex-1 overflow-hidden relative bg-[#050505] cursor-move"
+                <div class="map-viewport flex-1 overflow-hidden relative bg-[#050505] cursor-move"
                      @wheel.prevent="onMapWheel"
                      @mousedown="onMapMouseDown"
                      @mousemove="onMapMouseMove"
@@ -993,7 +1102,7 @@
         </section>
 
         <!-- 右侧：指挥台 -->
-        <aside class="w-2/5 bg-[var(--bg-panel)] flex flex-col shrink-0 shadow-[0_0_50px_var(--shadow-color)] z-40 border-l border-[var(--border-dim)] transition-colors duration-300">
+        <aside role="complementary" aria-label="Command Console" class="w-2/5 bg-[var(--bg-panel)] flex flex-col shrink-0 shadow-[0_0_50px_var(--shadow-color)] z-40 border-l border-[var(--border-dim)] transition-colors duration-300">
             <div class="flex border-b border-[var(--border-dim)] bg-[var(--bg-sidebar)]">
                 <button @click="tabs.right = 'staging'" :class="tabs.right === 'staging' ? 'border-indigo-500 text-[var(--text-main)] bg-[var(--bg-panel)]' : 'border-transparent text-[var(--text-dim)] hover:text-[var(--text-main)]'" class="flex-1 py-4 border-b-4 font-bold transition text-sm tracking-wide"><i class="fa-solid fa-layer-group mr-2"></i> {{ t('tab_pending') }} <span v-if="pendingEvents.length" class="ml-2 bg-indigo-600 text-white text-[10px] px-2 py-0.5 rounded-full align-middle">{{pendingEvents.length}}</span></button>
                 <!-- [新增] 战斗 Tab -->
@@ -1014,16 +1123,22 @@
                             </div>
                             <div class="text-base font-bold text-[var(--text-main)] mb-2 truncate">{{ evt.summary }}</div>
                             <div class="flex flex-wrap gap-2">
-                                <span v-for="imp in evt.impacts" class="text-[10px] px-2 py-0.5 theme-rounded-sm border font-mono-tech" :style="{ borderColor: getFactionColor(imp.targetId), color: getFactionColor(imp.targetId), backgroundColor: getFactionColor(imp.targetId)+'10' }">
-                                    <!-- 如果是特殊类型，显示类型名；否则显示属性名 -->
-                                    <template v-if="imp.type && imp.type !== 'STAT_CHANGE'">
-                                        <i class="fa-solid fa-bolt mr-1"></i>{{ imp.type }}: 
+                                <span v-for="imp in evt.impacts" class="text-[10px] px-2 py-0.5 theme-rounded-sm border font-mono-tech" :style="{ borderColor: getImpactColor(imp), color: getImpactColor(imp), backgroundColor: getImpactColor(imp)+'10' }">
+                                    <!-- 分支 A: 属性变更 (包括全局) -->
+                                    <template v-if="imp.type === 'STAT_CHANGE'">
+                                        <template v-if="imp.targetId === 'global'">
+                                            <i class="fa-solid fa-globe opacity-70"></i> {{ imp.targetName }}.{{ imp.attrLabel }}:
+                                        </template>
+                                        <template v-else>
+                                            {{ imp.targetName }}.{{ imp.attrLabel }}:
+                                        </template>
                                     </template>
+                                    <!-- 分支 B: 其他类型 -->
                                     <template v-else>
-                                        {{ imp.targetName }}.{{ imp.attrLabel }}: 
+                                        <i class="fa-solid fa-bolt mr-1"></i>{{ imp.type }}:
                                     </template>
-                                    
-                                    <!-- [修改] 使用 resolveVal 翻译 ID -->
+
+                                    <!-- 值显示部分保持不变 -->
                                     [{{ resolveVal(imp.oldValue) }} <i class="fa-solid fa-arrow-right opacity-50"></i> {{ resolveVal(imp.newValue) }}]
                                 </span>
                             </div>
@@ -1163,7 +1278,13 @@
                 <div class="p-4 bg-[var(--bg-sidebar)] border-b border-[var(--border-dim)] shadow-xl z-20 shrink-0">
                     <div class="flex justify-between items-center mb-2">
                         <span class="text-[10px] font-bold text-indigo-400 uppercase tracking-widest"><i class="fa-solid fa-microchip mr-1"></i> {{ t('ai_core_label') }}</span>
-                        <span class="text-[10px] font-mono-tech text-[var(--text-dim)]">{{ settings.api.model }}</span>
+                        <!-- [新增] 安科模式开关 -->
+                        <button @click="generateOptions = !generateOptions" 
+                            :class="generateOptions ? 'bg-pink-600 border-pink-500 text-white shadow-[0_0_15px_rgba(219,39,119,0.4)]' : 'bg-[var(--bg-badge)] border-[var(--border-dim)] text-[var(--text-dim)] hover:text-[var(--text-main)]'"
+                            class="px-3 py-1.5 theme-rounded-sm border text-[10px] font-bold transition-all duration-300 flex items-center gap-2">
+                            <i :class="generateOptions ? 'fa-solid fa-dice text-white' : 'fa-solid fa-dice text-[var(--text-dim)]'"></i>
+                            <span>{{ generateOptions ? 'ANKO: ON' : 'ANKO MODE' }}</span>
+                        </button>
                     </div>
                     <button @click="openContextModal" :disabled="isThinking" class="w-full py-4 theme-rounded-sm bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white font-bold text-sm tracking-widest shadow-lg shadow-indigo-900/30 transition disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-3">
                         <i :class="isThinking ? 'fa-solid fa-circle-notch fa-spin' : 'fa-solid fa-bolt'"></i>
@@ -1204,24 +1325,37 @@
                     <div class="p-5 border-b border-[var(--border-dim)] bg-[var(--bg-badge)]">
                         <label class="block text-[10px] font-bold text-amber-500 uppercase mb-3 tracking-widest">{{ t('label_impact') }}</label>
                         
-                        <!-- Impact 列表显示区 (已升级) -->
-                        <div class="flex flex-wrap gap-3 mb-4">
-                            <div v-for="(imp, idx) in editor.impacts" :key="idx" class="impact-badge pr-0 overflow-hidden relative" 
-                                 :style="{ borderColor: getImpactColor(imp) }">
-                                
-                                <!-- 1. 属性变更 Badge -->
-                                <template v-if="!imp.type || imp.type === 'STAT_CHANGE'">
-                                    <div class="flex items-center gap-2 pr-2 border-r" :style="{ borderColor: getFactionColor(imp.targetId) + '40' }">
-                                        <img v-if="isImage(getFactionLogo(imp.targetId))" :src="getFactionLogo(imp.targetId)" class="h-4 w-auto max-w-[24px] object-contain rounded-[1px] border border-white/10">
-                                        <i v-else :class="getFactionLogo(imp.targetId)" :style="{ color: getFactionColor(imp.targetId) }"></i>
-                                        <span class="font-bold text-xs" :style="{ color: getFactionColor(imp.targetId) }">{{ imp.targetName }}</span>
-                                    </div>
-                                    <div class="font-mono-tech text-xs text-[var(--text-main)] pl-2">
-                                        <span class="text-[var(--text-dim)] mr-1">{{ imp.attrLabel }}</span>
-                                        <!-- [修改] 使用 resolveVal -->
-                                        <span class="font-bold">{{ resolveVal(imp.oldValue) }} <i class="fa-solid fa-arrow-right text-[10px] mx-1 opacity-50"></i> {{ resolveVal(imp.newValue) }}</span>
-                                    </div>
-                                </template>
+                            <!-- Impact 列表显示区 (已升级) -->
+                            <div class="flex flex-wrap gap-3 mb-4">
+                                <div v-for="(imp, idx) in editor.impacts" :key="idx" class="impact-badge pr-0 overflow-hidden relative" 
+                                    :style="{ borderColor: getImpactColor(imp) }">
+                                    
+                                    <!-- 1. 属性变更 Badge -->
+                                    <template v-if="imp.type === 'STAT_CHANGE'">
+                                        <!-- 分支 A: 全局变量变更 -->
+                                        <template v-if="imp.targetId === 'global'">
+                                            <div class="flex items-center gap-2 pr-2 border-r border-slate-500/40">
+                                                <i class="fa-solid fa-globe text-slate-400"></i>
+                                                <span class="font-bold text-xs text-slate-400">{{ imp.targetName }}</span>
+                                            </div>
+                                            <div class="font-mono-tech text-xs text-[var(--text-main)] pl-2">
+                                                <span class="text-[var(--text-dim)] mr-1">{{ imp.attrLabel }}</span>
+                                                <span class="font-bold">{{ resolveVal(imp.oldValue) }} → {{ resolveVal(imp.newValue) }}</span>
+                                            </div>
+                                        </template>
+                                        <!-- 分支 B: 普通实体变更 -->
+                                        <template v-else>
+                                            <div class="flex items-center gap-2 pr-2 border-r" :style="{ borderColor: getFactionColor(imp.targetId) + '40' }">
+                                                <img v-if="isImage(getFactionLogo(imp.targetId))" :src="getFactionLogo(imp.targetId)" class="h-4 w-auto max-w-[24px] object-contain rounded-[1px] border border-white/10">
+                                                <i v-else :class="getFactionLogo(imp.targetId)" :style="{ color: getFactionColor(imp.targetId) }"></i>
+                                                <span class="font-bold text-xs" :style="{ color: getFactionColor(imp.targetId) }">{{ imp.targetName }}</span>
+                                            </div>
+                                            <div class="font-mono-tech text-xs text-[var(--text-main)] pl-2">
+                                                <span class="text-[var(--text-dim)] mr-1">{{ imp.attrLabel }}</span>
+                                                <span class="font-bold">{{ resolveVal(imp.oldValue) }} <i class="fa-solid fa-arrow-right text-[10px] mx-1 opacity-50"></i> {{ resolveVal(imp.newValue) }}</span>
+                                            </div>
+                                        </template>
+                                    </template>
                                 
                                 <!-- 2. 地块转移 Badge -->
                                 <template v-else-if="imp.type === 'REGION_TRANSFER'">
@@ -1334,12 +1468,55 @@
                     </div>
 
                     <!-- 详细内容 (设置 min-h 防止挤压) -->
-                    <div class="p-5 flex flex-col min-h-[400px] relative">
-                         <label class="block text-[10px] font-bold text-indigo-400 uppercase mb-2 tracking-widest">{{ t('label_details') }}</label>
-                         <textarea v-model="editor.content" class="flex-1 input-tech theme-rounded-sm p-4 text-base font-mono-tech text-[var(--text-main)] resize-none outline-none leading-relaxed h-full" placeholder="// ..."></textarea>
-                         <div class="absolute bottom-8 right-8 z-20">
-                            <button @click="addToStaging" class="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-3 theme-rounded-sm shadow-xl font-bold text-sm transition transform active:scale-95 hover:-translate-y-1 flex items-center gap-2"><i class="fa-solid fa-plus"></i> {{ t('btn_add_pending') }}</button>
-                         </div>
+                    <!-- [修改后] 右侧编辑器区域 -->
+                    <div class="p-5 flex flex-col min-h-[400px] relative pb-20"> <!-- 1. 增加 pb-20 防止底部被遮挡 -->
+                        
+                        <label class="block text-[10px] font-bold text-indigo-400 uppercase mb-2 tracking-widest">{{ t('label_details') }}</label>
+                        
+                        <!-- 内容输入框 -->
+                        <textarea v-model="editor.content" class="flex-1 input-tech theme-rounded-sm p-4 text-base font-mono-tech text-[var(--text-main)] resize-none outline-none leading-relaxed h-full min-h-[200px]" placeholder="// ..."></textarea>
+                        
+                        <!-- [修改点] 安科选项编辑区 -->
+                        <div class="mt-4 pt-4 border-t border-[var(--border-dim)]">
+                            <!-- 2. 标题行：左对齐，按钮紧跟文字 -->
+                            <div class="flex items-center gap-3 mb-2">
+                                <div class="text-[10px] font-bold text-pink-500 uppercase tracking-widest"><i class="fa-solid fa-list-ul mr-1"></i> ANKO OPTIONS</div>
+                                <!-- Add 按钮放在这里 -->
+                                <button @click="addOptionToEditor" class="text-[10px] bg-pink-900/20 text-pink-400 border border-pink-500/30 px-2 py-0.5 theme-rounded-sm hover:bg-pink-600 hover:text-white transition flex items-center gap-1" title="Add new option">
+                                    <i class="fa-solid fa-plus"></i> Add
+                                </button>
+                            </div>
+
+                            <!-- 选项列表 -->
+                            <div v-if="editor.options && editor.options.length > 0" class="space-y-2">
+                                <div v-for="(opt, oi) in editor.options" :key="oi" class="bg-[var(--bg-badge)] p-2 theme-rounded-sm border border-[var(--border-dim)] flex gap-2 items-start group">
+                                    <div class="flex-1 space-y-1">
+                                        <!-- Label 输入 -->
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-[9px] text-pink-500 font-bold uppercase w-8 text-right">Label</span>
+                                            <input v-model="opt.label" class="flex-1 bg-[var(--bg-input)] text-xs font-bold text-[var(--text-main)] px-1 py-0.5 theme-rounded-sm border border-[var(--border-dim)] outline-none focus:border-pink-500 placeholder-pink-500/30" placeholder="Short Title">
+                                        </div>
+                                        <!-- Desc 输入 -->
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-[9px] text-[var(--text-dim)] font-bold uppercase w-8 text-right">Desc</span>
+                                            <input v-model="opt.desc" class="flex-1 bg-[var(--bg-input)] text-xs text-[var(--text-dim)] px-1 py-0.5 theme-rounded-sm border border-[var(--border-dim)] outline-none focus:border-pink-500 placeholder-[var(--text-dim)]/30" placeholder="Consequence description...">
+                                        </div>
+                                    </div>
+                                    <!-- 删除按钮 -->
+                                    <button @click="editor.options.splice(oi,1)" class="text-[var(--text-dim)] hover:text-red-400 mt-1 px-1"><i class="fa-solid fa-times"></i></button>
+                                </div>
+                            </div>
+                            <div v-else class="text-[10px] text-[var(--text-dim)] italic opacity-30 py-1 pl-1">
+                                (No options defined. Click 'Add' to create manual choices.)
+                            </div>
+                        </div>
+
+                        <!-- 悬浮的 Add to Pending 按钮 (保持不变) -->
+                        <div class="absolute bottom-8 right-8 z-20">
+                            <button @click="addToStaging" class="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-3 theme-rounded-sm shadow-xl font-bold text-sm transition transform active:scale-95 hover:-translate-y-1 flex items-center gap-2">
+                                <i class="fa-solid fa-plus"></i> {{ t('btn_add_pending') }}
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -1358,7 +1535,11 @@
         </aside>
 
     </main>
-
+    <!-- [新增] 截图模式辅助层 -->
+    <div v-if="isScreenshotMode" class="screenshot-backdrop" @mousemove="handleScreenshotHover" @click.stop.prevent="captureScreenshot" @contextmenu.prevent="exitScreenshotMode"></div>
+    <div v-if="isScreenshotMode && screenshotRect.w > 0" class="screenshot-overlay" :style="{ top: screenshotRect.y + 'px', left: screenshotRect.x + 'px', width: screenshotRect.w + 'px', height: screenshotRect.h + 'px' }">
+        <div class="screenshot-label">SNAP: {{ screenshotTargetName }} (Click to Save)</div>
+    </div>
 <!-- HIDDEN POSTER CANVAS -->
     <div id="poster-canvas">
         
@@ -1437,7 +1618,7 @@
     <!-- Context Assembler Modal -->
     <transition name="fade">
         <div v-if="showContextModal" class="modal-mask" @click.self="showContextModal = false">
-            <div class="glass-panel theme-rounded w-[900px] h-[90vh] flex flex-col overflow-hidden text-[var(--text-main)]" @click.stop>
+            <div role="dialog" aria-label="Context Assembler" class="glass-panel theme-rounded w-[900px] h-[90vh] flex flex-col overflow-hidden text-[var(--text-main)]" @click.stop>
                 <div class="p-5 border-b border-[var(--border-dim)] bg-[var(--bg-header)] flex justify-between items-center shrink-0">
                     <div>
                         <h3 class="text-xl font-bold text-[var(--text-main)]"><i class="fa-solid fa-layer-group mr-2 text-indigo-400"></i>{{ t('modal_context_title') }}</h3>
@@ -1657,7 +1838,7 @@
     <!-- Modals (Settings) -->
     <transition name="fade">
         <div v-if="showSettings" class="modal-mask" @click.self="showSettings=false">
-            <div class="glass-panel theme-rounded w-[600px] flex flex-col overflow-hidden text-[var(--text-main)]" @click.stop>
+            <div role="dialog" aria-label="Settings" class="glass-panel theme-rounded w-[600px] flex flex-col overflow-hidden text-[var(--text-main)]" @click.stop>
                 <div class="p-6 border-b border-[var(--border-dim)] bg-[var(--bg-header)] flex justify-between items-center">
                     <h2 class="text-xl font-bold"><i class="fa-solid fa-sliders mr-2 text-[var(--text-dim)]"></i> {{ t('settings_title') }}</h2>
                     <button @click="showSettings = false" class="text-[var(--text-dim)] hover:text-[var(--text-main)] text-xl"><i class="fa-solid fa-times"></i></button>
@@ -1743,8 +1924,44 @@
                     </section>
 
                     <section>
-                         <h3 class="text-xs font-bold text-emerald-400 uppercase tracking-widest mb-4 pb-2 border-b border-[var(--border-dim)]">{{ t('set_sys_prompt') }}</h3>
-                         <textarea v-model="settings.prompts.system" class="w-full h-32 input-tech theme-rounded-sm p-3 text-xs font-mono resize-none outline-none text-[var(--text-dim)]"></textarea>
+                         <h3 class="text-xs font-bold text-emerald-400 uppercase tracking-widest mb-2 pb-2 border-b border-[var(--border-dim)]">AI Prompt Configuration</h3>
+                         
+                         <!-- 标签切换按钮 -->
+                         <div class="flex gap-2 mb-2">
+                             <button @click="settingsPromptTab = 'system'" 
+                                     :class="settingsPromptTab === 'system' ? 'bg-emerald-600 text-white' : 'bg-[var(--bg-badge)] text-[var(--text-dim)] hover:text-[var(--text-main)]'"
+                                     class="px-3 py-1 text-[10px] font-bold theme-rounded-sm transition">
+                                 System (Deduction)
+                             </button>
+                             <button @click="settingsPromptTab = 'script'" 
+                                     :class="settingsPromptTab === 'script' ? 'bg-indigo-600 text-white' : 'bg-[var(--bg-badge)] text-[var(--text-dim)] hover:text-[var(--text-main)]'"
+                                     class="px-3 py-1 text-[10px] font-bold theme-rounded-sm transition">
+                                 Script Gen
+                             </button>
+                             <button @click="settingsPromptTab = 'god'" 
+                                     :class="settingsPromptTab === 'god' ? 'bg-amber-600 text-white' : 'bg-[var(--bg-badge)] text-[var(--text-dim)] hover:text-[var(--text-main)]'"
+                                     class="px-3 py-1 text-[10px] font-bold theme-rounded-sm transition">
+                                 God Mode
+                             </button>
+                         </div>
+
+                         <!-- 1. System Prompt 编辑框 -->
+                         <div v-if="settingsPromptTab === 'system'">
+                             <div class="text-[10px] text-[var(--text-dim)] mb-1">用于日常“战术推演”与“智能补全”的核心指令。</div>
+                             <textarea v-model="settings.prompts.system" class="w-full h-64 input-tech theme-rounded-sm p-3 text-xs font-mono resize-none outline-none text-[var(--text-dim)]"></textarea>
+                         </div>
+
+                         <!-- 2. Script Generator Prompt 编辑框 -->
+                         <div v-if="settingsPromptTab === 'script'">
+                             <div class="text-[10px] text-[var(--text-dim)] mb-1">用于“剧本生成”功能，控制世界观初始化逻辑。</div>
+                             <textarea v-model="settings.prompts.script_generator" class="w-full h-64 input-tech theme-rounded-sm p-3 text-xs font-mono resize-none outline-none text-[var(--text-dim)]"></textarea>
+                         </div>
+
+                         <!-- 3. God Mode Prompt 编辑框 -->
+                         <div v-if="settingsPromptTab === 'god'">
+                             <div class="text-[10px] text-[var(--text-dim)] mb-1">用于“上帝模式”功能，控制直接修改 JSON 数据的逻辑。</div>
+                             <textarea v-model="settings.prompts.god_mode" class="w-full h-64 input-tech theme-rounded-sm p-3 text-xs font-mono resize-none outline-none text-[var(--text-dim)]"></textarea>
+                         </div>
                     </section>
                 </div>
                 <div class="p-6 border-t border-[var(--border-dim)] bg-[var(--bg-header)] flex justify-end gap-4"><button @click="showSettings = false" class="px-5 py-2 theme-rounded-sm bg-[var(--bg-badge)] text-[var(--text-dim)] font-bold text-sm hover:text-[var(--text-main)]">{{ t('btn_cancel') }}</button><button @click="saveSettings" class="px-6 py-2 theme-rounded-sm bg-emerald-600 text-white font-bold text-sm shadow-lg hover:bg-emerald-500">{{ t('btn_save') }}</button></div>
@@ -1755,7 +1972,7 @@
     <!-- Modals (Faction) -->
     <transition name="fade">
         <div v-if="showFactionModal" class="modal-mask" @click.self="closeFactionModal">
-            <div class="glass-panel theme-rounded w-[550px] flex flex-col overflow-hidden text-[var(--text-main)]" @click.stop>
+            <div role="dialog" aria-label="Edit Entity" class="glass-panel theme-rounded w-[550px] flex flex-col overflow-hidden text-[var(--text-main)]" @click.stop>
                 <div class="p-6 border-b border-[var(--border-dim)] bg-[var(--bg-header)] flex justify-between items-center">
                     <h3 class="text-xl font-bold">{{ editingFaction.id ? t('modal_edit_entity') : t('modal_new_entity') }}</h3>
                     <button @click="closeFactionModal" class="text-[var(--text-dim)] hover:text-[var(--text-main)] text-xl"><i class="fa-solid fa-times"></i></button>
@@ -1874,7 +2091,7 @@
 <!-- Modals (Map Pin Editor) -->
     <transition name="fade">
         <div v-if="showPinModal" class="modal-mask" @click.self="showPinModal = false">
-            <div class="glass-panel theme-rounded w-[450px] flex flex-col overflow-hidden text-[var(--text-main)]" @click.stop>
+            <div role="dialog" aria-label="Map Editor" class="glass-panel theme-rounded w-[450px] flex flex-col overflow-hidden text-[var(--text-main)]" @click.stop>
                 <!-- 1. 顶部标题栏 -->
                 <div class="p-4 border-b border-[var(--border-dim)] bg-[var(--bg-header)] flex justify-between items-center shrink-0">
                     <h3 class="text-lg font-bold flex items-center gap-2">
@@ -2080,8 +2297,10 @@
                 showSettings: false, showFactionModal: false, showSaveLoadModal: false, showScriptGenModal: false, showContextModal: false,
                 saveFiles: [], newSaveFilename: '', 
                 mapToolMode: 'view',
+                // [新增] 安科模式开关
+                generateOptions: false,
                 // --- 输入相关 ---
-                scriptGenPrompt: '', 
+                scriptGenPrompt: '',
                 rawInput: '',
                 godModeInput: '', // [新增] 上帝模式输入
                 scriptAttachments: [], // [新增] 剧本生成附件列表
@@ -2101,6 +2320,11 @@
                     ] 
                 },
                 isRollingDice: false,
+                // [新增] 截图模式状态
+                isScreenshotMode: false,
+                screenshotRect: { x: 0, y: 0, w: 0, h: 0 },
+                screenshotTarget: null, // 当前吸附的 DOM 元素
+                screenshotTargetName: '', // 显示组件名称
                 // [新增] 地图打点模态框状态
                 showPinModal: false,
                 editingPinIndex: -1, // -1 表示新建，>=0 表示编辑索引
@@ -2113,6 +2337,9 @@
                 
                 // --- UI Settings ---
                 ui: { theme: 'terminal', lang: 'zh' },
+                
+                // [新增] 用于设置面板切换 Prompt 标签页
+                settingsPromptTab: 'system', 
 
                 settings: {
                     api: { provider: 'Gemini', baseUrl: '', model: 'gemini-2.5-flash', key: '' },
@@ -2121,74 +2348,59 @@
                         // --- 1. 日常推演 (Daily Deduction) - v3 多层级/多规则版 ---
                         system: `你是一个辅助世界推演的 AI 引擎。
                         【任务】
-                        根据提供的“世界上下文”和“用户指令”，推演下一个时间段发生的事件。
+                        根据“世界上下文”和“用户指令”，推演下一阶段事件并以 JSON 格式输出。
 
-                        【世界观结构说明（重要）】
-                        1. **层级关系 (Hierarchy)**：实体之间存在父子从属关系 (Parent-Child)。例如：“帝国(父)”下辖“行省(子)”。推演时请注意：子实体的剧烈变动通常会向上波及父实体；父实体的决策也会向下影响子实体。
-                        2. **多重规则集 (Multi-Rules)**：不同类型的实体（如“国家”、“英雄”、“神器”）拥有完全不同的属性定义。生成 impacts 时，请确保修改的属性 (attrKey) 确实属于该目标实体类型所定义的规则。
+                        【核心原则】
+                        1. **层级联动**：子实体(Child)的变动会波及父实体(Parent)；父实体的决策会限制子实体。
+                        2. **规则一致性**：修改属性(attrKey)时，必须符合该实体 schemaId 对应的规则集定义。
+                        3. **JSON 完整性**：**必须确保 JSON 格式极其严谨，所有大括号 {} 和中括号 [] 必须成对闭合，严禁截断！**
 
-                        【输出规则】
-                        1. **只输出纯 JSON**：不要包含 \`\`\`json 或 markdown 标记。
-                        2. **语言与篇幅**：内容描述请使用中文。**"content" 字段的详细描述必须超过 100 字**，以保证剧情的丰富性。
-                        3. **属性值多样性**：实体的属性值 (stats) 不必是纯数值，**优先使用8个字以内的描述性文本**。
-                        4. **状态变更逻辑**：impacts 中的 "oldValue" 必须等于当前状态，"newValue" 是推演后的新状态。
+                        【输出格式规范】
+                        1. **纯 JSON**：直接输出 JSON 字符串，不要包含 \`\`\`json 标记。
+                        2. **文本要求**：中文描述。content > 100字。stats 属性值优先使用描述性文本(如"动荡"而非"30")。
+                        3. **数据一致性**：oldValue 必须等于当前值。
 
-                        【高级功能：特殊 Impact类型】
-                        除了常规的属性变更，你可以使用 "type" 字段来触发特殊的世界事件：
+                        【特殊 Impact 事件类型】
+                        A. REGION_TRANSFER: { "targetName": "地块名", "newValue": "新领主ID" }
+                        B. ENTITY_CREATE:   { "data": { "name": "...", "parentId": "...", "schemaId": "..." } }
+                        C. ENTITY_REMOVE:   { "targetId": "..." }
+                        D. PIN_MOVE:        { "targetId": "...", "newValue": "x,y" }
+                        E. GLOBAL MOD:      { "type": "STAT_CHANGE", "targetId": "global", ... }
 
-                        A. **地块控制权转移 (REGION_TRANSFER)**
-                        - "targetName": 目标地块的地理名称 (必须与地图数据中的 "name" 严格一致)
-                        - "newValue": 新的控制者实体ID
+                        【分支选项 (OPTIONS) - 仅在被要求时生成】
+                        - **结构必须为对象数组**：[ { "label": "...", "desc": "..." }, ... ]
+                        - **字段定义**：
+                        * "label": 4-8字短标题 (如"正面强攻")。
+                        * "desc": 详细后果预估。
+                        - **严禁**使用纯字符串数组！
 
-                        B. **创建新实体 (ENTITY_CREATE)**
-                        - "data": 包含新实体信息的对象。**注意：** 必须指定 "schemaId" (规则集ID) 和可选的 "parentId"。
-
-                        C. **移除实体 (ENTITY_REMOVE)**
-                        - "targetId": 要移除的实体ID
-
-                        D. **移动地图标记 (PIN_MOVE)**
-                        - "targetId": 标记的ID
-                        - "newValue": 新坐标字符串 "x,y" (0-100)
-
-                        E. **修改全局变量 (GLOBAL MOD)**
-                        - 依然使用默认类型 "STAT_CHANGE"，但 "targetId" 固定为 "global"。
-
-                        【JSON 结构模板】
+                        【标准 JSON 响应模板】
                         {
-                        "factionId": "行动方ID",
-                        "timeStart": "开始时间",
-                        "timeEnd": "结束时间",
-                        "summary": "事件简短标题",
-                        "content": "详细剧情描述 (支持 Markdown, 必须超过 100 字，请体现上下级实体的互动...)",
+                        "factionId": "行动方ID (如 p_empire)",
+                        "timeStart": "时间段开始",
+                        "timeEnd": "时间段结束",
+                        "summary": "简短标题",
+                        "content": "详细剧情描述...",
+                        
+                        // [可选] 仅在用户明确要求生成选项(Anko模式)时才包含此字段
+                        "options": [
+                            { "label": "外交斡旋", "desc": "尝试通过谈判解决争端，消耗资金但避免伤亡。" },
+                            { "label": "武力镇压", "desc": "调动近卫军进行清洗，虽然高效但会大幅降低稳定度。" },
+                            { "label": "静观其变", "desc": "暂时不采取行动，观察局势变化，风险较低。" }
+                        ],
+
                         "impacts": [
-                            { 
-                            "type": "STAT_CHANGE", 
-                            "targetId": "p_province_01", 
-                            "attrKey": "loyalty", 
-                            "oldValue": "摇摆", 
-                            "newValue": "叛乱" 
+                            {
+                            "type": "STAT_CHANGE",
+                            "targetId": "p_target_id",
+                            "attrKey": "stability",
+                            "oldValue": "稳固",
+                            "newValue": "动荡"
                             },
-                            { 
-                            "type": "STAT_CHANGE", 
-                            "targetId": "p_empire_main", 
-                            "attrKey": "stability", 
-                            "oldValue": "稳固", 
-                            "newValue": "动荡" 
-                            },
-                            { 
-                            "type": "REGION_TRANSFER", 
-                            "targetName": "诺曼底", 
-                            "newValue": "p_england" 
-                            },
-                            { 
-                            "type": "ENTITY_CREATE", 
-                            "data": { 
-                                "name": "新组建的第7军团", 
-                                "color": "#3b82f6", 
-                                "logo": "fa-solid fa-shield", 
-                                "parentId": "p_empire_main",
-                                "schemaId": "rs_legion" 
-                            } 
+                            {
+                            "type": "REGION_TRANSFER",
+                            "targetName": "诺曼底",
+                            "newValue": "p_new_owner"
                             }
                         ]
                         }`,
@@ -2536,9 +2748,6 @@
                 rule_sets: [], 
                 activeSchemaId: '', // 当前在左侧栏正在编辑哪一套规则
                 
-                // stat_schema 保留作为空数组或计算属性的缓存，避免报错，但主要逻辑将迁移
-                stat_schema: [], 
-                
                 lorebook: [], players: [], timeline: [], global_vars: [],
                 map_data: { image: '', pins: [], regions: [] },
 
@@ -2560,9 +2769,13 @@
                     // ★ 新增：显示模式 (full=全显示, icon=仅图标, dot=仅点)
                     displayMode: 'full' 
                 },
-                showMap: false, // <--- [新增] 控制中心区域显示地图还是情报流
+                showMap: false,
+                // [优化] 时间轴分页控制
+                timelinePageSize: 10, 
+                showAllTimeline: false,
                 pendingTurnRange: "", pendingEvents: [],
-                editor: { factionId: '', timeStart: '', timeEnd: '', summary: '', content: '', impacts: [] },
+                // [修改] 增加 options 数组
+                editor: { factionId: '', timeStart: '', timeEnd: '', summary: '', content: '', impacts: [], options: [] },
                 impactForm: { type: 'STAT_CHANGE', targetId: '', attrKey: '', newValue: '', targetName: '' },
                 editImpactForm: { type: 'STAT_CHANGE', targetId: '', attrKey: '', newValue: '', targetName: '' },
                 
@@ -2573,15 +2786,19 @@
                 tempSystemPrompt: "",
                 contextConfig: {
                     includeGlobal: true, includeRules: true, includeHistory: true, includeCurrent: true,
-                    includeMap: true, // [新增] 地图总开关
-                    historyDeepDepth: 1, historyShallowDepth: 3, 
+                    includeMap: true, // [恢复] 地图总开关
+                    
+                    // [恢复] 核心记忆变量
+                    historyDeepDepth: 1,    // 深层记忆 (近 - 含详情)
+                    historyShallowDepth: 3, // 浅层记忆 (远 - 仅摘要)
+                    
                     loreList: [], playerList: [],
                     
-                    // [新增] 地图筛选列表
+                    // [恢复] 地图筛选列表
                     mapRegionList: [], 
                     mapPinList: [],
 
-                    // [修改] 在这里加入 'map'，决定它在上下文中的默认顺序 (例如放在 players 后面)
+                    // [恢复] 正确的装配顺序，Map 在 Players 之后
                     order: ['global', 'rules', 'lore', 'players', 'map', 'history', 'current']
                 }
             }
@@ -2662,6 +2879,13 @@
             }, 6000);
         },
         computed: {
+            // [优化] 仅渲染可见的时间轴回合，避免后期 DOM 爆炸
+            visibleTimeline() {
+                if (this.showAllTimeline) return this.timeline;
+                // 仅返回最后 N 个回合
+                const start = Math.max(0, this.timeline.length - this.timelinePageSize);
+                return this.timeline.slice(start);
+            },
             // [新增] 树状实体列表：将扁平的 players 转换为带层级信息的列表
             sortedPlayers() {
                 const result = [];
@@ -2704,92 +2928,118 @@
             // index.html 约 1300 行左右
             finalContextPreview() {
                 let preview = "";
+                
                 this.contextConfig.order.forEach(type => {
-                    // 1. 全局变量
+                    // ... (Global, Rules, Lore, Players 保持原样) ...
                     if (type === 'global' && this.contextConfig.includeGlobal) {
-                        preview += `【${this.t('ctx_global')}】\n${this.global_vars.map(g => `${g.key}: ${g.value}`).join('\n')}\n\n`;
+                        preview += `=== [WORLD: GLOBAL VARS] ===\n${this.global_vars.map(g => `${g.key}: ${g.value}`).join('\n')}\n\n`;
                     }
-                    
-                    // 2. 规则
                     if (type === 'rules' && this.contextConfig.includeRules) {
-                        preview += `【${this.t('ctx_rules')}】\n${this.stat_schema.map(s => `${s.key}=${s.label}`).join(', ')}\n\n`;
+                        preview += `=== [WORLD: RULES] ===\n`;
+                        this.rule_sets.forEach(rs => {
+                            preview += `> ${rs.name}: ${rs.fields.map(f => f.key).join(', ')}\n`;
+                        });
+                        preview += `\n`;
                     }
-                    
-                    // 3. 资料
                     if (type === 'lore') {
                         const activeLore = this.contextConfig.loreList.filter(l => l.active);
-                        if (activeLore.length > 0) preview += `【${this.t('ctx_lore')}】\n${activeLore.map(l => `> [${l.keys}]: ${l.content}`).join('\n')}\n\n`;
+                        if (activeLore.length) preview += `=== [WORLD: LORE] ===\n${activeLore.map(l => `> [${l.keys}]: ${l.content}`).join('\n')}\n\n`;
                     }
-                    
                     if (type === 'players') {
-                        preview += `【${this.t('ctx_entities')} & HIERARCHY】\n`;
-                        preview += `Rule: Parent entity status changes imply effects on children. Child actions aggregate to affect parents.\n`;
-                        preview += this.buildHierarchyString();
-                        preview += `\n\n`;
-                        // ★★★ 注意：请确保这里没有之前的地图代码了 ★★★
+                        const activeP = this.contextConfig.playerList.filter(p => p.active);
+                        if (activeP.length) preview += `=== [WORLD: ENTITIES] ===\n${activeP.map(p => { const r=this.players.find(x=>x.id===p.id); return `ID:${r.id}|${r.name}\nDesc:${r.desc}\nStats:${JSON.stringify(r.stats)}`; }).join('\n\n')}\n\n`;
                     }
 
-                    // [新增] 独立的地图数据模块
+                    // === [核心修复] 5. 地图数据 (Map) - 适配你的筛选列表 ===
                     if (type === 'map' && this.contextConfig.includeMap) {
-                        const activeRegs = this.contextConfig.mapRegionList.filter(r => r.active);
+                        preview += `=== [TACTICAL MAP DATA] ===\n`;
+                        
+                        // 1. 仅获取被勾选 active 的区域
+                        const activeRegions = this.contextConfig.mapRegionList.filter(r => r.active);
+                        if (activeRegions.length > 0) {
+                            preview += "Regions (Territory Control):\n";
+                            activeRegions.forEach(reg => {
+                                // 注意：因为 contextConfig 里的对象是副本，我们需要用 ID 回查 owner 的最新名称
+                                const realReg = this.map_data.regions.find(r => r.id === reg.id) || reg;
+                                const ownerName = realReg.ownerId ? this.getFactionName(realReg.ownerId) : "NEUTRAL";
+                                preview += `- Region "${realReg.name}" (Owner: ${ownerName})\n`;
+                            });
+                        }
+
+                        // 2. 仅获取被勾选 active 的标记点
                         const activePins = this.contextConfig.mapPinList.filter(p => p.active);
+                        if (activePins.length > 0) {
+                            preview += "\nPoints of Interest:\n";
+                            activePins.forEach(pin => {
+                                const realPin = this.map_data.pins.find(p => p.id === pin.id) || pin;
+                                const label = realPin.label || this.getPinName(realPin.linkId);
+                                preview += `- Pin "${label}" at [${realPin.x.toFixed(1)}%, ${realPin.y.toFixed(1)}%]\n`;
+                            });
+                        }
+                        
+                        if (activeRegions.length === 0 && activePins.length === 0) {
+                            preview += "(No map items selected)\n";
+                        }
+                        preview += "\n";
+                    }
 
-                        // 只有当至少有一个被勾选时才生成 Header
-                        if (activeRegs.length > 0 || activePins.length > 0) {
-                            preview += `【TACTICAL MAP DATA】\n=== TACTICAL MAP STATUS (Geopolitics) ===\n`;
-                            
-                            // 1. 生成选中的 Regions
-                            if (activeRegs.length > 0) {
-                                preview += "Regions (Territory Control):\n";
-                                activeRegs.forEach(reg => {
-                                    const ownerName = reg.ownerId ? this.getFactionName(reg.ownerId) : "NEUTRAL";
-                                    
-                                    // ★★★ 修改：保留一位小数，更精确但依然节省 Token ★★★
-                                    const cX = reg.centerX.toFixed(1);
-                                    const cY = reg.centerY.toFixed(1);
-                                    
-                                    const N = reg.y.toFixed(1);
-                                    const S = (reg.y + reg.h).toFixed(1);
-                                    const W = reg.x.toFixed(1);
-                                    const E = (reg.x + reg.w).toFixed(1);
+                    // === [核心修复] 6. 历史回溯 (History) - 适配 historyDeepDepth/historyShallowDepth ===
+                    if (type === 'history' && this.contextConfig.includeHistory) {
+                        preview += `=== [HISTORY MEMORY] ===\n`;
+                        
+                        const totalLen = this.timeline.length;
+                        // 使用你UI中绑定的变量
+                        const deepLen = this.contextConfig.historyDeepDepth || 0;
+                        const shallowLen = this.contextConfig.historyShallowDepth || 0;
 
-                                    // --- 格式化输出 ---
-                                    preview += `- Region "${reg.name}" (Owner: [${ownerName}] ID:${reg.ownerId||''}). `;
-                                    preview += `Geo: Center[${cX}, ${cY}], Bounds[N:${N}, S:${S}, W:${W}, E:${E}].\n`;
+                        // 正序切片计算: 
+                        // [Start] ... [Shallow Zone] ... [Deep Zone] ... [End]
+                        const deepStart = Math.max(0, totalLen - deepLen);
+                        const shallowEnd = deepStart;
+                        const shallowStart = Math.max(0, shallowEnd - shallowLen);
+
+                        const shallowTurns = this.timeline.slice(shallowStart, shallowEnd);
+                        const deepTurns = this.timeline.slice(deepStart);
+
+                        // 渲染浅层 (只摘要)
+                        if (shallowTurns.length > 0) {
+                            preview += `--- Shallow Memory (Summary Only) ---\n`;
+                            shallowTurns.forEach(turn => {
+                                preview += `[Turn ${turn.id}] ${turn.timeRange}\n`;
+                                turn.events.forEach(e => {
+                                    preview += ` • ${e.summary} (Actor: ${e.factionId})\n`;
                                 });
-                            }
+                                preview += `\n`;
+                            });
+                        }
 
-                            // 2. 生成选中的 Pins
-                            if (activePins.length > 0) {
-                                preview += "\nKey Locations (Points of Interest):\n";
-                                activePins.forEach(pin => {
-                                    // 如果 pin.label 为空，尝试用 linkId 获取名字
-                                    let name = pin.label;
-                                    if (!name && pin.linkId) name = this.getPinName(pin.linkId);
-                                    name = name || "Unnamed Marker";
-                                    
-                                    preview += `- POI "${name}" at [${pin.x.toFixed(1)}%, ${pin.y.toFixed(1)}%]. Type: ${pin.type}.\n`;
+                        // 渲染深层 (含详情)
+                        if (deepTurns.length > 0) {
+                            preview += `--- Deep Memory (Full Details) ---\n`;
+                            deepTurns.forEach(turn => {
+                                preview += `[Turn ${turn.id}] ${turn.timeRange}\n`;
+                                turn.events.forEach(e => {
+                                    preview += ` • ${e.summary} (Actor: ${e.factionId})\n`;
+                                    if (e.content) preview += `   Details: ${e.content.substring(0, 150)}...\n`;
+                                    if (e.impacts && e.impacts.length) {
+                                         preview += `   Impacts: ${e.impacts.map(i => `${i.targetName}.${i.attrLabel}: ${i.change || (i.oldValue+'->'+i.newValue)}`).join('; ')}\n`;
+                                    }
                                 });
-                            }
-                            
-                            preview += "Note: Map Coords 0-100%. (0,0) is Top-Left(North-West). X=West->East, Y=North->South.\n\n";
+                                preview += `\n`;
+                            });
+                        }
+
+                        if (shallowTurns.length === 0 && deepTurns.length === 0) {
+                            preview += "(No history available in current range)\n\n";
                         }
                     }
-                    
-                    // 5. 历史
-                    if (type === 'history' && this.contextConfig.includeHistory) {
-                        // ... (历史记录代码保持不变) ...
-                        let historyContext = `【${this.t('ctx_history')}】\n`;
-                        // ... (略) ...
-                        preview += historyContext;
-                    }
-                    
-                    // 6. 当前指令
+
+                    // 7. Current (保持原样)
                     if (type === 'current' && this.contextConfig.includeCurrent) {
-                        // ... (当前指令代码保持不变) ...
-                        preview += `【${this.t('ctx_current')}】\n`;
+                        preview += `=== [CURRENT INSTRUCTION] ===\n`;
                         if (this.rawInput) preview += `> CMD: ${this.rawInput}\n`;
-                        // ... (略) ...
+                        if (this.editor.factionId) preview += `> ActorID: ${this.editor.factionId}\n`;
+                        if (this.editor.summary) preview += `> Draft: ${this.editor.summary}\n`;
                         preview += `\n`;
                     }
                 });
@@ -2797,6 +3047,284 @@
             }
         },
         methods: {
+            // [新增] 添加选项到右侧编辑器
+            addOptionToEditor() {
+                if (!this.editor.options) this.editor.options = [];
+                this.editor.options.push({ label: 'New Option', desc: 'Description of the outcome...' });
+            },
+
+            // [新增] 添加选项到时间轴事件
+            addOptionToEvent(event) {
+                if (!event.options) event.options = [];
+                // 确保是对象结构
+                event.options.push({ label: 'New Decision', desc: 'Potential consequences...' });
+            },
+
+            // --- 新增工具方法 ---
+            createImpactObject(form) {
+                const type = form.type || 'STAT_CHANGE';
+                let newImpact = { type };
+
+                if (type === 'STAT_CHANGE') {
+                    if (!form.targetId || !form.attrKey || form.newValue === '') return null;
+                    
+                    // 全局变量处理
+                    if (form.targetId === 'global') {
+                        Object.assign(newImpact, {
+                            targetId: 'global',
+                            targetName: 'Global',
+                            attrKey: form.attrKey,
+                            attrLabel: form.attrKey,
+                            oldValue: this.getAttrValueDisplay('global', form.attrKey),
+                            newValue: form.newValue
+                        });
+                    } else {
+                        // 实体处理
+                        const t = this.players.find(p => p.id === form.targetId);
+                        if (!t) return null;
+                        
+                        // ★ 修复：不再依赖 this.stat_schema，而是通过 getSchemaLabel 全局查找
+                        const label = this.getSchemaLabel(form.attrKey, t.schemaId);
+                        
+                        Object.assign(newImpact, {
+                            targetId: t.id,
+                            targetName: t.name,
+                            attrKey: form.attrKey,
+                            attrLabel: label,
+                            oldValue: t.stats[form.attrKey] || '-',
+                            newValue: form.newValue
+                        });
+                    }
+                } 
+                else if (type === 'REGION_TRANSFER') {
+                    if (!form.targetName || !form.newValue) return null;
+                    Object.assign(newImpact, { targetName: form.targetName, newValue: form.newValue });
+                }
+                else if (type === 'ENTITY_CREATE') {
+                    if (!form.newValue.trim()) return null;
+                    Object.assign(newImpact, { data: { name: form.newValue.trim() } });
+                }
+                else if (type === 'ENTITY_REMOVE') {
+                    if (!form.targetId) return null;
+                    Object.assign(newImpact, { targetId: form.targetId });
+                }
+                else if (type === 'PIN_MOVE') {
+                    if (!form.targetId || !form.newValue) return null;
+                    const pin = this.map_data.pins.find(p => p.id === form.targetId);
+                    const oldCoords = pin ? `${pin.x.toFixed(1)},${pin.y.toFixed(1)}` : '?,?';
+                    Object.assign(newImpact, {
+                        targetId: form.targetId,
+                        targetName: pin ? (pin.label || this.getPinName(pin.linkId)) : 'Unknown Pin',
+                        oldValue: oldCoords,
+                        newValue: form.newValue
+                    });
+                }
+                return newImpact;
+            },
+// --- [新增] 智能截图系统 ---
+            
+            toggleScreenshotMode() {
+                this.isScreenshotMode = !this.isScreenshotMode;
+                if (!this.isScreenshotMode) {
+                    this.screenshotRect = { x:0, y:0, w:0, h:0 };
+                    this.screenshotTarget = null;
+                }
+            },
+
+            exitScreenshotMode() {
+                this.isScreenshotMode = false;
+            },
+
+            // 核心逻辑：智能查找“值得截图”的父级容器
+            handleScreenshotHover(e) {
+                const elements = document.elementsFromPoint(e.clientX, e.clientY);
+                
+                // 1. 找到第一个不是“截图辅助层”的元素
+                const el = elements.find(node => 
+                    node.nodeType === 1 && 
+                    !node.classList.contains('screenshot-backdrop') &&
+                    !node.classList.contains('screenshot-overlay') &&
+                    !node.classList.contains('screenshot-label')
+                );
+
+                if (!el) return;
+
+                // 2. [关键修改] 特殊处理地图区域
+                // 如果鼠标下的元素属于地图视口（或者是视口本身），直接强制锁定为视口容器
+                // 这样无论地图放大多少倍，我们只截取“窗口”看到的部分
+                const mapViewport = el.closest('.map-viewport');
+                if (mapViewport) {
+                    this.screenshotTarget = mapViewport;
+                    this.screenshotTargetName = "Tactical_Map_View";
+                    
+                    const rect = mapViewport.getBoundingClientRect();
+                    this.screenshotRect = {
+                        x: rect.left,
+                        y: rect.top,
+                        w: rect.width,
+                        h: rect.height
+                    };
+                    return; // 地图处理完毕，直接返回
+                }
+
+                // 3. 常规组件吸附逻辑 (处理非地图区域)
+                const targetSelectors = [
+                    '.info-card',          // 实体卡片
+                    '.impact-badge',       // 状态胶囊
+                    '.glass-panel',        // 弹窗
+                    'aside',               // 侧边栏
+                    'header',              // 顶栏
+                    'section[role="main"]',// 中间主视图 (如果没选中地图视口，可能会选中这个)
+                    '.poster-terminal',    
+                    '.poster-newspaper'
+                ];
+
+                let target = el.closest(targetSelectors.join(','));
+
+                // 兜底逻辑
+                if (!target) {
+                    // 排除大背景，防止误触
+                    if (el.id === 'app' || el.tagName === 'BODY' || el.tagName === 'HTML' || el.classList.contains('app-texture')) {
+                        this.screenshotRect = { x:0, y:0, w:0, h:0 };
+                        this.screenshotTarget = null;
+                        return;
+                    }
+                    target = el; 
+                }
+
+                this.screenshotTarget = target;
+                
+                // 获取显示名称
+                let name = target.className;
+                if (typeof name === 'string') name = name.split(' ')[0];
+                else name = target.tagName.toLowerCase();
+                
+                if (target.getAttribute('aria-label')) name = target.getAttribute('aria-label');
+                this.screenshotTargetName = name || 'Element';
+
+                // 计算位置
+                const rect = target.getBoundingClientRect();
+                this.screenshotRect = {
+                    x: rect.left,
+                    y: rect.top,
+                    w: rect.width,
+                    h: rect.height
+                };
+            },
+
+            async captureScreenshot() {
+                if (!this.screenshotTarget) {
+                    alert("错误：未选中任何区域。");
+                    return;
+                }
+
+                const rect = { ...this.screenshotRect };
+                const fileNameLabel = this.screenshotTargetName || "Capture";
+
+                // 1. 暂时隐藏截图框
+                this.isScreenshotMode = false;
+                await this.$nextTick();
+
+                try {
+                    // 获取 DPR (Retina屏幕支持)
+                    const dpr = window.devicePixelRatio || 1;
+                    
+                    // 计算屏幕物理分辨率
+                    const screenW = window.screen.width * dpr;
+                    const screenH = window.screen.height * dpr;
+
+                    // 2. 唤起屏幕共享 (参数调优版)
+                    const stream = await navigator.mediaDevices.getDisplayMedia({
+                        video: {
+                            displaySurface: "browser",
+                            // 【优化】去掉鼠标光标 (需选择"当前标签页")
+                            cursor: "never", 
+                            
+                            // 【优化】请求最大物理分辨率
+                            width: { ideal: screenW, max: 8192 }, 
+                            height: { ideal: screenH, max: 8192 },
+                            
+                            // 【优化】强制低帧率，告诉编码器我们要的是画质而不是流畅度
+                            frameRate: { ideal: 1, max: 15 }, 
+                            
+                            resizeMode: "none"
+                        },
+                        audio: false,
+                        preferCurrentTab: true
+                    });
+
+                    // 3. 视频预热
+                    const video = document.createElement("video");
+                    video.style.position = "fixed";
+                    video.style.top = "-9999px";
+                    video.style.left = "-9999px";
+                    // 确保 video 元素本身也是物理像素大小，防止浏览器内部缩放
+                    video.style.width = window.innerWidth + "px";
+                    video.style.height = window.innerHeight + "px";
+                    document.body.appendChild(video);
+
+                    video.srcObject = stream;
+                    await video.play();
+
+                    // 【强制等待】等待画面变清晰 (视频流刚开始几帧通常很糊，主要是关键帧未到)
+                    await new Promise(resolve => setTimeout(resolve, 800));
+
+                    // 4. 计算精准坐标 (消除亚像素模糊)
+                    // 视频实际分辨率
+                    const videoW = video.videoWidth;
+                    // CSS 视口分辨率
+                    const viewportW = window.innerWidth;
+                    // 真实的缩放因子
+                    const scaleFactor = videoW / viewportW;
+
+                    // 【关键优化】所有坐标强制取整 (Math.round)，避免半像素渲染导致的模糊
+                    const sX = Math.round(rect.x * scaleFactor);
+                    const sY = Math.round(rect.y * scaleFactor);
+                    const sW = Math.round(rect.w * scaleFactor);
+                    const sH = Math.round(rect.h * scaleFactor);
+
+                    // 5. 绘图
+                    const canvas = document.createElement("canvas");
+                    const ctx = canvas.getContext("2d");
+
+                    canvas.width = sW;
+                    canvas.height = sH;
+
+                    // 关闭平滑 (在 1:1 像素映射时，关闭平滑反而更锐利)
+                    ctx.imageSmoothingEnabled = false;
+
+                    // 【可选黑科技】应用 SVG 锐化滤镜补偿视频压缩模糊
+                    // 如果觉得画面太“硬”，可以注释掉下面这行
+                    ctx.filter = 'contrast(1.05) saturate(1.05)'; 
+
+                    ctx.drawImage(
+                        video,
+                        sX, sY, sW, sH,  // 源坐标 (物理像素)
+                        0, 0, canvas.width, canvas.height // 目标坐标
+                    );
+
+                    // 6. 清理
+                    stream.getTracks().forEach(track => track.stop());
+                    document.body.removeChild(video);
+
+                    // 7. 下载
+                    const link = document.createElement('a');
+                    link.download = `Crystal_Snap_${fileNameLabel}_${Date.now()}.png`;
+                    link.href = canvas.toDataURL("image/png");
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+
+                } catch (e) {
+                    console.error(e);
+                    if (e.name !== 'NotAllowedError') {
+                        alert("截图异常: " + e.message);
+                    }
+                } finally {
+                    document.body.style.cursor = 'default';
+                    this.isScreenshotMode = true;
+                }
+            },
             // [新增] 切换地图标记显示模式
             cycleMapDisplayMode() {
                 const modes = ['full', 'icon', 'dot'];
@@ -2907,8 +3435,8 @@
                 const direction = e.deltaY > 0 ? -1 : 1;
                 let newScale = this.mapView.scale + (direction * zoomIntensity);
 
-                // 限制缩放范围 (0.5x ~ 5x)
-                newScale = Math.min(Math.max(0.5, newScale), 5);
+                // [修改] 限制缩放范围 (0.5x ~ 10x)，即最高 1000%
+                newScale = Math.min(Math.max(0.5, newScale), 10);
                 
                 // 简单的居中缩放逻辑 (为了代码简洁，暂时不做跟随鼠标位置的复杂矩阵计算)
                 // 如果需要更高级的“跟随鼠标缩放”，代码量会增加很多
@@ -3134,8 +3662,9 @@
                                Math.abs(b - startColor[2]) < tolerance; 
                     };
 
-                    // BFS 泛洪
-                    const stack = [[startX, startY]];
+                    // BFS 泛洪 (优化：使用单层整数栈减少GC压力)
+                    // 将坐标 x,y 编码为单一整数 index = y * width + x
+                    const stack = [startY * width + startX]; 
                     const visited = new Uint8Array(width * height);
                     const regionPixels = []; 
                     
@@ -3143,24 +3672,33 @@
                     
                     visited[startY * width + startX] = 1;
 
+                    // 预先定义方向数组，避免循环内创建对象
+                    const dx = [1, -1, 0, 0];
+                    const dy = [0, 0, 1, -1];
+
                     while (stack.length) {
-                        const [x, y] = stack.pop();
+                        const idx = stack.pop();
+                        const x = idx % width;
+                        const y = (idx / width) | 0; // 取整
                         
                         regionPixels.push(x, y);
+                        
+                        // 只需要比较当前点，不需要每次循环都比较
                         if (x < minX) minX = x;
                         if (x > maxX) maxX = x;
                         if (y < minY) minY = y;
                         if (y > maxY) maxY = y;
 
-                        const neighbors = [[x+1, y], [x-1, y], [x, y+1], [x, y-1]];
-                        for (let n of neighbors) {
-                            const nx = n[0], ny = n[1];
+                        for (let i = 0; i < 4; i++) {
+                            const nx = x + dx[i];
+                            const ny = y + dy[i];
+
                             if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
                                 const nIdx = ny * width + nx;
                                 if (!visited[nIdx]) {
                                     if (match(nIdx * 4)) {
                                         visited[nIdx] = 1;
-                                        stack.push([nx, ny]);
+                                        stack.push(nIdx);
                                     }
                                 }
                             }
@@ -3454,9 +3992,23 @@
                 return this.translations[key][this.ui.lang] || this.translations[key]['zh'];
             },
             renderMarkdown(text) { return marked.parse(text || ''); },
-            getFactionColor(id) { if(id === 'global') return '#94a3b8'; const p = this.players.find(x => x.id === id); return p ? p.color : '#6366f1'; },
-            getFactionName(id) { if (id === 'global') return this.t('option_global'); const p = this.players.find(x => x.id === id); return p ? p.name : 'Unknown'; },
-            getFactionLogo(id) { if (id === 'global') return 'fa-solid fa-globe'; const p = this.players.find(x => x.id === id); return p && p.logo ? p.logo : 'fa-solid fa-users'; },
+            getFactionColor(id) { 
+                if(!id || id === 'global') return '#94a3b8'; 
+                const p = this.players.find(x => x.id === id); 
+                return p ? p.color : '#6366f1'; 
+            },
+            getFactionName(id) { 
+                if (id === 'global') return this.t('option_global'); 
+                if (!id) return 'Unknown';
+                const p = this.players.find(x => x.id === id); 
+                return p ? p.name : 'Unknown'; 
+            },
+            getFactionLogo(id) { 
+                if (id === 'global') return 'fa-solid fa-globe'; 
+                if (!id) return 'fa-solid fa-users';
+                const p = this.players.find(x => x.id === id); 
+                return p && p.logo ? p.logo : 'fa-solid fa-users'; 
+            },
             getSchemaLabel(key) { const s = this.stat_schema.find(x => x.key === key); return s ? s.label : key; },
             // [新增] 获取指定规则集的所有字段
             getFieldsBySchemaId(sid) {
@@ -3468,18 +4020,21 @@
                 return this.getFieldsBySchemaId(this.activeSchemaId);
             },
             // [修改] 根据 key 查找 label (需要遍历所有规则集，或者指定规则集)
-            getSchemaLabel(key, schemaId = null) { 
+            getSchemaLabel(key, schemaId = null) {
+                // 1. 如果指定了 schemaId，精准查找
                 if (schemaId) {
-                    const fields = this.getFieldsBySchemaId(schemaId);
-                    const f = fields.find(x => x.key === key);
-                    if (f) return f.label;
+                    const schema = this.rule_sets.find(r => r.id === schemaId);
+                    if (schema) {
+                        const field = schema.fields.find(f => f.key === key);
+                        if (field) return field.label;
+                    }
                 }
-                // 如果没指定 schemaId，全表查找 (Fallback)
-                for (const set of this.rule_sets) {
-                    const f = set.fields.find(x => x.key === key);
-                    if (f) return f.label;
+                // 2. 全局查找 (用于 Impact 显示等上下文不明确的情况)
+                for (const rs of this.rule_sets) {
+                    const field = rs.fields.find(f => f.key === key);
+                    if (field) return field.label;
                 }
-                return key; 
+                return key; // 找不到则返回 key 本身
             },
             // [新增] 添加新规则集
             addNewRuleSet() {
@@ -3633,7 +4188,21 @@
                     this.showSaveLoadModal = false;
                 } catch (e) { this.serverConnected = false; }
             },
+            // [优化] 简单的防抖保存包装器
+            debouncedSave(filename) {
+                if (this.saveTimeout) clearTimeout(this.saveTimeout);
+                this.saveTimeout = setTimeout(() => {
+                    this.saveGame(filename);
+                }, 1000); // 延迟 1 秒保存
+            },
+
             async saveGame(filename) {
+                // 如果是防抖触发的，清除计时器句柄
+                if (this.saveTimeout) { 
+                    clearTimeout(this.saveTimeout); 
+                    this.saveTimeout = null; 
+                }
+                
                 if (!filename || !filename.trim()) return;
                 if (!filename.endsWith('.json')) filename += '.json';
                 
@@ -3695,10 +4264,6 @@ applyState(data) {
                 this.map_data = sanitizedData.map_data || { image: '', pins: [] }; 
                 this.pendingEvents = sanitizedData.currentTurnPending || [];
                 this.serverConnected = true;
-
-                // 4. [移除] 不再需要在此处手动更新 stat_schema，因为它是一个 computed property (计算属性)，
-                // 但为了保险起见，保留这行也没问题，因为此时 activeSchemaId 已被正确设置。
-                this.stat_schema = this.getActiveSchemaFields();
             },
             
             addGlobalVar() {
@@ -3770,178 +4335,413 @@ applyState(data) {
                     }
                 }
             },
+            // [修改] 点击选项后的处理逻辑
+            selectOption(event, optData) {
+                let decisionText = "";
+                if (typeof optData === 'object') {
+                    // 严格取 label，并附带 desc 给 AI 做上下文
+                    decisionText = `${optData.label} (${optData.desc})`;
+                } else {
+                    decisionText = optData;
+                }
+                
+                this.rawInput = `[Decision] ${this.getFactionName(event.factionId)} chose: ${decisionText}`;
+                
+                // 2. 切换到指令 Tab
+                this.tabs.right = 'input';
+                
+                // 3. 自动打开上下文组装窗口 (或者你可以直接调用 runAiInference，但打开窗口更安全)
+                this.openContextModal();
 
+                // 4. 可选：为了方便，自动把“当前指令”勾选上（如果之前没勾的话）
+                this.contextConfig.includeCurrent = true;
+            },
+            // --- ★ 核心智能 JSON 修复引擎 v6.0 (Heuristic Stack Repair) ★ ---
+            // 真正的“科学”修复：基于堆栈深度的启发式决策 (Insertion vs Substitution)
+            smartJSONParse(jsonStr) {
+                const firstOpen = jsonStr.indexOf('{');
+                if (firstOpen === -1) throw new Error("No JSON object found.");
+                
+                // 截取从第一个 { 开始的字符串
+                let str = jsonStr.substring(firstOpen);
+                
+                // 结果构建器
+                let result = [];
+                // 期望栈：存入“期望看到的闭合符号”
+                let stack = []; 
+                let inString = false;
+                let i = 0;
+                
+                // 根节点闭合标记
+                let rootClosed = false;
+
+                for (; i < str.length; i++) {
+                    if (rootClosed) break; // 根节点闭合后，忽略剩余字符
+
+                    const char = str[i];
+                    
+                    // 1. 字符串状态处理
+                    if (char === '"' && (i === 0 || str[i-1] !== '\\')) {
+                        inString = !inString;
+                        result.push(char);
+                        continue;
+                    }
+                    if (inString) {
+                        result.push(char);
+                        continue;
+                    }
+
+                    // 2. 结构字符处理
+                    if (char === '{') {
+                        stack.push('}');
+                        result.push(char);
+                    } 
+                    else if (char === '[') {
+                        stack.push(']');
+                        result.push(char);
+                    } 
+                    else if (char === '}' || char === ']') {
+                        if (stack.length === 0) {
+                            // 栈空了还有闭合符，说明多了，忽略
+                            continue;
+                        }
+
+                        const expected = stack[stack.length - 1]; // 栈顶期望
+
+                        // === 情况 A: 完美匹配 ===
+                        if (char === expected) {
+                            stack.pop();
+                            result.push(char);
+                            if (stack.length === 0) rootClosed = true;
+                        } 
+                        // === 情况 B: 不匹配，进行启发式决策 ===
+                        else {
+                            // 关键逻辑：判断是“漏写了”还是“写错了”
+                            // 检查栈的倒数第二层（Parent的Parent）
+                            const parentExpected = stack.length > 1 ? stack[stack.length - 2] : null;
+
+                            // 如果当前字符匹配“爷爷节点”的期望，说明“父亲节点”漏闭合了
+                            // 例子: [ { "a":1 ]  --> 栈是 ['}', ']']。当前是 ']'。
+                            // ']' 不等于栈顶 '}'，但等于爷爷 ']'。
+                            // 结论：漏写了 '}'。
+                            if (char === parentExpected) {
+                                // 动作：插入栈顶期望的符号，弹出栈顶
+                                const missingChar = stack.pop();
+                                result.push(missingChar); 
+                                
+                                // 回溯：当前的 char (即 ']') 还没被消费，i 减 1 让下一轮循环处理它
+                                i--; 
+                            } 
+                            // 否则，认为是单纯的笔误 (Typo)
+                            // 例子: { "a": 1 ] --> 栈是 ['}']。没有爷爷。
+                            // 结论：把 ']' 写成了 '}'。
+                            else {
+                                // 动作：强制替换
+                                stack.pop();
+                                result.push(expected); // 写入期望的符号，而不是当前的 char
+                                if (stack.length === 0) rootClosed = true;
+                            }
+                        }
+                    } 
+                    // 3. 普通字符 (非结构非字符串)
+                    else {
+                        result.push(char);
+                    }
+                }
+
+                // 4. 自动补全截断 (Auto-Complete)
+                // 循环结束如果栈还有剩，说明被截断了，依次补齐
+                while (stack.length > 0) {
+                    result.push(stack.pop());
+                }
+
+                // 5. 最终清洗：转字符串 -> 去尾部逗号 -> 解析
+                let fixedStr = result.join('');
+                
+                // 正则：去除 } 或 ] 前面的逗号 (JSON 不允许尾部逗号)
+                fixedStr = fixedStr.replace(/,\s*([\]}])/g, '$1');
+
+                try {
+                    return JSON.parse(fixedStr);
+                } catch (e) {
+                    console.error("智能修复 v6 失败。原始:", str, "\n修复后:", fixedStr);
+                    throw e;
+                }
+            },
             // --- 核心推演 (修改后支持 baseUrl 和 Attachments 接口) ---
             async runAiInference() {
                 this.isThinking = true;
-                const finalContext = this.finalContextPreview;
                 
+                // --- 构建单体上下文 (严格遵循 contextConfig.order 顺序) ---
+                let contextPayload = "";
+                
+                this.contextConfig.order.forEach(type => {
+                    
+                    // 1. 全局变量
+                    if (type === 'global' && this.contextConfig.includeGlobal) {
+                        contextPayload += `=== [WORLD: GLOBAL VARS] ===\n${this.global_vars.map(g => `${g.key}: ${g.value}`).join('\n')}\n\n`;
+                    }
+                    
+                    if (type === 'rules' && this.contextConfig.includeRules) {
+                        contextPayload += `=== [WORLD: RULES DEFINITIONS] ===\n`;
+                        // 遍历所有规则集发送给 AI
+                        this.rule_sets.forEach(rs => {
+                            const fieldsStr = rs.fields.map(f => `${f.key}=${f.label}`).join(', ');
+                            contextPayload += `TYPE [${rs.name}]: ${fieldsStr}\n`;
+                        });
+                        contextPayload += `\n`;
+                    }
+                    
+                    // 3. 资料设定
+                    if (type === 'lore') {
+                        const activeLore = this.contextConfig.loreList.filter(l => l.active);
+                        if (activeLore.length > 0) {
+                            contextPayload += `=== [WORLD: LORE] ===\n${activeLore.map(l => `> [${l.keys}]: ${l.content}`).join('\n')}\n\n`;
+                        }
+                    }
+                    
+                    // 4. 参与实体
+                    if (type === 'players') {
+                        const activePlayers = this.contextConfig.playerList.filter(p => p.active);
+                        if (activePlayers.length > 0) {
+                            contextPayload += `=== [WORLD: ENTITIES] ===\n${activePlayers.map(p => {
+                                const realP = this.players.find(x => x.id === p.id);
+                                return `ID:${realP.id} | ${realP.name}\n  Desc: ${realP.desc}\n  Stats: ${JSON.stringify(realP.stats)}`;
+                            }).join('\n\n')}\n\n`;
+                        }
+                    }
+
+                    // 5. 地图数据 (Map) - 适配筛选列表
+                    if (type === 'map' && this.contextConfig.includeMap) {
+                        const activeRegions = this.contextConfig.mapRegionList.filter(r => r.active);
+                        const activePins = this.contextConfig.mapPinList.filter(p => p.active);
+                        
+                        if (activeRegions.length > 0 || activePins.length > 0) {
+                            contextPayload += `=== [TACTICAL MAP DATA] ===\n`;
+                            
+                            if (activeRegions.length > 0) {
+                                contextPayload += "Regions (Control):\n";
+                                activeRegions.forEach(reg => {
+                                    // 必须回查原始数据以获取最新状态
+                                    const realReg = this.map_data.regions.find(r => r.id === reg.id) || reg;
+                                    const owner = realReg.ownerId ? this.getFactionName(realReg.ownerId) : "NEUTRAL";
+                                    contextPayload += `- Region "${realReg.name}" (Owner: ${owner})\n`;
+                                });
+                            }
+                            
+                            if (activePins.length > 0) {
+                                contextPayload += "\nPoints of Interest:\n";
+                                activePins.forEach(pin => {
+                                    const realPin = this.map_data.pins.find(p => p.id === pin.id) || pin;
+                                    const label = realPin.label || this.getPinName(realPin.linkId);
+                                    contextPayload += `- Pin "${label}" at [${realPin.x.toFixed(0)},${realPin.y.toFixed(0)}]\n`;
+                                });
+                            }
+                            contextPayload += "\n";
+                        }
+                    }
+
+                    // 6. 历史回溯 (History) - 正序 + 深浅分离
+                    if (type === 'history' && this.contextConfig.includeHistory) {
+                        const totalLen = this.timeline.length;
+                        const deepLen = this.contextConfig.historyDeepDepth;       // 近期 (详情)
+                        const shallowLen = this.contextConfig.historyShallowDepth; // 远期 (摘要)
+
+                        // 计算切片索引 (正序: 远 -> 近)
+                        const deepStart = Math.max(0, totalLen - deepLen);
+                        const shallowEnd = deepStart;
+                        const shallowStart = Math.max(0, shallowEnd - shallowLen);
+
+                        const shallowTurns = this.timeline.slice(shallowStart, shallowEnd);
+                        const deepTurns = this.timeline.slice(deepStart);
+
+                        if (shallowTurns.length > 0 || deepTurns.length > 0) {
+                            contextPayload += `=== [HISTORY MEMORY] ===\n`;
+                            
+                            // A. 浅层记忆 (仅摘要)
+                            if (shallowTurns.length > 0) {
+                                contextPayload += `--- Shallow Memory (Far Context / Summary Only) ---\n`;
+                                shallowTurns.forEach(turn => {
+                                    contextPayload += `[Turn ${turn.id}] ${turn.timeRange}\n`;
+                                    turn.events.forEach(e => {
+                                        contextPayload += ` • ${e.summary} (Actor: ${e.factionId})\n`;
+                                    });
+                                    contextPayload += `\n`;
+                                });
+                            }
+
+                            // B. 深层记忆 (含完整 Content 和 Impacts)
+                            if (deepTurns.length > 0) {
+                                contextPayload += `--- Deep Memory (Recent Events / Full Detail) ---\n`;
+                                deepTurns.forEach(turn => {
+                                    contextPayload += `[Turn ${turn.id}] ${turn.timeRange}\n`;
+                                    turn.events.forEach(e => {
+                                        contextPayload += ` • ${e.summary} (Actor: ${e.factionId})\n`;
+                                        // 注入完整内容，不截断
+                                        if (e.content) contextPayload += `   Details: ${e.content}\n`;
+                                        if (e.impacts && e.impacts.length) {
+                                             contextPayload += `   Impacts: ${e.impacts.map(i => `${i.targetName}.${i.attrLabel}: ${i.change || (i.oldValue+'->'+i.newValue)}`).join('; ')}\n`;
+                                        }
+                                    });
+                                    contextPayload += `\n`;
+                                });
+                            }
+                            contextPayload += "\n";
+                        }
+                    }
+
+                    // 7. 当前指令 (Current)
+                    if (type === 'current' && this.contextConfig.includeCurrent) {
+                        contextPayload += `=== [CURRENT INSTRUCTION] ===\n`;
+                        if (this.rawInput) contextPayload += `> COMMAND: ${this.rawInput}\n`;
+                        if (this.editor.factionId) contextPayload += `> ACTOR_ID: ${this.editor.factionId}\n`;
+                        if (this.editor.timeStart) contextPayload += `> TIME: ${this.editor.timeStart} - ${this.editor.timeEnd}\n`;
+                        if (this.editor.summary) contextPayload += `> DRAFT_TITLE: ${this.editor.summary}\n`;
+                        if (this.editor.content) contextPayload += `> DRAFT_CONTENT: ${this.editor.content}\n`;
+                        if (this.editor.impacts.length) {
+                            contextPayload += `> PLANNED_IMPACTS: ${JSON.stringify(this.editor.impacts)}\n`;
+                        }
+                        // 安科模式开关
+                        if (this.generateOptions) {
+                            contextPayload += `> MODE: Generate "options" array for player decision.\n`;
+                        }
+                        contextPayload += `\n`;
+                    }
+                });
+
+                // --- 组装 API 请求 ---
                 const payload = { 
                     provider: this.settings.api.provider, 
                     apiKey: this.settings.api.key, 
-                    baseUrl: this.settings.api.baseUrl, 
+                    baseUrl: this.settings.api.baseUrl,
                     model: this.settings.api.model, 
                     useProxy: this.settings.proxy.enabled, 
-                    proxyPort: this.settings.proxy.port, 
-                    systemPrompt: this.settings.prompts.system, 
-                    context: finalContext, 
-                    userPrompt: `Generate next turn JSON.` 
+                    proxyPort: this.settings.proxy.port,
+                    
+                    systemPrompt: this.tempSystemPrompt, 
+                    
+                    // 核心修改：所有信息都放在 context 里，history 留空以避免后端重复插入
+                    context: contextPayload,    
+                    history: "",    
+                    
+                    // userPrompt 仅作为最后的触发器
+                    userPrompt: "Analyze context and generate the next turn JSON event." 
                 };
 
                 try {
                     const res = await axios.post(`${API_BASE}/api/ai/generate`, payload);
                     const match = res.data.result.match(/\{[\s\S]*\}/);
-                    if (!match) throw new Error("AI output invalid JSON");
+                    if (!match) throw new Error("AI did not return a valid JSON object.");
                     
-                    const parsed = JSON.parse(match[0]);
+                    // ... (后续解析逻辑保持不变) ...
+                    const parsed = this.smartJSONParse(match[0]); // 使用你的智能解析器
+                    
                     this.editor.content = parsed.content || ""; 
                     this.editor.summary = parsed.summary || ""; 
-                    this.editor.factionId = parsed.factionId || ""; 
+                    this.editor.factionId = parsed.factionId || this.editor.factionId; 
                     this.editor.timeStart = parsed.timeStart || ""; 
                     this.editor.timeEnd = parsed.timeEnd || "";
+                    // 处理选项
+                    if (parsed.options && Array.isArray(parsed.options)) {
+                        this.editor.options = parsed.options;
+                    }
                     
-                    // [修正] runAiInference 中的 Impact 解析逻辑
-                    if(parsed.impacts && Array.isArray(parsed.impacts)) {
+                     if(parsed.impacts && Array.isArray(parsed.impacts)) {
                         this.editor.impacts = []; 
                         parsed.impacts.forEach(imp => {
-                            // 默认为 STAT_CHANGE
-                            const type = imp.type || 'STAT_CHANGE';
+                            
+                            // --- ★ 智能类型推断 (Duck Typing) & 标准化 ★ ---
+                            let normalizedType = 'UNKNOWN';
 
-                            // === 分支 1: 属性变更 (STAT_CHANGE) ===
-                            if (type === 'STAT_CHANGE') {
-                                // 特殊情况: 全局变量 (global)
-                                if (imp.targetId === 'global' || imp.targetName === 'global') {
-                                    this.editor.impacts.push({
-                                        type: 'STAT_CHANGE',
-                                        targetId: 'global',
-                                        targetName: 'Global', // 显示名称
-                                        attrKey: imp.attrKey,
-                                        attrLabel: imp.attrKey, // 全局变量直接用 Key 当 Label
-                                        oldValue: imp.oldValue || '?',
-                                        newValue: imp.newValue
-                                    });
-                                    return; // 处理完 global 直接返回
-                                }
-
-                                // 常规实体属性变更
-                                let target = this.players.find(p => p.id === imp.targetId) || this.players.find(p => p.name === imp.targetName);
-                                if (target) {
-                                    let oldV = imp.oldValue;
-                                    if (oldV === undefined || oldV === null) oldV = target.stats[imp.attrKey] || "?";
-
-                                    const schemaDef = this.stat_schema.find(s => s.key === imp.attrKey);
-                                    const finalLabel = schemaDef ? schemaDef.label : imp.attrKey; 
-
-                                    this.editor.impacts.push({ 
-                                        type: 'STAT_CHANGE',
-                                        targetId: target.id, 
-                                        targetName: target.name, 
-                                        attrKey: imp.attrKey, 
-                                        attrLabel: finalLabel, 
-                                        oldValue: oldV, 
-                                        newValue: imp.newValue 
-                                    }); 
-                                }
-                            } 
-                            // === 分支 2: 其他特殊事件 (直接透传) ===
-                            // 包括: REGION_TRANSFER, ENTITY_CREATE, ENTITY_REMOVE
-                            else {
-                                // 直接将 AI 生成的对象推入数组，因为它们的字段名 (targetName, newValue, data) 
-                                // 已经和我们的编辑器 UI 兼容了
-                                this.editor.impacts.push(imp);
+                            // 规则1: 只要有 attrKey，就一定是属性变更
+                            if (imp.attrKey) {
+                                normalizedType = 'STAT_CHANGE';
                             }
+                            // 规则2: 只要有 targetName 且没有 attrKey，大概率是地块转移
+                            else if (imp.targetName && !imp.attrKey) {
+                                normalizedType = 'REGION_TRANSFER';
+                            }
+                            // 规则3: 只要有 data 对象，就是创建实体
+                            else if (imp.data && typeof imp.data === 'object') {
+                                normalizedType = 'ENTITY_CREATE';
+                            }
+                            // 规则4: 只有 targetId，意图不明确，可能是移除
+                            else if (imp.targetId && Object.keys(imp).length <= 2) {
+                                normalizedType = 'ENTITY_REMOVE';
+                            }
+                            // ... 未来可以扩展更多规则
+
+                            // 如果无法推断，则信任 AI 的原始 type (如果存在)
+                            if (normalizedType === 'UNKNOWN' && imp.type) {
+                                normalizedType = imp.type;
+                            }
+                            
+                            imp.type = normalizedType; // ★ 强制覆盖 type
+
+                            // --- ★ 标准化后的数据填充 ★ ---
+                            
+                            // 填充 STAT_CHANGE 类型
+                            if (imp.type === 'STAT_CHANGE') {
+                                // 兼容全局变量，AI 可能返回 "GLOBAL"，"Global" 等
+                                if (imp.targetId && imp.targetId.toLowerCase() === 'global') {
+                                    imp.targetId = 'global';
+                                    imp.targetName = 'Global';
+                                    imp.attrLabel = imp.attrKey; // 全局变量 key 就是 label
+                                } else {
+                                    const p = this.players.find(x => x.id === imp.targetId);
+                                    imp.targetName = p ? p.name : 'Unknown';
+                                    // 注意：这里需要遍历所有 rule_sets 来查找 label
+                                    imp.attrLabel = this.getSchemaLabel(imp.attrKey, p ? p.schemaId : null);
+                                }
+                            }
+                            
+                            // 填充 oldValue (所有类型都可能需要)
+                            if (imp.oldValue === undefined) imp.oldValue = "?";
+
+                            this.editor.impacts.push(imp); 
                         });
                     }
                     this.showContextModal = false;
                 } catch (e) { alert("AI Error: " + e.message); } 
                 finally { this.isThinking = false; }
             },
-
+            
             addImpact() {
-            const type = this.impactForm.type;
-            let newImpact = { type };
-            let isValid = false;
-
-            if (type === 'STAT_CHANGE') {
-                if(!this.impactForm.targetId || !this.impactForm.attrKey || this.impactForm.newValue === '') return;
-
-                // [修改] 增加 Global 全局变量处理逻辑
-                if (this.impactForm.targetId === 'global') {
-                    Object.assign(newImpact, {
-                        targetId: 'global',
-                        targetName: 'Global', // 显示名称
-                        attrKey: this.impactForm.attrKey,
-                        attrLabel: this.impactForm.attrKey, // 全局变量直接用 Key 当 Label
-                        oldValue: this.getAttrValueDisplay('global', this.impactForm.attrKey),
-                        newValue: this.impactForm.newValue
-                    });
-                } 
-                // [原有] 常规实体处理逻辑
-                else {
-                    const t = this.players.find(p => p.id === this.impactForm.targetId);
-                    const s = this.stat_schema.find(k => k.key === this.impactForm.attrKey);
-                    
-                    // 容错：如果找不到对应实体或属性定义，不执行
-                    if (!t || !s) return; 
-
-                    Object.assign(newImpact, {
-                        targetId: t.id,
-                        targetName: t.name,
-                        attrKey: s.key,
-                        attrLabel: s.label,
-                        oldValue: t.stats[s.key] || '-',
-                        newValue: this.impactForm.newValue
-                    });
+                const impact = this.createImpactObject(this.impactForm);
+                if (impact) {
+                    this.editor.impacts.push(impact);
+                    // 重置表单
+                    this.impactForm.targetId = '';
+                    this.impactForm.attrKey = '';
+                    this.impactForm.newValue = '';
+                    this.impactForm.targetName = '';
                 }
-                isValid = true;
-            }
-            else if (type === 'REGION_TRANSFER') {
-                if (!this.impactForm.targetName || !this.impactForm.newValue) return;
-                Object.assign(newImpact, {
-                    targetName: this.impactForm.targetName, // Region Name
-                    newValue: this.impactForm.newValue     // New Owner ID
-                });
-                isValid = true;
-            }
-            else if (type === 'ENTITY_CREATE') {
-                if (!this.impactForm.newValue.trim()) return;
-                Object.assign(newImpact, {
-                    data: { name: this.impactForm.newValue.trim() }
-                });
-                isValid = true;
-            }
-            else if (type === 'ENTITY_REMOVE') {
-                if (!this.impactForm.targetId) return;
-                Object.assign(newImpact, {
-                    targetId: this.impactForm.targetId
-                });
-                isValid = true;
-            }
-
-            else if (type === 'PIN_MOVE') {
-                if (!this.impactForm.targetId || !this.impactForm.newValue) return;
-                const pin = this.map_data.pins.find(p => p.id === this.impactForm.targetId);
-                const oldCoords = pin ? `${pin.x.toFixed(1)},${pin.y.toFixed(1)}` : '?,?';
-                
-                Object.assign(newImpact, {
-                    targetId: this.impactForm.targetId,
-                    targetName: pin ? (pin.label || this.getPinName(pin.linkId)) : 'Unknown Pin',
-                    oldValue: oldCoords,
-                    newValue: this.impactForm.newValue // 格式为 "x,y"
-                });
-                isValid = true;
-            }
-
-            if (isValid) {
-                this.editor.impacts.push(newImpact);
-                // Reset form
-                this.impactForm.targetId = '';
-                this.impactForm.attrKey = '';
-                this.impactForm.newValue = '';
-                this.impactForm.targetName = '';
-            }},
+            },
             removeImpact(idx) { this.editor.impacts.splice(idx, 1); },
-            addToStaging() { if (!this.editor.summary) return; this.pendingEvents.push(JSON.parse(JSON.stringify({ ...this.editor, factionId: this.editor.factionId || 'global', timeStart: this.editor.timeStart || '?', timeEnd: this.editor.timeEnd || '?', content: this.editor.content || this.editor.summary, isOpen: false }))); this.editor.summary = ""; this.editor.content = ""; this.editor.impacts = []; this.editor.factionId = ""; this.editor.timeStart = ""; this.editor.timeEnd = ""; this.tabs.right = 'staging'; this.saveGame('autosave.json'); },
+            
+            // [修复] 移除重复的、不完整的 addToStaging 定义，只保留这一个
+            addToStaging() { 
+                if (!this.editor.summary) return; 
+                this.pendingEvents.push(JSON.parse(JSON.stringify({ 
+                    ...this.editor, 
+                    factionId: this.editor.factionId || 'global', 
+                    timeStart: this.editor.timeStart || '?', 
+                    timeEnd: this.editor.timeEnd || '?', 
+                    content: this.editor.content || this.editor.summary, 
+                    isOpen: false 
+                }))); 
+                // 清空编辑器
+                this.editor.summary = ""; 
+                this.editor.content = ""; 
+                this.editor.impacts = []; 
+                this.editor.options = []; // 这个在被删除的版本里漏掉了
+                this.editor.factionId = ""; 
+                this.editor.timeStart = ""; 
+                this.editor.timeEnd = ""; 
+                this.tabs.right = 'staging'; 
+                this.saveGame('autosave.json'); 
+            },
+
             loadFromStaging(i) { Object.assign(this.editor, JSON.parse(JSON.stringify(this.pendingEvents[i]))); this.pendingEvents.splice(i,1); this.tabs.right = 'input'; this.saveGame('autosave.json'); },
             commitTurn() {
                 if(this.pendingEvents.length === 0) return;
@@ -4058,58 +4858,12 @@ applyState(data) {
             },
             
             // 新增：向历史事件添加 Impact
-            // [修改 3] 支持多类型的历史事件添加逻辑
             addEventImpact(event) {
-                const type = this.editImpactForm.type || 'STAT_CHANGE';
-                let newImpact = { type };
-                let isValid = false;
-
-                if (type === 'STAT_CHANGE') {
-                    if(!this.editImpactForm.targetId || !this.editImpactForm.attrKey || this.editImpactForm.newValue === '') return;
-                    
-                    const t = this.players.find(p => p.id === this.editImpactForm.targetId);
-                    const s = this.stat_schema.find(k => k.key === this.editImpactForm.attrKey);
-                    // 尝试获取当前值作为参考
-                    const currentVal = t ? (t.stats[this.editImpactForm.attrKey] || '?') : '?';
-                    
-                    Object.assign(newImpact, {
-                        targetId: this.editImpactForm.targetId,
-                        targetName: t ? t.name : 'Unknown',
-                        attrKey: this.editImpactForm.attrKey,
-                        attrLabel: s ? s.label : this.editImpactForm.attrKey,
-                        oldValue: currentVal,
-                        newValue: this.editImpactForm.newValue
-                    });
-                    isValid = true;
-                } 
-                else if (type === 'REGION_TRANSFER') {
-                    if (!this.editImpactForm.targetName || !this.editImpactForm.newValue) return;
-                    Object.assign(newImpact, {
-                        targetName: this.editImpactForm.targetName,
-                        newValue: this.editImpactForm.newValue
-                    });
-                    isValid = true;
-                }
-                else if (type === 'ENTITY_CREATE') {
-                    if (!this.editImpactForm.newValue.trim()) return;
-                    Object.assign(newImpact, {
-                        data: { name: this.editImpactForm.newValue.trim() }
-                    });
-                    isValid = true;
-                }
-                else if (type === 'ENTITY_REMOVE') {
-                    if (!this.editImpactForm.targetId) return;
-                    Object.assign(newImpact, {
-                        targetId: this.editImpactForm.targetId
-                    });
-                    isValid = true;
-                }
-
-                if (isValid) {
+                const impact = this.createImpactObject(this.editImpactForm);
+                if (impact) {
                     if (!event.impacts) event.impacts = [];
-                    event.impacts.push(newImpact);
-                    
-                    // 保留 type，清空其他字段，方便连续添加
+                    event.impacts.push(impact);
+                    // 重置表单
                     this.editImpactForm.targetId = '';
                     this.editImpactForm.attrKey = '';
                     this.editImpactForm.newValue = '';

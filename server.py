@@ -144,6 +144,8 @@ class TimelineEvent(BaseModel):
     content: str = ""
     impacts: List[EventImpact] = []
     isOpen: bool = False
+    # [新增] 选项列表，用于交互式推演
+    options: List[Any] = []
 
 class Turn(BaseModel):
     id: int
@@ -273,13 +275,49 @@ def delete_save(filename: str):
     else:
         raise HTTPException(status_code=404, detail="File not found")
 
+# [优化] 智能日志清洗函数
+def smart_clean_payload(obj):
+    """
+    智能清洗日志：
+    1. 保留长的文本 Context/Prompt (对调试很重要)。
+    2. 仅过滤 API Key 和 疑似 Base64 的二进制数据字段。
+    """
+    if isinstance(obj, dict):
+        new_obj = {}
+        for k, v in obj.items():
+            # 1. 敏感字段脱敏
+            if k == 'apiKey':
+                new_obj[k] = f"***{v[-4:]}" if v and isinstance(v, str) else "None"
+            
+            # 2. 靶向过滤：已知的二进制/Base64 字段名
+            # 'data': 通常在 attachments 里
+            # 'image', 'maskData': 地图数据
+            # 'logo': 实体图标可能是 Base64
+            elif k in ['data', 'image', 'maskData', 'logo', 'base64'] and isinstance(v, str):
+                # 只有长度超过 200 才认为是 Base64，防止误伤短的 URL 或 FontAwesome class
+                if len(v) > 200:
+                    new_obj[k] = f"<BASE64_DATA_OMITTED size={len(v)}>"
+                else:
+                    new_obj[k] = v
+            
+            # 3. 递归处理
+            else:
+                new_obj[k] = smart_clean_payload(v)
+        return new_obj
+    
+    elif isinstance(obj, list):
+        return [smart_clean_payload(i) for i in obj]
+    
+    return obj
+
 @app.post("/api/ai/generate")
-async def ai_generate(req: AIRequest):
-    # --- ★ 修改 1: 在请求开始时记录收到的数据 (除了敏感的 API Key) ★ ---
-    # 为了安全，我们复制一份请求数据，并把 API Key 替换掉
-    log_req = req.model_dump()
-    log_req['apiKey'] = f"***{req.apiKey[-4:]}" if req.apiKey else "None"
-    logger.info(f"AI Request Received. Payload:\n{json.dumps(log_req, indent=2, ensure_ascii=False)}")
+def ai_generate(req: AIRequest):  # <--- 去掉 async
+    # --- ★ 修改 1: 在请求开始时记录收到的数据 ★ ---
+    # 使用 smart_clean_payload 替代简单的 dump
+    raw_dump = req.model_dump()
+    safe_log_req = smart_clean_payload(raw_dump)
+    
+    logger.info(f"AI Request Received. Payload:\n{json.dumps(safe_log_req, indent=2, ensure_ascii=False)}")
     
     # 代理设置 (保持不变)
     if req.useProxy and req.proxyPort:
