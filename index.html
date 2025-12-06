@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LEVANT 自动化推演 v1.08</title>
+    <title>LEVANT 自动化推演 v1.10</title>
     <link rel="icon" href="logo.png" type="image/png"> 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -208,7 +208,77 @@
 
         .fade-enter-active, .fade-leave-active { transition: opacity 0.3s ease; }
         .fade-enter-from, .fade-leave-to { opacity: 0; }
+        /* --- 启动页专用过渡 --- */
+        .splash-leave-active { transition: opacity 1.5s ease-in-out, transform 1.5s ease-in-out; }
+        .splash-leave-to { opacity: 0; transform: scale(1.05); pointer-events: none; }
+        /* --- 复古未来 (Retro-Future) 启动页样式 --- */
+        .retro-bg {
+            /* 深邃的蓝紫夜空背景 */
+            background: radial-gradient(circle at center top, #1e1b4b 0%, #020617 60%, #2e1065 100%);
+        }
 
+        .synthwave-grid {
+            /* 经典的紫色地平线网格 */
+            background-image: 
+                linear-gradient(rgba(192, 38, 211, 0.3) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(192, 38, 211, 0.3) 1px, transparent 1px);
+            background-size: 60px 60px;
+            background-position: center center;
+            /* 极致的透视感 */
+            transform: perspective(300px) rotateX(60deg) scale(2) translateY(0);
+            transform-origin: center bottom;
+            opacity: 0.6;
+            animation: grid-fly 4s linear infinite;
+            mask-image: linear-gradient(to top, black 0%, transparent 80%); /* 远处渐隐 */
+        }
+
+        @keyframes grid-fly {
+            0% { background-position: center 0; }
+            100% { background-position: center 60px; }
+        }
+
+        .scanlines-retro {
+            background: linear-gradient(
+                to bottom,
+                rgba(18, 16, 16, 0) 50%,
+                rgba(0, 0, 0, 0.25) 50%
+            );
+            background-size: 100% 4px;
+            pointer-events: none;
+        }
+
+        /* 铬金文字渐变效果 */
+        .chrome-text {
+            background: linear-gradient(to bottom, #22d3ee 0%, #e879f9 50%, #ffffff 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            text-shadow: 0 0 20px rgba(34, 211, 238, 0.5);
+        }
+
+        /* 霓虹呼吸 */
+        @keyframes neon-glow {
+            0%, 100% { filter: drop-shadow(0 0 5px rgba(168, 85, 247, 0.6)) drop-shadow(0 0 15px rgba(34, 211, 238, 0.4)); }
+            50% { filter: drop-shadow(0 0 20px rgba(168, 85, 247, 0.8)) drop-shadow(0 0 30px rgba(34, 211, 238, 0.6)); transform: scale(1.02); }
+        }
+         /* --- [新增] 赛博光晕背景 --- */
+        .cyber-halo {
+            /* 核心改动：从实心图形改为柔和的蓝紫渐变光雾 */
+            background: radial-gradient(
+                circle at center, 
+                rgba(34, 211, 238, 0.25) 0%,   /* 中心青色 */
+                rgba(168, 85, 247, 0.15) 40%,  /* 中圈紫色 */
+                transparent 70%                /* 外圈透明 */
+            );
+            filter: blur(40px); /* 强力模糊，消除边缘 */
+            animation: halo-breathe 6s infinite ease-in-out;
+            pointer-events: none;
+        }
+
+        @keyframes halo-breathe {
+            0%, 100% { opacity: 0.6; transform: translate(-50%, -50%) scale(1); }
+            50% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
+        }
         /* 状态变更框 */
         .impact-badge {
             display: inline-flex; align-items: center; gap: 0.75rem; padding: 0.5rem 1rem;
@@ -422,6 +492,69 @@
 <body>
 
 <div id="app" class="h-screen flex flex-col relative text-[var(--text-main)]" :class="ui.theme === 'newspaper' ? 'font-serif' : 'font-sans'">
+    
+<!-- ★★★ 极简赛博启动界面 (Clean Cyber Splash) ★★★ -->
+    <transition name="splash">
+        <div v-if="showSplash" 
+             @click="enterApp"
+             class="fixed inset-0 z-[100000] retro-bg overflow-hidden flex flex-col items-center justify-center cursor-pointer select-none font-sans group">
+            
+            <!-- 1. 背景层：合成波网格 (保持不变) -->
+            <div class="absolute bottom-[-20%] left-[-50%] right-[-50%] h-[80%] synthwave-grid pointer-events-none"></div>
+            
+            <!-- ★★★ [新增]：黑客帝国风格数据流 Canvas ★★★ -->
+            <!-- z-0 确保它在最底层，opacity-20 确保它很淡 -->
+            <canvas ref="matrixCanvas" class="absolute inset-0 z-0 pointer-events-none opacity-20"></canvas>
+
+            <!-- 2. 氛围层：扫描线 (保持不变，z-50 盖住数据流) -->
+            <div class="absolute inset-0 scanlines-retro z-50 pointer-events-none opacity-40"></div>
+            
+            <!-- 3. 背景光晕：Logo 后面的能量场 -->
+            <div class="absolute w-[800px] h-[800px] rounded-full cyber-halo top-1/2 left-1/2 mt-[-50px] z-0"></div>
+
+            <!-- 4. HUD 边框：仅保留四角，增加一种“取景框”的感觉 -->
+            <div class="absolute top-8 left-8 w-32 h-32 border-l-2 border-t-2 border-cyan-500/50 rounded-tl-xl pointer-events-none transition-all duration-500 group-hover:w-40 group-hover:h-40 group-hover:border-cyan-400"></div>
+            <div class="absolute top-8 right-8 w-32 h-32 border-r-2 border-t-2 border-fuchsia-500/50 rounded-tr-xl pointer-events-none transition-all duration-500 group-hover:w-40 group-hover:h-40 group-hover:border-fuchsia-400"></div>
+            <div class="absolute bottom-8 left-8 w-32 h-32 border-l-2 border-b-2 border-fuchsia-500/50 rounded-bl-xl pointer-events-none transition-all duration-500 group-hover:w-40 group-hover:h-40 group-hover:border-fuchsia-400"></div>
+            <div class="absolute bottom-8 right-8 w-32 h-32 border-r-2 border-b-2 border-cyan-500/50 rounded-br-xl pointer-events-none transition-all duration-500 group-hover:w-40 group-hover:h-40 group-hover:border-cyan-400"></div>
+
+            <!-- 5. 核心内容区 -->
+            <div class="relative z-40 flex flex-col items-center justify-center">
+                
+                <!-- Logo 容器 -->
+                <div class="relative" style="animation: neon-glow 4s infinite ease-in-out;">
+                    <img src="logo.png" 
+                         class="w-[450px] h-[450px] object-contain relative transition-transform duration-700 group-hover:scale-105 group-hover:-translate-y-2">
+                </div>
+
+                <!-- ★★★ [修改] 极简对称版本号 ★★★ -->
+                <!-- 向上负边距，让文字紧贴 Logo 底部 -->
+                <div class="relative -mt-8 z-50 transition-transform duration-300 group-hover:scale-105">
+                    
+                    <!-- 背景光晕：淡淡的洋红色，增强文字可读性 -->
+                    <div class="absolute inset-0 bg-fuchsia-900/40 blur-lg rounded-full"></div>
+                    
+                    <!-- 核心文字 -->
+                    <div class="relative px-6 py-2 bg-black/20 backdrop-blur-[2px] rounded-full border border-white/5">
+                        <span class="text-sm font-bold text-fuchsia-300 uppercase tracking-[0.35em] font-mono"
+                              style="text-shadow: 0 0 12px rgba(232,121,249,0.9);">
+                            v1.10 Christmas Eve
+                        </span>
+                    </div>
+                </div>
+
+                <!-- 底部交互提示 (稍微下移一点) -->
+                <div class="mt-12 text-[10px] text-cyan-300/40 font-mono tracking-[1em] uppercase animate-pulse">
+                    System_Ready
+                </div>
+            </div>
+
+            <!-- 6. 底部版权行 (改为极淡的灰色，不抢眼) -->
+            <div class="absolute bottom-6 w-full text-center text-[9px] text-white/10 font-mono tracking-widest z-40">
+                LEVANT ENGINE V1.10 // INITIALIZED
+            </div>
+        </div>
+    </transition>
     <canvas id="map-analysis-canvas" style="display: none;"></canvas>
     <!-- 纸张纹理层 -->
     <div class="app-texture"></div>
@@ -437,7 +570,7 @@
             <div class="flex flex-col justify-center">
                 <div class="flex items-center">
                     <h1 class="font-black text-2xl text-[var(--text-main)] tracking-tight leading-none mr-2">{{ t('app_title') }}</h1>
-                    <span class="text-[var(--text-dim)] font-light text-sm font-mono-tech mr-4">v1.08</span>
+                    <span class="text-[var(--text-dim)] font-light text-sm font-mono-tech mr-4">v1.10</span>
                     <div class="h-4 w-px bg-[var(--border-dim)] mr-4"></div>
                     <div class="flex items-center gap-2 px-3 py-1 theme-rounded-sm bg-[var(--bg-badge)] border border-[var(--border-dim)] text-indigo-400 font-mono-tech text-xs font-bold tracking-wide backdrop-blur-sm mr-4 shrink-0">
                         <span>POWERED BY 絜矩 (QQ 2124223354)</span>
@@ -476,7 +609,15 @@
             <button @click="openScriptGenModal" class="h-11 px-5 theme-rounded-sm bg-[var(--bg-panel)] hover:bg-[var(--bg-hover)] text-[var(--text-accent)] border border-[var(--border-dim)] transition font-bold text-sm flex items-center gap-2">
                 <i class="fa-solid fa-wand-sparkles"></i> {{ t('btn_script_gen') }}
             </button>
-            <button @click="showSettings = true" class="h-11 w-11 theme-rounded-sm bg-[var(--bg-panel)] hover:bg-[var(--bg-hover)] text-[var(--text-dim)] border border-[var(--border-dim)] transition flex items-center justify-center">
+
+            <!-- [新增] 独立的专业地图编辑器入口 (放在剧本生成右边) -->
+            <!-- 使用 ml-2 (margin-left) 稍微隔开一点距离 -->
+            <!-- 样式与左边的按钮保持高度一致 (h-11, bg-panel, border-dim) -->
+            <a href="/map_editor" target="_blank" class="h-11 px-5 theme-rounded-sm bg-[var(--bg-panel)] hover:bg-[var(--bg-hover)] text-emerald-500 border border-[var(--border-dim)] transition font-bold text-sm flex items-center gap-2 ml-2 no-underline" title="Open Professional Map Editor">
+                <i class="fa-solid fa-map-location-dot"></i> 地图编辑
+            </a>
+
+            <button @click="showSettings = true" class="h-11 w-11 theme-rounded-sm bg-[var(--bg-panel)] hover:bg-[var(--bg-hover)] text-[var(--text-dim)] border border-[var(--border-dim)] transition flex items-center justify-center ml-2">
                 <i class="fa-solid fa-gear text-lg"></i>
             </button>
             <!-- [新增] 截图模式按钮 -->
@@ -505,8 +646,8 @@
                 <div class="text-xs text-[var(--text-dim)] font-bold uppercase tracking-widest mb-2 px-1">{{ t('header_global_vars') }}</div>
                 <div v-for="(gVar, idx) in global_vars" :key="idx" class="bg-[var(--bg-panel)] p-3 theme-rounded-sm border border-[var(--border-dim)] flex flex-col gap-2 group">
                     <div class="flex gap-2">
-                        <input v-model="gVar.key" @change="debouncedSave('autosave.json')" class="w-1/3 bg-[var(--bg-badge)] text-sm text-indigo-400 p-2 theme-rounded-sm border border-[var(--border-dim)] outline-none font-bold font-mono-tech" placeholder="变量名">
-                        <input v-model="gVar.value" @change="debouncedSave('autosave.json')" class="flex-1 bg-[var(--bg-badge)] text-sm text-[var(--text-main)] p-2 theme-rounded-sm border border-[var(--border-dim)] outline-none" placeholder="当前状态">
+                        <input v-model="gVar.key" @change="debouncedSave('autosave.json')" class="w-1/3 bg-[var(--bg-badge)] text-sm text-indigo-400 p-2 theme-rounded-sm border border-[var(--border-dim)] outline-none font-bold font-mono-tech" :placeholder="t('ph_var_key')">
+                        <input v-model="gVar.value" @change="debouncedSave('autosave.json')" class="flex-1 bg-[var(--bg-badge)] text-sm text-[var(--text-main)] p-2 theme-rounded-sm border border-[var(--border-dim)] outline-none" :placeholder="t('ph_var_val')">
                         <button @click="global_vars.splice(idx,1); saveGame('autosave.json')" class="text-[var(--text-dim)] hover:text-red-400 px-2 opacity-0 group-hover:opacity-100 transition"><i class="fa-solid fa-trash"></i></button>
                     </div>
                 </div>
@@ -563,13 +704,13 @@
             <div v-if="tabs.left === 'lore'" class="flex-1 overflow-y-auto p-5 space-y-4">
                 <div v-for="(entry, idx) in lorebook" :key="idx" class="info-card theme-rounded p-4">
                     <div class="flex justify-between items-center mb-3 pb-2 border-b border-[var(--border-highlight)]">
-                        <input v-model="entry.keys" @change="debouncedSave('autosave.json')" class="bg-transparent text-sm font-bold text-emerald-400 w-full outline-none placeholder-[var(--text-dim)]" placeholder="关键词...">
+                        <input v-model="entry.keys" @change="debouncedSave('autosave.json')" class="bg-transparent text-sm font-bold text-emerald-400 w-full outline-none placeholder-[var(--text-dim)]" placeholder="t('ph_lore_key')">
                         <div class="flex items-center gap-2">
                             <button @click="exportAsImage('lore', entry)" class="text-[var(--text-dim)] hover:text-emerald-400 transition text-xs" title="导出资料卡"><i class="fa-solid fa-camera"></i></button>
-                            <button @click="cycleLoreMode(entry)" class="px-2 py-1 theme-rounded-sm text-[10px] font-bold uppercase tracking-wider min-w-[50px] transition-all border" :class="{'bg-emerald-900/40 text-emerald-400 border-emerald-500/40': entry.mode==='on', 'bg-indigo-900/40 text-indigo-400 border-indigo-500/40': entry.mode==='auto', 'bg-[var(--bg-badge)] text-[var(--text-dim)] border-[var(--border-dim)]': entry.mode==='off'}">{{ entry.mode === 'on' ? '常驻' : (entry.mode === 'auto' ? '自动' : '禁用') }}</button>
+                            <button @click="cycleLoreMode(entry)" class="px-2 py-1 theme-rounded-sm text-[10px] font-bold uppercase tracking-wider min-w-[50px] transition-all border" :class="{'bg-emerald-900/40 text-emerald-400 border-emerald-500/40': entry.mode==='on', 'bg-indigo-900/40 text-indigo-400 border-indigo-500/40': entry.mode==='auto', 'bg-[var(--bg-badge)] text-[var(--text-dim)] border-[var(--border-dim)]': entry.mode==='off'}">{{ entry.mode === 'on' ? t('btn_mode_on') : (entry.mode === 'auto' ? t('btn_mode_auto') : t('btn_mode_off')) }}</button>
                         </div>
                     </div>
-                    <textarea v-model="entry.content" @change="debouncedSave('autosave.json')" class="w-full bg-[var(--bg-badge)] theme-rounded-sm p-3 text-xs text-[var(--text-main)] resize-none h-20 border border-[var(--border-dim)] focus:border-emerald-500/50 outline-none leading-relaxed" placeholder="设定内容..."></textarea>
+                    <textarea v-model="entry.content" @change="debouncedSave('autosave.json')" class="w-full bg-[var(--bg-badge)] theme-rounded-sm p-3 text-xs text-[var(--text-main)] resize-none h-20 border border-[var(--border-dim)] focus:border-emerald-500/50 outline-none leading-relaxed" :placeholder="t('ph_lore_content')"></textarea>
                     <div class="flex justify-end mt-1"><button @click="lorebook.splice(idx,1); saveGame('autosave.json')" class="text-xs text-[var(--text-dim)] hover:text-red-400"><i class="fa-solid fa-trash"></i></button></div>
                 </div>
                 <button @click="addLoreEntry" class="w-full py-3 bg-[var(--bg-panel)] hover:bg-[var(--bg-header)] text-emerald-500 theme-rounded-sm border border-[var(--border-dim)] transition font-bold text-sm"><i class="fa-solid fa-database mr-2"></i> {{ t('btn_add_lore') }}</button>
@@ -580,7 +721,7 @@
                 <!-- A. 规则集切换器 -->
                 <div class="p-4 border-b border-[var(--border-dim)] bg-[var(--bg-header)] space-y-2 shrink-0">
                     <div class="flex justify-between items-center">
-                         <span class="text-[10px] font-bold text-[var(--text-dim)] uppercase tracking-widest">TYPE DEFINITIONS</span>
+                         <span class="text-[10px] font-bold text-[var(--text-dim)] uppercase tracking-widest">{{ t('header_type_def') }}</span>
                          <div class="flex gap-1">
                              <button @click="addNewRuleSet" class="text-[var(--text-dim)] hover:text-[var(--text-main)]"><i class="fa-solid fa-plus-square"></i></button>
                              <button @click="deleteActiveRuleSet" class="text-[var(--text-dim)] hover:text-red-400"><i class="fa-solid fa-trash"></i></button>
@@ -594,16 +735,16 @@
                 <!-- B. 字段列表 (绑定到当前选中的规则集) -->
                 <div class="flex-1 overflow-y-auto p-5 space-y-3">
                     <div v-if="getActiveSchemaFields().length === 0" class="text-center text-[var(--text-dim)] text-xs italic py-4">
-                        (No fields defined for this type)
+                        {{ t('msg_no_fields') }}
                     </div>
                     <div v-for="(field, idx) in getActiveSchemaFields()" :key="idx" class="bg-[var(--bg-panel)] p-3 theme-rounded-sm border border-[var(--border-dim)] flex gap-3 items-center group">
                         <div class="flex-1">
-                             <div class="text-[9px] text-[var(--text-dim)] uppercase mb-0.5">Label</div>
-                             <input v-model="field.label" @change="debouncedSave('autosave.json')" class="w-full bg-[var(--bg-badge)] text-sm text-[var(--text-main)] p-1 theme-rounded-sm outline-none border border-transparent focus:border-[var(--border-dim)]">
+                            <div class="text-[9px] text-[var(--text-dim)] uppercase mb-0.5">{{ t('lbl_field_label') }}</div>
+                            <input v-model="field.label" @change="debouncedSave('autosave.json')" class="w-full bg-[var(--bg-badge)] text-sm text-[var(--text-main)] p-1 theme-rounded-sm outline-none border border-transparent focus:border-[var(--border-dim)]">
                         </div>
                         <div class="w-20">
-                             <div class="text-[9px] text-[var(--text-dim)] uppercase mb-0.5">Key</div>
-                             <input v-model="field.key" @change="debouncedSave('autosave.json')" class="w-full bg-[var(--bg-badge)] text-sm text-amber-500 font-mono p-1 theme-rounded-sm outline-none text-center border border-transparent focus:border-[var(--border-dim)]">
+                            <div class="text-[9px] text-[var(--text-dim)] uppercase mb-0.5">{{ t('lbl_field_key') }}</div>
+                            <input v-model="field.key" @change="debouncedSave('autosave.json')" class="w-full bg-[var(--bg-badge)] text-sm text-amber-500 font-mono p-1 theme-rounded-sm outline-none text-center border border-transparent focus:border-[var(--border-dim)]">
                         </div>
                         <button @click="getActiveSchemaFields().splice(idx,1); saveGame('autosave.json')" class="text-[var(--text-dim)] hover:text-red-400 px-1 opacity-0 group-hover:opacity-100 transition"><i class="fa-solid fa-times"></i></button>
                     </div>
@@ -616,7 +757,12 @@
         <!-- 中间：情报流 / 地图 -->
 <!-- 中间：情报流 / 地图 -->
         <section role="main" aria-label="Main View" class="w-2/5 bg-[var(--bg-deep)] flex flex-col relative border-r border-[var(--border-dim)] transition-colors duration-300">
-            
+            <!-- [新增] 全局背景大水印 (巨型、极淡、旋转) -->
+            <div class="absolute inset-0 flex items-center justify-center pointer-events-none z-0 overflow-hidden">
+                <!-- [修改] 去掉了 rotate-12 -->
+                <img src="logo.png" 
+                    class="w-[800px] h-[800px] object-contain opacity-[0.03] grayscale brightness-200">
+            </div>
             <!-- [新增 1] 视图切换栏 (这是关键，没有它你无法进入地图模式) -->
             <div class="h-12 bg-[var(--bg-header)] border-b border-[var(--border-dim)] flex shrink-0 z-20">
                 <button @click="showMap = false" :class="!showMap ? 'text-[var(--text-main)] border-indigo-500 bg-[var(--bg-panel)]' : 'text-[var(--text-dim)] border-transparent'" class="flex-1 font-bold text-xs uppercase tracking-widest border-b-2 transition hover:bg-[var(--bg-panel)] flex items-center justify-center gap-2">
@@ -636,13 +782,19 @@
                 <!-- [优化] 加载更多按钮 -->
                 <div v-if="timeline.length > timelinePageSize && !showAllTimeline" class="flex justify-center mb-10">
                     <button @click="showAllTimeline = true" class="px-6 py-2 bg-[var(--bg-panel)] border border-[var(--border-dim)] text-[var(--text-dim)] hover:text-[var(--text-main)] theme-rounded-sm text-xs font-bold uppercase tracking-widest transition">
-                        <i class="fa-solid fa-clock-rotate-left mr-2"></i> Show All History ({{ timeline.length }} Turns)
+                        <i class="fa-solid fa-clock-rotate-left mr-2"></i> {{ t('btn_show_all_history') }} ({{ timeline.length }})
                     </button>
                 </div>
 
-                <div v-if="timeline.length === 0" class="h-full flex flex-col items-center justify-center text-[var(--text-dim)] opacity-50">
-                    <i class="fa-regular fa-file-lines text-6xl mb-6"></i>
+                <div v-if="timeline.length === 0" class="h-full flex flex-col items-center justify-center text-[var(--text-dim)] opacity-50 relative z-10">
+                    <!-- [修改] 替换原有 Icon 为 Logo -->
+                    <div class="relative mb-6">
+                        <div class="absolute inset-0 bg-indigo-500 blur-3xl opacity-20 rounded-full animate-pulse"></div>
+                        <img src="logo.png" class="w-32 h-32 object-contain relative z-10 drop-shadow-[0_0_15px_rgba(99,102,241,0.5)]">
+                    </div>
+                    
                     <p class="text-lg font-mono-tech font-bold uppercase tracking-widest">{{ t('msg_no_events') }}</p>
+                    <p class="text-xs font-mono mt-2 opacity-50">SYSTEM READY. AWAITING INPUT.</p>
                 </div>
 
                 <!-- [优化] 遍历 visibleTimeline 而不是 timeline -->
@@ -738,9 +890,9 @@
                                             <div class="bg-[var(--bg-badge)] p-3 theme-rounded-sm border border-[var(--border-dim)] mt-4">
                                                 <!-- 标题行：左对齐 -->
                                                 <div class="flex items-center gap-3 mb-3">
-                                                    <div class="text-[10px] font-bold text-pink-500 uppercase tracking-widest">ANKO OPTIONS (DECISIONS)</div>
+                                                    <div class="text-[10px] font-bold text-pink-500 uppercase tracking-widest">{{ t('header_anko_options') }}</div>
                                                     <button @click="addOptionToEvent(event)" class="text-[10px] bg-pink-900/20 text-pink-400 border border-pink-500/30 px-2 py-0.5 theme-rounded-sm hover:bg-pink-600 hover:text-white transition flex items-center gap-1">
-                                                        <i class="fa-solid fa-plus"></i> Add
+                                                        <i class="fa-solid fa-plus"></i> {{ t('btn_add') }}
                                                     </button>
                                                 </div>
                                                 
@@ -748,17 +900,17 @@
                                                     <div v-for="(opt, oi) in event.options" :key="oi" class="bg-[var(--bg-deep)] p-2 theme-rounded-sm border border-[var(--border-dim)] flex gap-2 items-start">
                                                         <div class="flex-1 space-y-1">
                                                             <div class="flex items-center gap-2">
-                                                                <span class="text-[9px] text-pink-500 font-bold uppercase w-8 text-right">Label</span>
-                                                                <input v-model="opt.label" placeholder="Option Label" class="flex-1 bg-transparent text-xs font-bold text-pink-400 px-1 border-b border-[var(--border-dim)] outline-none focus:border-pink-500">
+                                                                <span class="text-[9px] text-pink-500 font-bold uppercase w-8 text-right">{{ t('lbl_opt_label') }}</span>
+                                                                <input v-model="opt.label" :placeholder="t('ph_opt_label')" class="flex-1 bg-transparent text-xs font-bold text-pink-400 px-1 border-b border-[var(--border-dim)] outline-none focus:border-pink-500">
                                                             </div>
                                                             <div class="flex items-center gap-2">
-                                                                <span class="text-[9px] text-[var(--text-dim)] font-bold uppercase w-8 text-right">Desc</span>
-                                                                <textarea v-model="opt.desc" placeholder="Consequence..." class="flex-1 bg-transparent text-[10px] text-[var(--text-dim)] px-1 h-6 resize-none outline-none focus:text-[var(--text-main)] border-b border-transparent focus:border-[var(--border-dim)]"></textarea>
+                                                                <span class="text-[9px] text-[var(--text-dim)] font-bold uppercase w-8 text-right">{{ t('lbl_opt_desc') }}</span>
+                                                                <textarea v-model="opt.desc" :placeholder="t('ph_opt_desc')" class="flex-1 bg-transparent text-[10px] text-[var(--text-dim)] px-1 h-6 resize-none outline-none focus:text-[var(--text-main)] border-b border-transparent focus:border-[var(--border-dim)]"></textarea>
                                                             </div>
                                                         </div>
                                                         <button @click="event.options.splice(oi,1)" class="text-[var(--text-dim)] hover:text-red-400 mt-1"><i class="fa-solid fa-times"></i></button>
                                                     </div>
-                                                    <div v-if="!event.options || event.options.length === 0" class="text-center text-[10px] text-[var(--text-dim)] italic opacity-50">No options available.</div>
+                                                    <div v-if="!event.options || event.options.length === 0" class="text-center text-[10px] text-[var(--text-dim)] italic opacity-50">{{ t('msg_no_options') }}</div>
                                                 </div>
                                             </div>
                                             <!-- [修改 2] 新的添加表单 -->
@@ -989,116 +1141,197 @@
                     
                     <!-- 空状态 -->
                     <div v-if="!map_data.image" class="absolute inset-0 flex flex-col items-center justify-center text-[var(--text-dim)] opacity-30 pointer-events-none gap-4">
-                        <i class="fa-solid fa-map-location-dot text-6xl"></i>
+                        <!-- [修改] w-32 改为 w-64 (256px) -->
+                        <img src="logo.png" class="w-128 h-128 object-contain grayscale opacity-80">
                         <span class="text-xs uppercase font-bold tracking-widest">{{ t('msg_no_map') }}</span>
                     </div>
                     
                     <!-- 
                         变换层 (Transform Layer) 
-                        style: 应用动态的 scale 和 translate
-                        transform-origin: 0 0 (从左上角开始变换，便于计算)
+                        使用 CSS Grid 让所有子元素重叠 (grid-area: 1/1)，
+                        这样图片层会自动撑开容器高度，解决塌陷问题。
                     -->
-                    <div v-else 
-                        id="map-capture-target"
-                        class="relative inline-block origin-top-left transition-transform duration-75 ease-out will-change-transform"
-                        :style="{ transform: `translate(${mapView.x}px, ${mapView.y}px) scale(${mapView.scale})`, width: '100%' }"
+                    <div id="map-capture-target"
+                        class="relative inline-grid origin-top-left transition-transform duration-75 ease-out will-change-transform"
+                        :style="{ transform: `translate(${mapView.x}px, ${mapView.y}px) scale(${mapView.scale})`, width: '100%', gridTemplateAreas: '\'stack\'' }"
                         @click="onMapBackgroundClick">
                         
-                        <!-- 1. 底图层 -->
-                        <img :src="map_data.image" class="block w-full pointer-events-none opacity-80 select-none" draggable="false">
-                        
-                        <!-- 2. Regions 地块遮罩层 (最底层交互 z-0) -->
-                        <div v-for="(reg, idx) in map_data.regions" :key="reg.id"
-                             class="absolute z-0"
-                             :class="mapToolMode === 'region' ? 'pointer-events-auto cursor-pointer' : 'pointer-events-none'"
-                             :style="{ left: reg.x + '%', top: reg.y + '%', width: reg.w + '%', height: reg.h + '%' }"
-                             @click.stop="onRegionClick(reg, idx)">
-                             
-                             <svg class="w-full h-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
-                                <defs>
-                                    <!-- 定义遮罩：引入 Base64 图片 -->
-                                    <mask :id="'mask-' + reg.id">
-                                        <image :href="reg.maskData" x="0" y="0" width="100" height="100" preserveAspectRatio="none" />
-                                    </mask>
-                                </defs>
-                                <!-- 绘制矩形，应用遮罩和颜色 -->
-                                <rect x="0" y="0" width="100" height="100" 
-                                      :fill="getRegionColor(reg)" 
-                                      fill-opacity="0.5"
-                                      :mask="'url(#mask-' + reg.id + ')'" 
-                                      class="transition-opacity duration-200 hover:opacity-80" />
-                             </svg>
-                        </div>
+                        <!-- [修复] 图层渲染循环 -->
+                        <div v-for="(layer, lIdx) in map_data.layers" :key="layer.id"
+                             class="w-full h-full pointer-events-none"
+                             :style="{ zIndex: lIdx, opacity: layer.visible ? layer.opacity : 0, display: layer.visible ? 'block' : 'none', gridArea: 'stack' }">
 
-                        <!-- 3. Regions 地块徽章层 (中间层 z-20) -->
-                        <div v-for="(reg, idx) in map_data.regions" :key="'label-'+reg.id"
-                             class="absolute w-0 h-0 z-20 pointer-events-none flex items-center justify-center"
-                             :style="{ left: reg.centerX + '%', top: reg.centerY + '%' }">
-                             
-                             <!-- [修改] 增加 transform: scale(...) 和 v-if 控制 -->
-                             <div class="flex items-center gap-1.5 bg-black/70 backdrop-blur-[2px] border border-white/10 px-2 py-1 theme-rounded-sm shadow-[0_4px_6px_rgba(0,0,0,0.5)] transition-all duration-200"
-                                  :style="{ transform: `scale(${mapView.badgeScale})` }">
-                                 
-                                 <!-- A. 微型模式 (Dot) -->
-                                 <div v-if="mapView.displayMode === 'dot'" class="w-2 h-2 rounded-full" :style="{ backgroundColor: getRegionColor(reg) }"></div>
+                            <!-- Type A: 图像层 (Image) -->
+                            <!-- 注意：Image 层必须 block w-full 才能撑开父容器 -->
+                            <img v-if="layer.type === 'image'" :src="layer.data" class="block w-full h-auto object-contain select-none" draggable="false">
 
-                                 <!-- B. 图标模式/全模式 (Icon) -->
-                                 <template v-else>
-                                    <img v-if="isImage(getRegionOwnerLogo(reg))" 
-                                        :src="getRegionOwnerLogo(reg)" 
-                                        class="h-5 w-auto max-w-[40px] object-contain shadow-sm border border-white/10 rounded-[1px] self-center">
-                                    <i v-else :class="getRegionOwnerLogo(reg)" 
-                                        class="text-sm drop-shadow-[0_1px_2px_rgba(0,0,0,1)] self-center" 
-                                        :style="{ color: getRegionColor(reg) }"></i>
-                                     
-                                     <!-- C. 仅全模式显示文字 (Text) -->
-                                     <div v-if="mapView.displayMode === 'full'" class="flex flex-col leading-none">
-                                        <span class="text-[10px] font-bold whitespace-nowrap shadow-black drop-shadow-md"
-                                            :style="{ color: getRegionColor(reg) }">
-                                            {{ reg.name || 'Unnamed' }}
-                                        </span>
-                                         <span v-if="reg.ownerId" class="text-[8px] font-mono text-[var(--text-dim)] uppercase tracking-tight scale-90 origin-left mt-0.5 truncate">
-                                            {{ getFactionName(reg.ownerId) }}
-                                         </span>
-                                     </div>
-                                 </template>
-                             </div>
-                        </div>
+                            <!-- Type B: 地块层 (Region) -->
+                            <template v-if="layer.type === 'region'">
+                                <!-- 这一层必须 absolute inset-0 覆盖在 Grid 单元格上，否则如果是空 div 可能会导致尺寸异常 -->
+                                <div class="absolute inset-0 w-full h-full">
+                                    <!-- B1. 遮罩交互区 (SVG Mask) -->
+                                    <div v-for="(reg, rIdx) in layer.data" :key="reg.id"
+                                         class="absolute pointer-events-auto"
+                                         :class="mapToolMode === 'region' && map_data.activeLayerId === layer.id ? 'cursor-pointer' : ''"
+                                         :style="{ left: reg.x + '%', top: reg.y + '%', width: reg.w + '%', height: reg.h + '%' }"
+                                         @click.stop="onRegionClick(reg, rIdx, layer)">
+                                         
+                                         <svg class="w-full h-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
+                                            <defs>
+                                                <mask :id="'mask-' + reg.id">
+                                                    <image :href="reg.maskData" x="0" y="0" width="100" height="100" preserveAspectRatio="none" />
+                                                </mask>
+                                            </defs>
+                                            <rect x="0" y="0" width="100" height="100" 
+                                                  :fill="getRegionColor(reg)" 
+                                                  fill-opacity="0.5"
+                                                  :mask="'url(#mask-' + reg.id + ')'" 
+                                                  class="transition-opacity duration-200 hover:opacity-80" />
+                                         </svg>
+                                    </div>
 
-                        <!-- 4. Pins 普通点层 (最顶层 z-30) -->
-                        <div v-for="(pin, idx) in map_data.pins" :key="pin.id" 
-                             class="absolute transform -translate-x-1/2 -translate-y-1/2 transition group z-30 flex flex-col items-center justify-center origin-center"
-                             :class="mapToolMode === 'pin' ? 'pointer-events-auto cursor-pointer' : 'pointer-events-none'"
-                             :style="{ left: pin.x + '%', top: pin.y + '%', transform: `translate(-50%, -50%) scale(${mapView.badgeScale})` }"
-                             @mousedown.stop 
-                             @click.stop="onPinClick(pin, idx)">
-                             
-                             <!-- A. 微型模式 (Dot) -->
-                             <div v-if="mapView.displayMode === 'dot'" class="w-3 h-3 rounded-full border border-white shadow-md" :style="{ backgroundColor: getFinalPinColor(pin) }"></div>
+                                    <!-- B2. 徽章显示区 -->
+                                    <div v-for="(reg, rIdx) in layer.data" :key="'lbl-'+reg.id"
+                                         class="absolute w-0 h-0 flex items-center justify-center pointer-events-none"
+                                         :style="{ left: reg.centerX + '%', top: reg.centerY + '%' }">
+                                         
+                                         <div class="flex items-center gap-1.5 bg-black/70 backdrop-blur-[2px] border border-white/10 px-2 py-1 theme-rounded-sm shadow-[0_4px_6px_rgba(0,0,0,0.5)] transition-all duration-200"
+                                              :style="{ transform: `scale(${mapView.badgeScale})` }">
+                                             
+                                             <!-- A. 微型模式 (Dot) -->
+                                             <div v-if="mapView.displayMode === 'dot'" class="w-2 h-2 rounded-full" :style="{ backgroundColor: getRegionColor(reg) }"></div>
 
-                             <!-- B. 常规模式 (Icon) -->
-                             <template v-else>
-                                 <img v-if="isImage(getFinalPinIcon(pin))" 
-                                      :src="getFinalPinIcon(pin)" 
-                                      class="w-12 h-auto object-contain border-[1.5px] shadow-[0_4px_8px_rgba(0,0,0,0.6)] bg-black/20"
-                                      :style="{ borderColor: getFinalPinColor(pin) }">
-                                 
-                                 <i v-else :class="getFinalPinIcon(pin)" 
-                                   class="text-3xl drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] transition-colors duration-200"
-                                   :style="{ color: getFinalPinColor(pin) }"></i>
-                             </template>
+                                             <!-- B. 图标模式/全模式 (Icon) -->
+                                             <template v-else>
+                                                <img v-if="isImage(getRegionOwnerLogo(reg))" 
+                                                    :src="getRegionOwnerLogo(reg)" 
+                                                    class="h-5 w-auto max-w-[40px] object-contain shadow-sm border border-white/10 rounded-[1px] self-center">
+                                                <i v-else :class="getRegionOwnerLogo(reg)" 
+                                                    class="text-sm drop-shadow-[0_1px_2px_rgba(0,0,0,1)] self-center" 
+                                                    :style="{ color: getRegionColor(reg) }"></i>
+                                                 
+                                                 <!-- C. 仅全模式显示文字 (Text) -->
+                                                 <div v-if="mapView.displayMode === 'full'" class="flex flex-col leading-none">
+                                                    <span class="text-[10px] font-bold whitespace-nowrap shadow-black drop-shadow-md"
+                                                        :style="{ color: getRegionColor(reg) }">
+                                                        {{ reg.name || 'Unnamed' }}
+                                                    </span>
+                                                     <span v-if="reg.ownerId" class="text-[8px] font-mono text-[var(--text-dim)] uppercase tracking-tight scale-90 origin-left mt-0.5 truncate">
+                                                        {{ getFactionName(reg.ownerId) }}
+                                                     </span>
+                                                 </div>
+                                             </template>
+                                         </div>
+                                    </div>
+                                </div>
+                            </template>
 
-                             <!-- 悬浮提示 (始终保持缩放比例，或可以设为不缩放) -->
-                            <div v-if="mapView.displayMode !== 'dot'" 
-                                class="absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 bg-black/90 text-[10px] px-2 py-0.5 theme-rounded-sm border whitespace-nowrap pointer-events-none font-bold shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
-                                :style="{ color: getFinalPinColor(pin), borderColor: getFinalPinColor(pin) + '60' }">
-                            {{ pin.label || getPinName(pin.linkId) }}
-                            </div>
+                            <!-- Type C: 标记层 (Marker) -->
+                            <template v-if="layer.type === 'marker'">
+                                <!-- 同样加上 absolute inset-0 -->
+                                <div class="absolute inset-0 w-full h-full">
+                                    <div v-for="(pin, pIdx) in layer.data" :key="pin.id" 
+                                         class="absolute transform -translate-x-1/2 -translate-y-1/2 transition group flex flex-col items-center justify-center origin-center pointer-events-auto"
+                                         :class="mapToolMode === 'pin' && map_data.activeLayerId === layer.id ? 'cursor-pointer' : ''"
+                                         :style="{ left: pin.x + '%', top: pin.y + '%', transform: `translate(-50%, -50%) scale(${mapView.badgeScale})` }"
+                                         @mousedown.stop 
+                                         @click.stop="onPinClick(pin, pIdx, layer)">
+                                         
+                                         <!-- A. 微型模式 (Dot) -->
+                                         <div v-if="mapView.displayMode === 'dot'" class="w-3 h-3 rounded-full border border-white shadow-md" :style="{ backgroundColor: getFinalPinColor(pin) }"></div>
+
+                                         <!-- B. 常规模式 (Icon) -->
+                                         <template v-else>
+                                             <img v-if="isImage(getFinalPinIcon(pin))" 
+                                                  :src="getFinalPinIcon(pin)" 
+                                                  class="w-12 h-auto object-contain border-[1.5px] shadow-[0_4px_8px_rgba(0,0,0,0.6)] bg-black/20"
+                                                  :style="{ borderColor: getFinalPinColor(pin) }">
+                                             
+                                             <i v-else :class="getFinalPinIcon(pin)" 
+                                               class="text-3xl drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] transition-colors duration-200"
+                                               :style="{ color: getFinalPinColor(pin) }"></i>
+                                         </template>
+
+                                         <!-- 悬浮提示 -->
+                                        <div v-if="mapView.displayMode !== 'dot'" 
+                                            class="absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 bg-black/90 text-[10px] px-2 py-0.5 theme-rounded-sm border whitespace-nowrap pointer-events-none font-bold shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                                            :style="{ color: getFinalPinColor(pin), borderColor: getFinalPinColor(pin) + '60' }">
+                                        {{ pin.label || getPinName(pin.linkId) }}
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
                         </div>
                     </div>
                 </div>
             </div>
 
+
+            <!-- [新增] 图层管理器面板 (带折叠功能) -->
+            <div v-show="showMap" 
+                 class="bg-[var(--bg-sidebar)] border-t border-[var(--border-dim)] flex flex-col shrink-0 z-20 transition-all duration-300 ease-in-out"
+                 :class="isLayerManagerOpen ? 'h-48' : 'h-8'">
+                
+                <!-- 头部：点击可折叠/展开 -->
+                <div class="px-3 py-1.5 bg-[var(--bg-header)] border-b border-[var(--border-dim)] flex justify-between items-center cursor-pointer hover:bg-[var(--bg-panel)] transition select-none"
+                     @click="isLayerManagerOpen = !isLayerManagerOpen"
+                     title="Toggle Layer Manager">
+                    
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-layer-group text-[var(--text-dim)] text-xs transition-transform duration-300"
+                           :class="isLayerManagerOpen ? 'rotate-0' : '-rotate-90'"></i>
+                        <span class="text-[10px] font-bold text-[var(--text-dim)] uppercase tracking-widest">{{ t('header_layer_manager') }}</span>
+                    </div>
+
+                    <!-- 按钮组：仅在展开时显示，或者你也可以选择一直显示但需要阻止冒泡 -->
+                    <div class="flex gap-1" @click.stop>
+                        <button @click="addLayer('image')" title="Add Map Layer" class="theme-rounded-sm border border-[var(--border-dim)] bg-[var(--bg-panel)] text-[var(--text-dim)] hover:text-[var(--text-main)] px-2 py-0.5 text-[10px]"><i class="fa-regular fa-image"></i> {{ t('btn_add_layer_map') }}</button>
+                        <button @click="addLayer('region')" title="Add Region Layer" class="theme-rounded-sm border border-[var(--border-dim)] bg-[var(--bg-panel)] text-[var(--text-dim)] hover:text-emerald-500 px-2 py-0.5 text-[10px]"><i class="fa-solid fa-draw-polygon"></i> {{ t('btn_add_layer_reg') }}</button>
+                        <button @click="addLayer('marker')" title="Add Marker Layer" class="theme-rounded-sm border border-[var(--border-dim)] bg-[var(--bg-panel)] text-[var(--text-dim)] hover:text-amber-500 px-2 py-0.5 text-[10px]"><i class="fa-solid fa-location-dot"></i> {{ t('btn_add_layer_pin') }}</button>                    </div>
+                </div>
+                
+                <!-- 列表内容：折叠时隐藏以防止布局问题 -->
+                <div v-show="isLayerManagerOpen" class="flex-1 overflow-y-auto p-2 space-y-1">
+                    <!-- 图层列表项 -->
+                    <div v-for="(layer, idx) in map_data.layers" :key="layer.id" 
+                         @click="map_data.activeLayerId = layer.id"
+                         :class="map_data.activeLayerId === layer.id ? 'bg-[var(--bg-panel)] border-indigo-500 shadow-inner' : 'bg-[var(--bg-badge)] border-transparent hover:border-[var(--border-dim)]'"
+                         class="flex items-center gap-3 p-2 theme-rounded-sm border cursor-pointer group transition-all select-none">
+                        
+                        <!-- 可见性开关 -->
+                        <button @click.stop="layer.visible = !layer.visible" class="w-5 text-center shrink-0">
+                            <i :class="layer.visible ? 'fa-solid fa-eye text-[var(--text-main)]' : 'fa-solid fa-eye-slash text-[var(--text-dim)] opacity-50'" class="text-xs"></i>
+                        </button>
+                        
+                        <!-- 图层类型图标 -->
+                        <div class="w-5 text-center shrink-0">
+                            <i v-if="layer.type === 'image'" class="fa-regular fa-image text-[var(--text-dim)] text-xs"></i>
+                            <i v-else-if="layer.type === 'region'" class="fa-solid fa-draw-polygon text-emerald-500 text-xs"></i>
+                            <i v-else class="fa-solid fa-location-dot text-amber-500 text-xs"></i>
+                        </div>
+
+                        <!-- 图层名称 -->
+                        <input v-model="layer.name" class="flex-1 bg-transparent text-xs font-bold text-[var(--text-main)] outline-none border-b border-transparent focus:border-[var(--border-dim)]" @click.stop>
+
+                        <!-- 透明度控制 -->
+                        <div class="flex items-center gap-1 group/opacity" title="Opacity">
+                            <i class="fa-solid fa-circle-half-stroke text-[9px] text-[var(--text-dim)]"></i>
+                            <input type="range" v-model.number="layer.opacity" min="0" max="1" step="0.1" class="w-12 h-1 bg-[var(--border-dim)] rounded-lg appearance-none cursor-pointer accent-indigo-500" @click.stop>
+                        </div>
+                        
+                        <!-- 删除与排序 -->
+                        <div class="flex gap-1 pl-2 border-l border-[var(--border-dim)] opacity-0 group-hover:opacity-100 transition shrink-0">
+                            <button @click.stop="moveLayer(idx, -1)" class="text-[var(--text-dim)] hover:text-[var(--text-main)] w-4"><i class="fa-solid fa-arrow-up text-[10px]"></i></button>
+                            <button @click.stop="moveLayer(idx, 1)" class="text-[var(--text-dim)] hover:text-[var(--text-main)] w-4"><i class="fa-solid fa-arrow-down text-[10px]"></i></button>
+                            <button @click.stop="deleteLayer(idx)" class="text-[var(--text-dim)] hover:text-red-400 w-4"><i class="fa-solid fa-times text-[10px]"></i></button>
+                        </div>
+                    </div>
+                    
+                    <div v-if="!map_data.layers || map_data.layers.length === 0" class="text-center text-[var(--text-dim)] text-[10px] py-4 italic opacity-50">
+                        {{ t('msg_no_layers_created') }}
+                    </div>
+                </div>
+            </div>
         </section>
 
         <!-- 右侧：指挥台 -->
@@ -1150,8 +1383,16 @@
                         <span class="font-mono-tech uppercase font-bold tracking-widest text-sm">{{ t('msg_empty_queue') }}</span>
                     </div>
                 </div>
-                <div v-if="tabs.right === 'input'" class="h-full">
-                    <textarea v-model="rawInput" class="w-full h-full bg-transparent border-none outline-none text-[var(--text-main)] font-mono-tech p-2 resize-none text-base leading-relaxed" :placeholder="t('placeholder_input')"></textarea>
+                <div v-if="tabs.right === 'input'" class="h-full relative overflow-hidden group">
+                    <!-- [新增] 背景水印 Logo -->
+                    <div class="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
+                        <!-- [修改] 去掉了 rotate-[-5deg] -->
+                        <img src="logo.png" 
+                            class="w-64 h-64 object-contain opacity-[0.08] transition-transform duration-700 ease-in-out group-hover:scale-110 group-hover:opacity-[0.12]">
+                    </div>
+
+                    <!-- 原输入框 (添加 relative z-10 确保在图片上层) -->
+                    <textarea v-model="rawInput" class="relative z-10 w-full h-full bg-transparent border-none outline-none text-[var(--text-main)] font-mono-tech p-4 resize-none text-base leading-relaxed placeholder-opacity-30" :placeholder="t('placeholder_input')"></textarea>
                 </div>
                 <!-- [新增] 战斗系统面板 -->
                 <div v-if="tabs.right === 'combat'" class="h-full flex flex-col p-5 overflow-y-auto relative">
@@ -1161,23 +1402,23 @@
                     <!-- 1. 双方选择 -->
                     <div class="flex items-center gap-2 mb-4">
                         <div class="flex-1 bg-[var(--bg-badge)] p-2 theme-rounded-sm border border-red-500/30">
-                            <div class="text-[9px] text-[var(--text-dim)] uppercase mb-1">Attacker</div>
+                            <div class="text-[9px] text-[var(--text-dim)] uppercase mb-1">{{ t('lbl_attacker') }}</div>
                             <!-- [修改] text-red-400 改为动态 style -->
                             <select v-model="combatForm.attackerId" 
                                     class="w-full bg-transparent text-sm font-bold outline-none transition-colors duration-300"
                                     :style="{ color: combatForm.attackerId ? getFactionColor(combatForm.attackerId) : '#f87171' }">
-                                <option value="" disabled>Select</option>
+                                <option value="" disabled>{{ t('opt_select') }}</option>
                                 <option v-for="p in players" :value="p.id">{{ p.name }}</option>
                             </select>
                         </div>
                         <div class="text-[var(--text-dim)] font-black text-lg">VS</div>
                         <div class="flex-1 bg-[var(--bg-badge)] p-2 theme-rounded-sm border border-blue-500/30">
-                            <div class="text-[9px] text-[var(--text-dim)] uppercase mb-1">Defender</div>
+                            <div class="text-[9px] text-[var(--text-dim)] uppercase mb-1">{{ t('lbl_defender') }}</div>
                             <!-- [修改] text-blue-400 改为动态 style -->
                             <select v-model="combatForm.defenderId" 
                                     class="w-full bg-transparent text-sm font-bold outline-none transition-colors duration-300"
                                     :style="{ color: combatForm.defenderId ? getFactionColor(combatForm.defenderId) : '#60a5fa' }">
-                                <option value="" disabled>Select</option>
+                                <option value="" disabled>{{ t('opt_select') }}</option>
                                 <option v-for="p in players" :value="p.id">{{ p.name }}</option>
                             </select>
                         </div>
@@ -1186,11 +1427,11 @@
                     <div class="mb-4">
                         <label class="block text-[10px] font-bold text-[var(--text-dim)] uppercase mb-1"><i class="fa-solid fa-map-pin mr-1"></i> {{ t('label_combat_loc') || 'Location' }}</label>
                         <select v-model="combatForm.locationId" class="w-full input-tech p-2 theme-rounded-sm text-xs font-bold outline-none">
-                            <option value="">-- No Specific Location --</option>
-                            <optgroup label="Regions (Territory)">
+                            <option value="">{{ t('opt_no_loc') }}</option>
+                            <optgroup :label="t('optgroup_regions')">
                                 <option v-for="r in map_data.regions" :value="r.name">{{ r.name }} ({{ getFactionName(r.ownerId) }})</option>
                             </optgroup>
-                            <optgroup label="Pins (POI)">
+                            <optgroup :label="t('optgroup_pins')">
                                 <option v-for="p in map_data.pins" :value="p.label || p.id">{{ p.label || 'Marker' }}</option>
                             </optgroup>
                         </select>
@@ -1199,14 +1440,14 @@
                 <!-- 2. 战斗背景/意图 -->
                     <div class="mb-4">
                         <label class="block text-[10px] font-bold text-[var(--text-dim)] uppercase mb-1">{{ t('label_combat_context') }}</label>
-                        <textarea v-model="combatForm.context" placeholder="E.g. 争夺桥头堡 / 遭遇战 / 试图刺杀" class="w-full h-16 input-tech p-2 theme-rounded-sm text-xs resize-none outline-none"></textarea>
+                        <textarea v-model="combatForm.context" :placeholder="t('ph_combat_context')" class="w-full h-16 input-tech p-2 theme-rounded-sm text-xs resize-none outline-none"></textarea>
                     </div>
 
                 <!-- 3. 骰子序列系统 (大尺寸动画版) -->
                     <div class="bg-[var(--bg-input)] p-4 theme-rounded-sm border border-[var(--border-dim)] mb-4">
                         <div class="flex justify-between items-center mb-3">
                             <label class="text-[10px] font-bold text-[var(--text-dim)] uppercase">{{ t('label_dice_check') }}</label>
-                            <button @click="addCombatDie" class="text-[10px] bg-[var(--bg-badge)] border border-[var(--border-dim)] px-2 py-0.5 theme-rounded-sm hover:text-emerald-400 transition"><i class="fa-solid fa-plus mr-1"></i> Add Die</button>
+                            <button @click="addCombatDie" class="text-[10px] bg-[var(--bg-badge)] border border-[var(--border-dim)] px-2 py-0.5 theme-rounded-sm hover:text-emerald-400 transition"><i class="fa-solid fa-plus mr-1"></i> {{ t('btn_add_die') }}</button>
                         </div>
                         
                         <!-- 骰子列表 -->
@@ -1223,7 +1464,7 @@
                                 
                                 <div class="flex-1 flex flex-col gap-2">
                                     <!-- 上排: 意图 -->
-                                    <input v-model="die.label" placeholder="Check (e.g. Hit/Dmg)" class="w-full bg-transparent text-sm font-bold outline-none border-b border-transparent focus:border-[var(--text-dim)] transition placeholder-opacity-50 placeholder-[var(--text-dim)]">
+                                    <input v-model="die.label" :placeholder="t('ph_die_intent')" class="w-full bg-transparent text-sm font-bold outline-none border-b border-transparent focus:border-[var(--text-dim)] transition placeholder-opacity-50 placeholder-[var(--text-dim)]">
                                     
                                     <!-- 下排: 类型选择 -->
                                     <select v-model="die.type" @change="die.val = null" class="w-full bg-transparent text-[10px] font-mono font-bold outline-none text-[var(--text-dim)]">
@@ -1246,7 +1487,7 @@
                         <!-- [修改] 增大投掷按钮 -->
                         <button @click="rollCombatDice" :disabled="isRollingDice || combatForm.dicePool.length === 0" class="w-full mt-4 py-3 bg-[var(--bg-panel)] border border-[var(--border-dim)] theme-rounded-sm hover:bg-[var(--bg-header)] transition active:scale-95 flex items-center justify-center gap-3 font-bold text-sm uppercase tracking-wider group">
                             <i :class="isRollingDice ? 'fa-solid fa-circle-notch fa-spin text-lg' : 'fa-solid fa-dice-d20 text-lg'"></i>
-                            ROLL ALL DICE
+                            {{ t('btn_roll_all') }}
                         </button>
                     </div>
 
@@ -1261,8 +1502,13 @@
                 </div>
                 <div v-if="tabs.right === 'godmode'" class="h-full flex flex-col p-5 relative">
                     <div class="absolute inset-0 bg-amber-900/5 pointer-events-none"></div>
+                    <!-- [新增] 上帝模式专属水印 (金色、发光) -->
+                    <div class="absolute -bottom-20 -right-20 pointer-events-none opacity-20 group-hover:opacity-30 transition-opacity duration-500">
+                         <!-- 这里的 sepia hue-rotate 是为了把 logo 染成琥珀色/金色 -->
+                        <img src="logo.png" class="w-80 h-80 object-contain rotate-[-15deg] sepia saturate-200 hue-rotate-[10deg]">
+                    </div>
                     <div class="text-[10px] text-amber-500 font-bold uppercase tracking-widest mb-2"><i class="fa-solid fa-database mr-1"></i> {{ t('header_godmode') }}</div>
-                    <p class="text-xs text-[var(--text-dim)] mb-4 leading-relaxed">用自然语言直接修改世界状态。例如：“把所有名为‘帝国’的势力的兵力设为0”，“给所有人增加一个‘理智值’属性，默认为100”。</p>
+                    <p class="text-xs text-[var(--text-dim)] mb-4 leading-relaxed">{{ t('msg_godmode_desc') }}</p>
                     <textarea v-model="godModeInput" class="flex-1 bg-[var(--bg-input)] border border-amber-500/30 theme-rounded-sm p-3 text-sm font-mono text-[var(--text-main)] resize-none outline-none focus:border-amber-500 transition" placeholder="t('ph_godmode')"></textarea>
                     <div class="mt-4 flex justify-end">
                         <button @click="executeGodMode" :disabled="isThinking || !godModeInput.trim()" class="px-6 py-2 bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs uppercase tracking-widest theme-rounded-sm shadow-lg flex items-center gap-2 disabled:opacity-50">
@@ -1283,7 +1529,7 @@
                             :class="generateOptions ? 'bg-pink-600 border-pink-500 text-white shadow-[0_0_15px_rgba(219,39,119,0.4)]' : 'bg-[var(--bg-badge)] border-[var(--border-dim)] text-[var(--text-dim)] hover:text-[var(--text-main)]'"
                             class="px-3 py-1.5 theme-rounded-sm border text-[10px] font-bold transition-all duration-300 flex items-center gap-2">
                             <i :class="generateOptions ? 'fa-solid fa-dice text-white' : 'fa-solid fa-dice text-[var(--text-dim)]'"></i>
-                            <span>{{ generateOptions ? 'ANKO: ON' : 'ANKO MODE' }}</span>
+                            <span>{{ generateOptions ? t('header_anko_on') : t('header_anko_mode') }}</span>
                         </button>
                     </div>
                     <button @click="openContextModal" :disabled="isThinking" class="w-full py-4 theme-rounded-sm bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white font-bold text-sm tracking-widest shadow-lg shadow-indigo-900/30 transition disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-3">
@@ -1397,7 +1643,7 @@
                                 <button @click="impactForm.type = 'REGION_TRANSFER'" :class="impactForm.type === 'REGION_TRANSFER' ? 'bg-indigo-600 text-white' : 'text-[var(--text-dim)] hover:bg-[var(--bg-panel)]'" class="flex-1 py-1 text-[10px] font-bold theme-rounded-sm transition">{{ t('btn_type_region') }}</button>
                                 <button @click="impactForm.type = 'ENTITY_CREATE'" :class="impactForm.type === 'ENTITY_CREATE' ? 'bg-emerald-600 text-white' : 'text-[var(--text-dim)] hover:bg-[var(--bg-panel)]'" class="flex-1 py-1 text-[10px] font-bold theme-rounded-sm transition">{{ t('btn_type_create') }}</button>
                                 <button @click="impactForm.type = 'ENTITY_REMOVE'" :class="impactForm.type === 'ENTITY_REMOVE' ? 'bg-red-600 text-white' : 'text-[var(--text-dim)] hover:bg-[var(--bg-panel)]'" class="flex-1 py-1 text-[10px] font-bold theme-rounded-sm transition">{{ t('btn_type_remove') }}</button>
-                                <button @click="impactForm.type = 'PIN_MOVE'" :class="impactForm.type === 'PIN_MOVE' ? 'bg-pink-600 text-white' : 'text-[var(--text-dim)] hover:bg-[var(--bg-panel)]'" class="flex-1 py-1 text-[10px] font-bold theme-rounded-sm transition">移动标记</button>
+                                <button @click="impactForm.type = 'PIN_MOVE'" :class="impactForm.type === 'PIN_MOVE' ? 'bg-pink-600 text-white' : 'text-[var(--text-dim)] hover:bg-[var(--bg-panel)]'" class="flex-1 py-1 text-[10px] font-bold theme-rounded-sm transition">{{ t('btn_type_pin') }}</button>
                             </div>
 
                             <!-- B. 条件表单 (中文替换) -->
@@ -1474,16 +1720,15 @@
                         <label class="block text-[10px] font-bold text-indigo-400 uppercase mb-2 tracking-widest">{{ t('label_details') }}</label>
                         
                         <!-- 内容输入框 -->
-                        <textarea v-model="editor.content" class="flex-1 input-tech theme-rounded-sm p-4 text-base font-mono-tech text-[var(--text-main)] resize-none outline-none leading-relaxed h-full min-h-[200px]" placeholder="// ..."></textarea>
+                        <textarea v-model="editor.content" class="flex-1 input-tech theme-rounded-sm p-4 text-base font-mono-tech text-[var(--text-main)] resize-none outline-none leading-relaxed h-full min-h-[200px]" :placeholder="t('ph_editor_content')"></textarea>
                         
                         <!-- [修改点] 安科选项编辑区 -->
                         <div class="mt-4 pt-4 border-t border-[var(--border-dim)]">
                             <!-- 2. 标题行：左对齐，按钮紧跟文字 -->
                             <div class="flex items-center gap-3 mb-2">
-                                <div class="text-[10px] font-bold text-pink-500 uppercase tracking-widest"><i class="fa-solid fa-list-ul mr-1"></i> ANKO OPTIONS</div>
-                                <!-- Add 按钮放在这里 -->
+                                <div class="text-[10px] font-bold text-pink-500 uppercase tracking-widest"><i class="fa-solid fa-list-ul mr-1"></i> {{ t('lbl_manual_options') }}</div>
                                 <button @click="addOptionToEditor" class="text-[10px] bg-pink-900/20 text-pink-400 border border-pink-500/30 px-2 py-0.5 theme-rounded-sm hover:bg-pink-600 hover:text-white transition flex items-center gap-1" title="Add new option">
-                                    <i class="fa-solid fa-plus"></i> Add
+                                    <i class="fa-solid fa-plus"></i> {{ t('btn_add') }}
                                 </button>
                             </div>
 
@@ -1493,21 +1738,19 @@
                                     <div class="flex-1 space-y-1">
                                         <!-- Label 输入 -->
                                         <div class="flex items-center gap-2">
-                                            <span class="text-[9px] text-pink-500 font-bold uppercase w-8 text-right">Label</span>
-                                            <input v-model="opt.label" class="flex-1 bg-[var(--bg-input)] text-xs font-bold text-[var(--text-main)] px-1 py-0.5 theme-rounded-sm border border-[var(--border-dim)] outline-none focus:border-pink-500 placeholder-pink-500/30" placeholder="Short Title">
-                                        </div>
+                                            <span class="text-[9px] text-pink-500 font-bold uppercase w-8 text-right">{{ t('lbl_opt_label') }}</span>
+                                            <input v-model="opt.label" class="flex-1 bg-[var(--bg-input)] text-xs font-bold text-[var(--text-main)] px-1 py-0.5 theme-rounded-sm border border-[var(--border-dim)] outline-none focus:border-pink-500 placeholder-pink-500/30" :placeholder="t('ph_opt_label')">                                        </div>
                                         <!-- Desc 输入 -->
                                         <div class="flex items-center gap-2">
-                                            <span class="text-[9px] text-[var(--text-dim)] font-bold uppercase w-8 text-right">Desc</span>
-                                            <input v-model="opt.desc" class="flex-1 bg-[var(--bg-input)] text-xs text-[var(--text-dim)] px-1 py-0.5 theme-rounded-sm border border-[var(--border-dim)] outline-none focus:border-pink-500 placeholder-[var(--text-dim)]/30" placeholder="Consequence description...">
-                                        </div>
+                                            <span class="text-[9px] text-[var(--text-dim)] font-bold uppercase w-8 text-right">{{ t('lbl_opt_desc') }}</span>
+                                            <input v-model="opt.desc" class="flex-1 bg-[var(--bg-input)] text-xs text-[var(--text-dim)] px-1 py-0.5 theme-rounded-sm border border-[var(--border-dim)] outline-none focus:border-pink-500 placeholder-[var(--text-dim)]/30" :placeholder="t('ph_opt_desc')">                                        </div>
                                     </div>
                                     <!-- 删除按钮 -->
                                     <button @click="editor.options.splice(oi,1)" class="text-[var(--text-dim)] hover:text-red-400 mt-1 px-1"><i class="fa-solid fa-times"></i></button>
                                 </div>
                             </div>
                             <div v-else class="text-[10px] text-[var(--text-dim)] italic opacity-30 py-1 pl-1">
-                                (No options defined. Click 'Add' to create manual choices.)
+                                {{ t('msg_no_manual_options') }}
                             </div>
                         </div>
 
@@ -1580,7 +1823,7 @@
 
             <div class="poster-footer">
                 <div class="flex items-center gap-4"><i class="fa-solid fa-layer-group text-indigo-500"></i><span>LEVANT 自动化推演</span></div>
-                <div class="flex flex-col items-end"><span class="text-slate-500 text-sm mb-1 font-bold">POWERED BY 絜矩 (QQ 2124223354)</span><span class="text-emerald-500 font-bold">LEVANT v1.08</span></div>
+                <div class="flex flex-col items-end"><span class="text-slate-500 text-sm mb-1 font-bold">POWERED BY 絜矩 (QQ 2124223354)</span><span class="text-emerald-500 font-bold">LEVANT v1.10</span></div>
             </div>
         </div>
 
@@ -1609,16 +1852,17 @@
             <div class="poster-md content-cols" v-html="posterData.content"></div>
 
             <div style="margin-top: auto; border-top: 1px solid #333; padding-top: 20px; text-align: center; font-family: monospace; font-size: 14px; color: #555;">
-                LEVANT 自动化推演 | AUTOMATED REPORT | POWERED BY 絜矩 (QQ 2124223354)
+                {{ t('poster_footer_text') }} | POWERED BY 絜矩 (QQ 2124223354)
             </div>
         </div>
 
     </div>
 
-    <!-- Context Assembler Modal -->
+    <!-- Context Assembler Modal (已修复并应用 i18n) -->
     <transition name="fade">
         <div v-if="showContextModal" class="modal-mask" @click.self="showContextModal = false">
             <div role="dialog" aria-label="Context Assembler" class="glass-panel theme-rounded w-[900px] h-[90vh] flex flex-col overflow-hidden text-[var(--text-main)]" @click.stop>
+                <!-- Header -->
                 <div class="p-5 border-b border-[var(--border-dim)] bg-[var(--bg-header)] flex justify-between items-center shrink-0">
                     <div>
                         <h3 class="text-xl font-bold text-[var(--text-main)]"><i class="fa-solid fa-layer-group mr-2 text-indigo-400"></i>{{ t('modal_context_title') }}</h3>
@@ -1719,9 +1963,8 @@
                                         </div>
                                     </div>
                                 </div>
-                                <!-- [新增] Map Data 模块 -->
+                                <!-- Map Data 模块 -->
                                 <div v-if="type === 'map'" class="border border-[var(--border-dim)] theme-rounded-sm bg-[var(--bg-sidebar)]">
-                                    <!-- 标题栏 -->
                                     <div class="p-2 bg-[var(--bg-header)] border-b border-[var(--border-dim)] flex justify-between items-center">
                                         <div class="flex items-center gap-2">
                                             <input type="checkbox" v-model="contextConfig.includeMap" class="accent-pink-500">
@@ -1732,11 +1975,7 @@
                                             <button @click="moveContextItem('map', 1)"><i class="fa-solid fa-arrow-down"></i></button>
                                         </div>
                                     </div>
-                                    
-                                    <!-- 内容列表 (可滚动) -->
                                     <div v-if="contextConfig.includeMap" class="p-2 space-y-3 max-h-60 overflow-y-auto">
-                                        
-                                        <!-- 子列表: Regions -->
                                         <div v-if="contextConfig.mapRegionList.length > 0">
                                             <div class="text-[9px] font-bold text-[var(--text-dim)] uppercase mb-1 flex justify-between">
                                                 <span><i class="fa-solid fa-draw-polygon mr-1"></i>Regions</span>
@@ -1752,8 +1991,6 @@
                                                 </div>
                                             </div>
                                         </div>
-
-                                        <!-- 子列表: Pins -->
                                         <div v-if="contextConfig.mapPinList.length > 0">
                                             <div class="text-[9px] font-bold text-[var(--text-dim)] uppercase mb-1 mt-2 flex justify-between">
                                                 <span><i class="fa-solid fa-map-pin mr-1"></i>Pins (POI)</span>
@@ -1768,8 +2005,6 @@
                                                 </div>
                                             </div>
                                         </div>
-
-                                        <!-- 空状态提示 -->
                                         <div v-if="contextConfig.mapRegionList.length === 0 && contextConfig.mapPinList.length === 0" class="text-center py-4 opacity-50 text-xs">
                                             (No Map Data)
                                         </div>
@@ -1788,7 +2023,6 @@
                                         </div>
                                     </div>
                                     <div v-if="contextConfig.includeHistory" class="p-4 space-y-4">
-                                        <!-- 深记忆控制 -->
                                         <div>
                                             <div class="flex justify-between text-[10px] font-bold text-emerald-500 mb-1 uppercase tracking-wider">
                                                 <span>{{ t('ctx_hist_deep') }}</span>
@@ -1796,7 +2030,6 @@
                                             </div>
                                             <input type="range" v-model.number="contextConfig.historyDeepDepth" min="0" max="5" class="w-full h-1 bg-[var(--border-dim)] theme-rounded-sm appearance-none cursor-pointer accent-emerald-500">
                                         </div>
-                                        <!-- 浅记忆控制 -->
                                         <div>
                                             <div class="flex justify-between text-[10px] font-bold text-[var(--text-dim)] mb-1 uppercase tracking-wider">
                                                 <span>{{ t('ctx_hist_shallow') }}</span>
@@ -1823,12 +2056,13 @@
                     </div>
                 </div>
 
+                <!-- Footer -->
                 <div class="p-5 border-t border-[var(--border-dim)] bg-[var(--bg-header)] flex justify-between items-center shrink-0">
                     <div class="text-xs text-[var(--text-dim)]">{{ t('ctx_preview_hint') }}</div>
                     <button @click="runAiInference" :disabled="isThinking" class="px-8 py-3 theme-rounded-sm bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-lg transition flex items-center gap-2">
                         <i v-if="isThinking" class="fa-solid fa-circle-notch fa-spin"></i>
                         <i v-else class="fa-solid fa-bolt"></i>
-                        EXECUTE
+                        {{ t('btn_execute') }}
                     </button>
                 </div>
             </div>
@@ -1924,42 +2158,42 @@
                     </section>
 
                     <section>
-                         <h3 class="text-xs font-bold text-emerald-400 uppercase tracking-widest mb-2 pb-2 border-b border-[var(--border-dim)]">AI Prompt Configuration</h3>
+                         <h3 class="text-xs font-bold text-emerald-400 uppercase tracking-widest mb-2 pb-2 border-b border-[var(--border-dim)]">{{ t('set_prompt_config') }}</h3>
                          
                          <!-- 标签切换按钮 -->
                          <div class="flex gap-2 mb-2">
                              <button @click="settingsPromptTab = 'system'" 
                                      :class="settingsPromptTab === 'system' ? 'bg-emerald-600 text-white' : 'bg-[var(--bg-badge)] text-[var(--text-dim)] hover:text-[var(--text-main)]'"
                                      class="px-3 py-1 text-[10px] font-bold theme-rounded-sm transition">
-                                 System (Deduction)
+                                 {{ t('tab_prompt_sys') }}
                              </button>
                              <button @click="settingsPromptTab = 'script'" 
                                      :class="settingsPromptTab === 'script' ? 'bg-indigo-600 text-white' : 'bg-[var(--bg-badge)] text-[var(--text-dim)] hover:text-[var(--text-main)]'"
                                      class="px-3 py-1 text-[10px] font-bold theme-rounded-sm transition">
-                                 Script Gen
+                                 {{ t('tab_prompt_script') }}
                              </button>
                              <button @click="settingsPromptTab = 'god'" 
                                      :class="settingsPromptTab === 'god' ? 'bg-amber-600 text-white' : 'bg-[var(--bg-badge)] text-[var(--text-dim)] hover:text-[var(--text-main)]'"
                                      class="px-3 py-1 text-[10px] font-bold theme-rounded-sm transition">
-                                 God Mode
+                                 {{ t('tab_prompt_god') }}
                              </button>
                          </div>
 
                          <!-- 1. System Prompt 编辑框 -->
                          <div v-if="settingsPromptTab === 'system'">
-                             <div class="text-[10px] text-[var(--text-dim)] mb-1">用于日常“战术推演”与“智能补全”的核心指令。</div>
+                             <div class="text-[10px] text-[var(--text-dim)] mb-1">{{ t('desc_prompt_system') }}</div>
                              <textarea v-model="settings.prompts.system" class="w-full h-64 input-tech theme-rounded-sm p-3 text-xs font-mono resize-none outline-none text-[var(--text-dim)]"></textarea>
                          </div>
 
                          <!-- 2. Script Generator Prompt 编辑框 -->
                          <div v-if="settingsPromptTab === 'script'">
-                             <div class="text-[10px] text-[var(--text-dim)] mb-1">用于“剧本生成”功能，控制世界观初始化逻辑。</div>
+                             <div class="text-[10px] text-[var(--text-dim)] mb-1">{{ t('desc_prompt_script') }}</div>
                              <textarea v-model="settings.prompts.script_generator" class="w-full h-64 input-tech theme-rounded-sm p-3 text-xs font-mono resize-none outline-none text-[var(--text-dim)]"></textarea>
                          </div>
 
                          <!-- 3. God Mode Prompt 编辑框 -->
                          <div v-if="settingsPromptTab === 'god'">
-                             <div class="text-[10px] text-[var(--text-dim)] mb-1">用于“上帝模式”功能，控制直接修改 JSON 数据的逻辑。</div>
+                             <div class="text-[10px] text-[var(--text-dim)] mb-1">{{ t('desc_prompt_god') }}</div>
                              <textarea v-model="settings.prompts.god_mode" class="w-full h-64 input-tech theme-rounded-sm p-3 text-xs font-mono resize-none outline-none text-[var(--text-dim)]"></textarea>
                          </div>
                     </section>
@@ -1982,9 +2216,9 @@
                     
                     <!-- [优化] 父级实体选择 (支持层级缩进显示) -->
                     <div>
-                        <label class="block text-xs font-bold text-[var(--text-dim)] uppercase mb-2">Parent Entity (Hierarchy)</label>
+                        <label class="block text-xs font-bold text-[var(--text-dim)] uppercase mb-2">{{ t('lbl_parent_entity') }}</label>
                         <select v-model="editingFaction.parentId" class="w-full input-tech p-3 theme-rounded-sm text-sm font-mono outline-none">
-                            <option value="">-- No Parent (Top Level) --</option>
+                            <option value="">{{ t('opt_top_level') }}</option>
                             <!-- 使用 sortedPlayers 可以在下拉框中也保持顺序 -->
                             <option v-for="p in sortedPlayers" :key="p.id" :value="p.id" 
                                     v-show="p.id !== editingFaction.id"
@@ -2035,7 +2269,7 @@
                              <label class="block text-xs font-bold text-amber-500 uppercase">{{ t('label_stats') }}</label>
                              <!-- [新增] 实体类型选择器 -->
                              <div class="flex items-center gap-2">
-                                 <span class="text-[10px] text-[var(--text-dim)] uppercase">Type:</span>
+                                 <span class="text-[10px] text-[var(--text-dim)] uppercase">{{ t('lbl_entity_type') }}</span>
                                  <select v-model="editingFaction.schemaId" class="bg-[var(--bg-badge)] border border-[var(--border-dim)] text-[10px] theme-rounded-sm p-1 text-[var(--text-main)] outline-none">
                                      <option v-for="rs in rule_sets" :key="rs.id" :value="rs.id">{{ rs.name }}</option>
                                  </select>
@@ -2293,6 +2527,7 @@
     createApp({
         data() {
             return {
+                showSplash: true, // [新增] 控制启动页显示
                 serverConnected: false, isThinking: false, currentSaveFile: 'savegame.json',
                 showSettings: false, showFactionModal: false, showSaveLoadModal: false, showScriptGenModal: false, showContextModal: false,
                 saveFiles: [], newSaveFilename: '', 
@@ -2340,6 +2575,7 @@
                 
                 // [新增] 用于设置面板切换 Prompt 标签页
                 settingsPromptTab: 'system', 
+                isLayerManagerOpen: true, // [新增] 控制图层管理器展开/折叠
 
                 settings: {
                     api: { provider: 'Gemini', baseUrl: '', model: 'gemini-2.5-flash', key: '' },
@@ -2566,7 +2802,7 @@
                     }
                 },
                 
-                // --- i18n Dictionary ---
+                // --- i18n Dictionary (完整修复版) ---
                 translations: {
                     app_title: { zh: "LEVANT 自动化推演", en: "LEVANT Auto-Deduction", ja: "LEVANT 自動演繹" },
                     status_online: { zh: "系统联机", en: "SYSTEM ONLINE", ja: "システム稼働中" },
@@ -2575,81 +2811,62 @@
                     auto: { zh: "自动", en: "AUTO", ja: "自動" },
                     btn_script_gen: { zh: "剧本生成", en: "Script Gen", ja: "シナリオ生成" },
                     btn_files: { zh: "档案管理", en: "Files", ja: "ファイル管理" },
+                    
+                    // Sidebar Tabs
                     tab_world: { zh: "世界", en: "World", ja: "世界" },
                     tab_entity: { zh: "实体", en: "Entities", ja: "実体" },
                     tab_lore: { zh: "资料", en: "Lore", ja: "資料" },
                     tab_rules: { zh: "规则", en: "Rules", ja: "ルール" },
+                    
+                    // Sidebar Content
+                    header_global_vars: { zh: "全局变量控制", en: "Global Variables", ja: "グローバル変数" },
+                    ph_var_key: { zh: "变量名", en: "Var Name", ja: "変数名" },
+                    ph_var_val: { zh: "当前状态", en: "Current Value", ja: "現在値" },
                     btn_add_global: { zh: "添加全局状态", en: "Add Global Var", ja: "グローバル変数を追加" },
                     btn_new_entity: { zh: "注册新实体", en: "New Entity", ja: "新規実体登録" },
+                    ph_lore_key: { zh: "关键词...", en: "Keywords...", ja: "キーワード..." },
+                    ph_lore_content: { zh: "设定内容...", en: "Content...", ja: "内容..." },
+                    btn_mode_on: { zh: "常驻", en: "ALWAYS", ja: "常駐" },
+                    btn_mode_auto: { zh: "自动", en: "AUTO", ja: "自動" },
+                    btn_mode_off: { zh: "禁用", en: "OFF", ja: "無効" },
                     btn_add_lore: { zh: "新增资料条目", en: "Add Lore Entry", ja: "資料エントリ追加" },
-                    btn_export_rules: { zh: "导出规则海报", en: "Export Rules", ja: "ルール出力" },
+                    header_type_def: { zh: "类型定义", en: "TYPE DEFINITIONS", ja: "型定義" },
+                    msg_no_fields: { zh: "(该类型未定义属性字段)", en: "(No fields defined for this type)", ja: "(フィールド未定義)" },
+                    lbl_field_label: { zh: "显示名", en: "Label", ja: "表示名" },
+                    lbl_field_key: { zh: "键名", en: "Key", ja: "キー" },
                     btn_add_rule: { zh: "添加属性字段", en: "Add Attribute", ja: "属性フィールド追加" },
-                    msg_no_events: { zh: "等待情报输入...", en: "Awaiting Intelligence...", ja: "情報入力待ち..." },
-                    btn_copy: { zh: "复制", en: "Copy", ja: "コピー" },
-                    btn_delete: { zh: "删除", en: "Delete", ja: "削除" },
-                    tab_pending: { zh: "待决", en: "Pending", ja: "保留中" },
-                    tab_console: { zh: "指令台", en: "Console", ja: "コンソール" },
-                    tab_godmode: { zh: "上帝模式", en: "God Mode", ja: "神モード" },
-                    msg_empty_queue: { zh: "队列为空", en: "Queue Empty", ja: "キューが空です" },
-                    placeholder_input: { zh: "// 输入原始指令...\n例如: #Cortex 试图入侵 #NeoTokyo", en: "// Input raw command...\ne.g., #Cortex attempts to hack #NeoTokyo", ja: "// コマンドを入力...\n例: #Cortex が #NeoTokyo に侵入を試みる" },
-                    ai_core_label: { zh: "AI 智能核心 (Active)", en: "AI CORE (Active)", ja: "AI コア (稼働中)" },
-                    btn_ai_deduce: { zh: "AI 智能补全 / 推演", en: "AI DEDUCTION / AUTO-COMPLETE", ja: "AI 自動補完 / 演繹" },
-                    status_thinking: { zh: "正在进行战术推演...", en: "Calculating Strategy...", ja: "戦術演算中..." },
-                    label_actor: { zh: "行动实体", en: "Actor", ja: "行動主体" },
-                    label_start: { zh: "开始", en: "Start", ja: "開始" },
-                    label_end: { zh: "结束", en: "End", ja: "終了" },
-                    option_ai_auto: { zh: "AI 自动判断", en: "AI Auto-Detect", ja: "AI 自動判定" },
-                    option_global: { zh: "全局事件", en: "Global Event", ja: "グローバルイベント" },
-                    label_summary: { zh: "标题摘要", en: "Summary", ja: "要約" },
-                    label_impact: { zh: "状态变更计算", en: "State Impact Calc", ja: "状態変化計算" },
-                    label_details: { zh: "详细情报档案", en: "Detailed Intelligence", ja: "詳細情報アーカイブ" },
-                    btn_add_pending: { zh: "加入待决序列", en: "Add to Pending", ja: "保留リストに追加" },
-                    btn_commit: { zh: "执行推演 (Commit)", en: "COMMIT TURN", ja: "ターン実行 (Commit)" },
-                    modal_context_title: { zh: "上下文装配与推演", en: "Context Assembler", ja: "コンテキストアセンブラ" },
-                    modal_context_subtitle: { zh: "确认 AI 将接收到的“世界切片”以及“当前指令”。", en: "Confirm the 'World Slice' and 'Action' sent to AI.", ja: "AIに送信する「世界スライス」と「現在指令」を確認してください。" },
-                    ctx_current: { zh: "当前指令与草稿", en: "Current Action", ja: "現在の指令" },
-                    ctx_global: { zh: "世界全局变量", en: "Global Vars", ja: "グローバル変数" },
-                    ctx_rules: { zh: "属性规则定义", en: "Stat Rules", ja: "属性ルール" },
-                    ctx_lore: { zh: "资料设定 (Lore)", en: "Lore Entries", ja: "資料設定" },
-                    ctx_entities: { zh: "参与实体", en: "Active Entities", ja: "参加実体" },
-                    ctx_hist_deep: { zh: "深层记忆 (近 - 含详情)", en: "Deep Mem (Recent - Full)", ja: "深層記憶 (詳細)" },
-                    ctx_hist_shallow: { zh: "浅层记忆 (远 - 仅摘要)", en: "Shallow Mem (Older - Summary)", ja: "浅層記憶 (要約)" },
-                    ctx_preview_label: { zh: "Payload 预览 (AI 可见内容)", en: "Payload Preview (What AI Sees)", ja: "ペイロードプレビュー" }, // 新增
-                    ctx_preview_hint: { zh: "AI 将基于以上预览内容进行生成。", en: "AI will generate based on the preview content.", ja: "AIは上記に基づいて生成します。" }, // 新增
-                    btn_execute: { zh: "执行", en: "EXECUTE", ja: "実行" }, // 新增
-                    settings_title: { zh: "系统配置", en: "System Settings", ja: "システム設定" },
-                    settings_ui: { zh: "界面与语言", en: "Interface & Language", ja: "UIと言語" },
-                    settings_theme: { zh: "界面风格", en: "Theme", ja: "テーマ" },
-                    settings_lang: { zh: "系统语言", en: "Language", ja: "言語" },
-                    btn_cancel: { zh: "取消", en: "Cancel", ja: "キャンセル" },
-                    btn_save: { zh: "保存配置", en: "Save Config", ja: "設定保存" },
-                    modal_edit_entity: { zh: "编辑实体档案", en: "Edit Entity", ja: "実体編集" },
-                    modal_new_entity: { zh: "注册新实体", en: "Register Entity", ja: "新規実体登録" },
-                    label_name: { zh: "名称", en: "Name", ja: "名称" },
-                    label_icon_color: { zh: "图标 & 颜色", en: "Icon & Color", ja: "アイコン & 色" },
-                    label_desc: { zh: "描述", en: "Description", ja: "説明" },
-                    label_stats: { zh: "属性面板", en: "Stats", ja: "ステータス" },
-                    btn_destroy: { zh: "销毁数据", en: "Destroy Data", ja: "データ破棄" },
-                    btn_confirm: { zh: "确认", en: "Confirm", ja: "確認" },
-                    modal_files: { zh: "档案管理", en: "File Management", ja: "ファイル管理" },
-                    label_save_as: { zh: "另存为", en: "Save As", ja: "名前を付けて保存" },
-                    label_local_files: { zh: "本地档案", en: "Local Files", ja: "ローカルファイル" },
-                    btn_load: { zh: "读取", en: "Load", ja: "読込" },
-                    btn_overwrite: { zh: "覆盖", en: "Overwrite", ja: "上書" },
-                    msg_no_files: { zh: "无存档", en: "No Files", ja: "ファイルなし" },
-                    modal_script_gen: { zh: "AI 剧本生成", en: "AI Script Generation", ja: "AI シナリオ生成" },
-                    msg_script_gen_hint: { zh: "上传设定集、地图图片或描述您想要的世界观。AI 将自动生成实体、属性规则和开场。", en: "Upload lore, maps, or describe your world. AI will generate entities, rules, and intro.", ja: "設定資料、地図をアップロード、または世界観を記述。AIが実体、ルール、オープニングを生成します。" },
-                    label_upload_ref: { zh: "上传参考文档 / 图片", en: "Upload Reference Docs / Images", ja: "参考資料/画像をアップロード" }, // 新增
-                    placeholder_prompt: { zh: "提示词 (例如: '一个魔法吞噬灵魂的黑暗奇幻世界...')", en: "Prompt (e.g., 'A grimdark fantasy world...')", ja: "プロンプト (例: '魔法が魂を食らうダークファンタジー世界...')" }, // 新增
-                    status_generating: { zh: "正在构建世界...", en: "Constructing World...", ja: "世界構築中..." },
-                    btn_start_gen: { zh: "初始化剧本生成", en: "Initialize Generation", ja: "生成開始" },
-                    
-                    // --- 侧边栏 ---
-                    header_global_vars: { zh: "全局变量控制", en: "Global Variables", ja: "グローバル変数" },
 
-                    // --- 地图工具栏 ---
+                    // Timeline & Events
                     view_timeline: { zh: "时间轴情报流", en: "Timeline Stream", ja: "タイムライン" },
                     view_map: { zh: "战术地图", en: "Tactical Map", ja: "戦術地図" },
+                    btn_show_all_history: { zh: "显示全部历史", en: "Show All History", ja: "全履歴を表示" },
+                    msg_no_events: { zh: "等待情报输入...", en: "Awaiting Intelligence...", ja: "情報入力待ち..." },
+                    header_manage_impacts: { zh: "影响管理", en: "Manage Impacts", ja: "影響管理" },
+                    header_anko_options: { zh: "安科选项 (决策)", en: "ANKO OPTIONS (DECISIONS)", ja: "安価オプション (決定)" },
+                    btn_add: { zh: "添加", en: "Add", ja: "追加" },
+                    msg_no_options: { zh: "暂无选项", en: "No options available.", ja: "オプションなし" },
+                    lbl_opt_label: { zh: "标题", en: "Label", ja: "ラベル" },
+                    ph_opt_label: { zh: "选项标题", en: "Option Label", ja: "オプション名" },
+                    lbl_opt_desc: { zh: "描述", en: "Desc", ja: "説明" },
+                    ph_opt_desc: { zh: "后果描述...", en: "Consequence...", ja: "結果の説明..." },
+                    btn_copy: { zh: "复制", en: "Copy", ja: "コピー" },
+                    btn_delete: { zh: "删除", en: "Delete", ja: "削除" },
+
+                    // Impact Editor
+                    btn_type_stat: { zh: "属性变更", en: "CHANGE STAT", ja: "ステータス変更" },
+                    btn_type_region: { zh: "地块转移", en: "TRANSFER REGION", ja: "領土移譲" },
+                    btn_type_create: { zh: "创建实体", en: "CREATE ENTITY", ja: "実体作成" },
+                    btn_type_remove: { zh: "移除实体", en: "REMOVE ENTITY", ja: "実体削除" },
+                    btn_type_pin: { zh: "移动标记", en: "MOVE PIN", ja: "ピン移動" }, // 之前漏了
+                    ph_target_entity: { zh: "目标实体", en: "Target Entity", ja: "対象実体" },
+                    ph_attribute: { zh: "属性", en: "Attribute", ja: "属性" },
+                    ph_target_region: { zh: "目标区域", en: "Target Region", ja: "対象地域" },
+                    ph_new_controller: { zh: "新控制者", en: "New Controller", ja: "新支配者" },
+                    ph_new_entity_name: { zh: "新实体名称...", en: "New Entity Name...", ja: "新実体名..." },
+                    ph_entity_remove: { zh: "选择要移除的实体", en: "Entity to Remove", ja: "削除する実体" },
+                    ph_new_value: { zh: "新值", en: "New Value", ja: "新しい値" },
+                    
+                    // Map Interface
                     btn_upload_map: { zh: "上传地图", en: "Upload Map", ja: "地図読込" },
                     mode_view: { zh: "浏览", en: "View", ja: "閲覧" },
                     mode_pin: { zh: "标记", en: "Pin", ja: "ピン" },
@@ -2662,32 +2879,87 @@
                     hint_drag: { zh: "拖拽", en: "DRAG", ja: "ドラッグ" },
                     hint_zoom: { zh: "滚轮", en: "WHEEL", ja: "ホイール" },
                     msg_no_map: { zh: "未装载战术地图", en: "No Tactical Map Loaded", ja: "戦術地図なし" },
-
-                    // --- 事件编辑 ---
-                    header_manage_impacts: { zh: "影响管理", en: "Manage Impacts", ja: "影響管理" },
-                    label_target: { zh: "目标", en: "Target", ja: "対象" },
-                    label_attr: { zh: "属性", en: "Attr", ja: "属性" },
-                    label_val: { zh: "新值", en: "Val", ja: "値" },
                     
-                    // --- Impact Editor (右侧栏) ---
-                    btn_type_stat: { zh: "属性变更", en: "CHANGE STAT", ja: "ステータス変更" }, // 新增
-                    btn_type_region: { zh: "地块转移", en: "TRANSFER REGION", ja: "領土移譲" }, // 新增
-                    btn_type_create: { zh: "创建实体", en: "CREATE ENTITY", ja: "実体作成" }, // 新增
-                    btn_type_remove: { zh: "移除实体", en: "REMOVE ENTITY", ja: "実体削除" }, // 新增
-                    ph_target_entity: { zh: "目标实体", en: "Target Entity", ja: "対象実体" }, // 新增
-                    ph_attribute: { zh: "属性", en: "Attribute", ja: "属性" }, // 新增
-                    ph_target_region: { zh: "目标区域", en: "Target Region", ja: "対象地域" }, // 新增
-                    ph_new_controller: { zh: "新控制者", en: "New Controller", ja: "新支配者" }, // 新增
-                    ph_new_entity_name: { zh: "新实体名称...", en: "New Entity Name...", ja: "新実体名..." }, // 新增
-                    ph_entity_remove: { zh: "选择要移除的实体", en: "Entity to Remove", ja: "削除する実体" }, // 新增
-                    ph_new_value: { zh: "新值", en: "New Value", ja: "新しい値" }, // 新增
+                    // Layer Manager
+                    header_layer_manager: { zh: "图层管理", en: "LAYER MANAGER", ja: "レイヤー管理" },
+                    btn_add_layer_map: { zh: "+地图", en: "+Map", ja: "+地図" },
+                    btn_add_layer_reg: { zh: "+区域", en: "+Reg", ja: "+領域" },
+                    btn_add_layer_pin: { zh: "+标记", en: "+Pin", ja: "+ピン" },
+                    msg_no_layers_created: { zh: "暂无图层。请点击上方按钮添加。", en: "No Layers Created. Click buttons above to add one.", ja: "レイヤーなし。上のボタンで追加してください。" },
 
-                    // --- 右侧 & 底部 ---
+                    // Right Panel Tabs
+                    tab_pending: { zh: "待决", en: "Pending", ja: "保留中" },
+                    tab_combat: { zh: "战斗", en: "Combat", ja: "戦闘" },
+                    tab_console: { zh: "指令台", en: "Console", ja: "コンソール" },
+                    tab_godmode: { zh: "上帝模式", en: "God Mode", ja: "神モード" },
+                    msg_empty_queue: { zh: "队列为空", en: "Queue Empty", ja: "キューが空です" },
+                    placeholder_input: { zh: "// 输入原始指令...\n例如: #Cortex 试图入侵 #NeoTokyo", en: "// Input raw command...\ne.g., #Cortex attempts to hack #NeoTokyo", ja: "// コマンドを入力...\n例: #Cortex が #NeoTokyo に侵入を試みる" },
+
+                    // Right Panel - Combat
+                    header_combat: { zh: "战斗裁决系统 (UCS)", en: "Universal Combat System", ja: "汎用戦闘システム" },
+                    lbl_attacker: { zh: "攻击方", en: "Attacker", ja: "攻撃側" },
+                    lbl_defender: { zh: "防御方", en: "Defender", ja: "防御側" },
+                    opt_select: { zh: "选择...", en: "Select...", ja: "選択..." },
+                    lbl_combat_loc: { zh: "战斗地点", en: "Location", ja: "場所" },
+                    opt_no_loc: { zh: "-- 无特定地点 --", en: "-- No Specific Location --", ja: "-- 場所指定なし --" },
+                    optgroup_regions: { zh: "领土区域", en: "Regions (Territory)", ja: "領土エリア" },
+                    optgroup_pins: { zh: "标记点 (POI)", en: "Pins (POI)", ja: "地点 (POI)" },
+                    label_combat_context: { zh: "战斗背景 / 战术意图", en: "Context / Intent", ja: "戦闘背景 / 意図" },
+                    ph_combat_context: { zh: "例如：争夺桥头堡 / 遭遇战 / 试图刺杀", en: "E.g. Bridgehead skirmish / Encounter / Assassination attempt", ja: "例：橋頭堡の争奪 / 遭遇戦 / 暗殺の試み" },
+                    label_dice_check: { zh: "命运检定 (RNG)", en: "Fate Check (RNG)", ja: "運命判定" },
+                    btn_add_die: { zh: "添加骰子", en: "Add Die", ja: "ダイス追加" },
+                    ph_die_intent: { zh: "检定目的 (如: 命中/伤害)", en: "Check (e.g. Hit/Dmg)", ja: "判定目的 (例: 命中/ダメ)" },
+                    btn_roll_all: { zh: "全部投掷", en: "ROLL ALL DICE", ja: "全ロール" },
+                    btn_judge_combat: { zh: "AI 裁决战斗结果", en: "AI Judge Combat", ja: "AI 戦闘裁定" },
+
+                    // Right Panel - Godmode & Editor
                     header_godmode: { zh: "全局状态干涉 (上帝模式)", en: "GLOBAL STATE MANIPULATION", ja: "神の操作" },
-                    ph_godmode: { zh: "输入神之指令...", en: "Enter divine command...", ja: "神のコマンドを入力..." }, // 新增
-                    label_next_turn_b: { zh: "下个回合:", en: "Next Turn:", ja: "次ターン:" },
+                    msg_godmode_desc: { zh: "用自然语言直接修改世界状态。例如：“把所有名为‘帝国’的势力的兵力设为0”，“给所有人增加一个‘理智值’属性，默认为100”。", en: "Modify world state with natural language. E.g., 'Set manpower to 0 for all Empire factions', 'Add Sanity stat to everyone, default 100'.", ja: "自然言語で世界の状態を直接変更します。例：「『帝国』という名前の全勢力の兵力を0にする」、「全員に『理性値』属性を追加し、デフォルトを100にする」。" },
+                    ph_godmode: { zh: "输入神之指令...", en: "Enter divine command...", ja: "神のコマンドを入力..." },
+                    btn_execute: { zh: "执行", en: "EXECUTE", ja: "実行" },
 
-                    // --- 设置模态框 ---
+                    ai_core_label: { zh: "AI 智能核心 (Active)", en: "AI CORE (Active)", ja: "AI コア (稼働中)" },
+                    header_anko_mode: { zh: "安科模式", en: "ANKO MODE", ja: "安価モード" },
+                    header_anko_on: { zh: "安科: 开启", en: "ANKO: ON", ja: "安価: ON" },
+                    btn_ai_deduce: { zh: "AI 智能补全 / 推演", en: "AI DEDUCTION / AUTO-COMPLETE", ja: "AI 自動補完 / 演繹" },
+                    status_thinking: { zh: "正在进行战术推演...", en: "Calculating Strategy...", ja: "戦術演算中..." },
+
+                    // AI Editor Inputs
+                    label_actor: { zh: "行动实体", en: "Actor", ja: "行動主体" },
+                    label_start: { zh: "开始", en: "Start", ja: "開始" },
+                    label_end: { zh: "结束", en: "End", ja: "終了" },
+                    option_ai_auto: { zh: "AI 自动判断", en: "AI Auto-Detect", ja: "AI 自動判定" },
+                    option_global: { zh: "全局事件", en: "Global Event", ja: "グローバルイベント" },
+                    label_summary: { zh: "标题摘要", en: "Summary", ja: "要約" },
+                    label_impact: { zh: "状态变更计算", en: "State Impact Calc", ja: "状態変化計算" },
+                    label_details: { zh: "详细情报档案", en: "Detailed Intelligence", ja: "詳細情報アーカイブ" },
+                    ph_editor_content: { zh: "// 在此输入剧情内容...", en: "// Enter story content here...", ja: "// ここにストーリーを入力..." },
+                    lbl_manual_options: { zh: "手动选项 (MANUAL)", en: "MANUAL OPTIONS", ja: "手動オプション" },
+                    msg_no_manual_options: { zh: "(未定义选项，点击'Add'手动创建)", en: "(No options defined. Click 'Add' to create manual choices.)", ja: "(オプション未定義、'Add'で作成)" },
+                    btn_add_pending: { zh: "加入待决序列", en: "Add to Pending", ja: "保留リストに追加" },
+                    label_next_turn_b: { zh: "下个回合:", en: "Next Turn:", ja: "次ターン:" },
+                    btn_commit: { zh: "执行推演 (Commit)", en: "COMMIT TURN", ja: "ターン実行 (Commit)" },
+
+                    // Modals - Context
+                    modal_context_title: { zh: "上下文装配与推演", en: "Context Assembler", ja: "コンテキストアセンブラ" },
+                    modal_context_subtitle: { zh: "确认 AI 将接收到的“世界切片”以及“当前指令”。", en: "Confirm the 'World Slice' and 'Action' sent to AI.", ja: "AIに送信する「世界スライス」と「現在指令」を確認してください。" },
+                    set_sys_prompt: { zh: "系统提示词 (System Prompt)", en: "System Prompt", ja: "システムプロンプト" },
+                    ctx_current: { zh: "当前指令与草稿", en: "Current Action", ja: "現在の指令" },
+                    ctx_global: { zh: "世界全局变量", en: "Global Vars", ja: "グローバル変数" },
+                    ctx_rules: { zh: "属性规则定义", en: "Stat Rules", ja: "属性ルール" },
+                    ctx_lore: { zh: "资料设定 (Lore)", en: "Lore Entries", ja: "資料設定" },
+                    ctx_entities: { zh: "参与实体", en: "Active Entities", ja: "参加実体" },
+                    ctx_history: { zh: "历史记录", en: "History Memory", ja: "履歴メモリ" },
+                    ctx_hist_deep: { zh: "深层记忆 (近 - 含详情)", en: "Deep Mem (Recent - Full)", ja: "深層記憶 (詳細)" },
+                    ctx_hist_shallow: { zh: "浅层记忆 (远 - 仅摘要)", en: "Shallow Mem (Older - Summary)", ja: "浅層記憶 (要約)" },
+                    ctx_preview_label: { zh: "Payload 预览 (AI 可见内容)", en: "Payload Preview (What AI Sees)", ja: "ペイロードプレビュー" },
+                    ctx_preview_hint: { zh: "AI 将基于以上预览内容进行生成。", en: "AI will generate based on the preview content.", ja: "AIは上記に基づいて生成します。" },
+
+                    // Modals - Settings
+                    settings_title: { zh: "系统配置", en: "System Settings", ja: "システム設定" },
+                    settings_ui: { zh: "界面与语言", en: "Interface & Language", ja: "UIと言語" },
+                    settings_theme: { zh: "界面风格", en: "Theme", ja: "テーマ" },
+                    settings_lang: { zh: "系统语言", en: "Language", ja: "言語" },
                     set_llm_config: { zh: "LLM API 配置", en: "LLM API Configuration", ja: "LLM API 設定" },
                     set_provider: { zh: "服务提供商", en: "Provider Type", ja: "プロバイダー" },
                     set_base_url: { zh: "API 地址 (Base URL)", en: "Base URL", ja: "API URL" },
@@ -2695,52 +2967,95 @@
                     set_key: { zh: "API 密钥 (Key)", en: "API Key", ja: "API キー" },
                     set_proxy: { zh: "网络代理 (Proxy)", en: "Network Proxy", ja: "プロキシ" },
                     set_enable_proxy: { zh: "启用本地代理", en: "Enable Local Proxy", ja: "プロキシ有効化" },
-                    set_sys_prompt: { zh: "系统提示词 (System Prompt)", en: "System Prompt", ja: "システムプロンプト" },
+                    desc_prompt_system: { zh: "用于日常“战术推演”与“智能补全”的核心指令。", en: "Core instruction for daily 'Tactical Deduction' and 'Auto-Complete'.", ja: "日常の「戦術演繹」と「自動補完」のための核心指令。" },
+                    desc_prompt_script: { zh: "用于“剧本生成”功能，控制世界观初始化逻辑。", en: "Controls world initialization logic for 'Script Generation'.", ja: "「シナリオ生成」機能用、世界観初期化ロジックを制御。" },
+                    desc_prompt_god: { zh: "用于“上帝模式”功能，控制直接修改 JSON 数据的逻辑。", en: "Controls JSON manipulation logic for 'God Mode'.", ja: "「神モード」機能用、JSONデータ直接修正ロジックを制御。" },
+                    btn_save: { zh: "保存配置", en: "Save Config", ja: "設定保存" },
 
-                    // --- 地图编辑模态框 (大量新增) ---
+                    // Modals - Faction
+                    modal_edit_entity: { zh: "编辑实体档案", en: "Edit Entity", ja: "実体編集" },
+                    modal_new_entity: { zh: "注册新实体", en: "Register Entity", ja: "新規実体登録" },
+                    label_name: { zh: "名称", en: "Name", ja: "名称" },
+                    lbl_parent_entity: { zh: "父级实体 (层级关系)", en: "Parent Entity (Hierarchy)", ja: "親実体 (階層)" },
+                    opt_top_level: { zh: "-- 无父级 (顶级势力) --", en: "-- No Parent (Top Level) --", ja: "-- 親なし (トップレベル) --" },
+                    label_icon_color: { zh: "图标 & 颜色", en: "Icon & Color", ja: "アイコン & 色" },
+                    label_desc: { zh: "描述", en: "Description", ja: "説明" },
+                    label_stats: { zh: "属性面板", en: "Stats", ja: "ステータス" },
+                    lbl_entity_type: { zh: "实体类型:", en: "Type:", ja: "タイプ:" },
+                    msg_no_attrs_for_type: { zh: "该类型未定义属性。", en: "No attributes defined for this type.", ja: "このタイプの属性は未定義です。" },
+                    btn_destroy: { zh: "销毁数据", en: "Destroy Data", ja: "データ破棄" },
+                    btn_confirm: { zh: "确认", en: "Confirm", ja: "確認" },
+                    btn_cancel: { zh: "取消", en: "Cancel", ja: "キャンセル" },
+
+                    // Modals - Save/Load
+                    modal_files: { zh: "档案管理", en: "File Management", ja: "ファイル管理" },
+                    label_save_as: { zh: "另存为", en: "Save As", ja: "名前を付けて保存" },
+                    label_local_files: { zh: "本地档案", en: "Local Files", ja: "ローカルファイル" },
+                    btn_load: { zh: "读取", en: "Load", ja: "読込" },
+                    btn_overwrite: { zh: "覆盖", en: "Overwrite", ja: "上書" },
+                    msg_no_files: { zh: "无存档", en: "No Files", ja: "ファイルなし" },
+
+                    // Modals - Map Editor
                     map_new_terr: { zh: "新建领土 (Region)", en: "New Territory", ja: "新規領土" },
                     map_edit_terr: { zh: "编辑领土 (Region)", en: "Edit Territory", ja: "領土編集" },
                     map_add_pin: { zh: "添加标记 (Pin)", en: "Add Pin", ja: "ピン追加" },
                     map_edit_pin: { zh: "编辑标记 (Pin)", en: "Edit Pin", ja: "ピン編集" },
-                    
                     map_geo_title: { zh: "地缘政治设定", en: "Geopolitics", ja: "地政学設定" },
                     label_geo_name: { zh: "地理名称", en: "Region Name", ja: "地域名" },
                     hint_geo_name: { zh: "该地块的永久地理名称。", en: "The permanent name of this land.", ja: "この土地の恒久的な名前。" },
                     label_controller: { zh: "当前控制权", en: "Current Controller", ja: "支配勢力" },
                     opt_neutral: { zh: "-- 中立 / 无主 --", en: "-- Neutral / Unclaimed --", ja: "-- 中立 / 無主 --" },
                     hint_controller: { zh: "颜色将自动跟随控制者。", en: "Color matches the controller automatically.", ja: "色は支配者に追従します。" },
-                    
                     label_marker_type: { zh: "标记类型", en: "Marker Type", ja: "マーカー種類" },
                     btn_type_entity: { zh: "实体", en: "Entity", ja: "実体" },
                     btn_type_lore: { zh: "资料", en: "Lore", ja: "資料" },
                     btn_type_custom: { zh: "自定义", en: "Custom", ja: "カスタム" },
-                    
                     label_select_entity: { zh: "选择实体", en: "Select Entity", ja: "実体選択" },
                     opt_choose_entity: { zh: "-- 请选择实体 --", en: "-- Choose Entity --", ja: "-- 実体を選択 --" },
                     label_select_lore: { zh: "选择资料条目", en: "Select Lore Entry", ja: "資料エントリ選択" },
                     opt_choose_lore: { zh: "-- 请选择资料 --", en: "-- Choose Lore --", ja: "-- 資料を選択 --" },
                     hint_lore_link: { zh: "链接至资料库。", en: "Links to Lore Library.", ja: "資料データベースへリンク。" },
                     label_custom_label: { zh: "自定义标签", en: "Label Name", ja: "ラベル名" },
-                    
                     label_appearance: { zh: "图标与颜色覆盖 (可选)", en: "Icon & Color Override", ja: "アイコンと色のオーバーライド" },
                     label_icon_class: { zh: "图标类名 (FontAwesome)", en: "Icon Class", ja: "アイコンクラス" },
                     label_custom_color: { zh: "自定义颜色", en: "Custom Color", ja: "カスタム色" },
-                    
                     label_pos_region: { zh: "标签位置微调 (重心)", en: "Label Position (Centroid)", ja: "ラベル位置 (重心)" },
                     label_pos_pin: { zh: "标记坐标微调", en: "Pin Position", ja: "ピン座標" },
                     hint_pos_region: { zh: "微调地块标签的中心点。", en: "Fine-tune the label center point.", ja: "ラベルの中心点を微調整。" },
                     hint_pos_pin: { zh: "微调标记点的位置。", en: "Fine-tune pin location.", ja: "ピンの位置を微調整。" },
-                    
                     btn_remove: { zh: "移除", en: "Remove", ja: "削除" },
 
+                    // Modals - Script Gen
+                    modal_script_gen: { zh: "AI 剧本生成", en: "AI Script Generation", ja: "AI シナリオ生成" },
+                    msg_script_gen_hint: { zh: "上传设定集、地图图片或描述您想要的世界观。AI 将自动生成实体、属性规则和开场。", en: "Upload lore, maps, or describe your world. AI will generate entities, rules, and intro.", ja: "設定資料、地図をアップロード、または世界観を記述。AIが実体、ルール、オープニングを生成します。" },
+                    label_upload_ref: { zh: "上传参考文档 / 图片", en: "Upload Reference Docs / Images", ja: "参考資料/画像をアップロード" },
+                    placeholder_prompt: { zh: "提示词 (例如: '一个魔法吞噬灵魂的黑暗奇幻世界...')", en: "Prompt (e.g., 'A grimdark fantasy world...')", ja: "プロンプト (例: '魔法が魂を食らうダークファンタジー世界...')" },
+                    status_generating: { zh: "正在构建世界...", en: "Constructing World...", ja: "世界構築中..." },
+                    btn_start_gen: { zh: "初始化剧本生成", en: "Initialize Generation", ja: "生成開始" },
 
+                    // Poster
+                    poster_footer_text: { zh: "LEVANT 自动化推演 | AUTOMATED REPORT", en: "LEVANT AUTO-DEDUCTION | AUTOMATED REPORT", ja: "LEVANT 自動演繹 | 自動レポート" },
+                    // --- Settings: Prompt Config ---
+                    set_prompt_config: { zh: "AI 提示词配置", en: "AI Prompt Configuration", ja: "AIプロンプト設定" },
+                    tab_prompt_sys: { zh: "核心推演 (System)", en: "System (Deduction)", ja: "システム (演繹)" },
+                    tab_prompt_script: { zh: "剧本生成 (Script)", en: "Script Gen", ja: "シナリオ生成" },
+                    tab_prompt_god: { zh: "上帝模式 (God)", en: "God Mode", ja: "神モード" },
 
-                    tab_combat: { zh: "战斗裁判", en: "Combat", ja: "戦闘" },
-                    header_combat: { zh: "战斗裁决系统 (UCS)", en: "Universal Combat System", ja: "汎用戦闘システム" },
-                    label_combat_context: { zh: "战斗背景 / 战术意图", en: "Context / Intent", ja: "戦闘背景 / 意図" },
-                    label_dice_check: { zh: "命运检定 (RNG)", en: "Fate Check (RNG)", ja: "運命判定" },
-                    msg_click_roll: { zh: "点击骰子进行检定", en: "Click dice to roll", ja: "ダイスをクリック" },
-                    btn_judge_combat: { zh: "AI 裁决战斗结果", en: "AI Judge Combat", ja: "AI 戦闘裁定" }
+                    // --- JS Dynamic Strings (用于 JavaScript 逻辑的动态文本) ---
+                    dice_crit_success: { zh: "大成功!", en: "CRITICAL SUCCESS!", ja: "大成功！" },
+                    dice_crit_fail: { zh: "大失败!", en: "CRITICAL FAILURE!", ja: "大失敗！" },
+                    dice_pass: { zh: "成功", en: "Pass", ja: "成功" },
+                    dice_fail: { zh: "失败", en: "Fail", ja: "失敗" },
+                    
+                    layer_new: { zh: "新建图层", en: "New Layer", ja: "新規レイヤー" },
+                    layer_map: { zh: "地图底图", en: "Map Layer", ja: "地図レイヤー" },
+                    layer_region: { zh: "领土层", en: "Regions", ja: "領域レイヤー" },
+                    layer_marker: { zh: "标记层", en: "Markers", ja: "マーカーレイヤー" },
+                    
+                    opt_new: { zh: "新选项", en: "New Option", ja: "新規オプション" },
+                    opt_desc_ph: { zh: "后果描述...", en: "Description...", ja: "結果の説明..." },
+                    dec_new: { zh: "新决策", en: "New Decision", ja: "新規決定" },
+                    dec_desc_ph: { zh: "潜在后果...", en: "Potential consequences...", ja: "潜在的な結果..." }
                 },
 
                 // [修改] stat_schema 升级为 rule_sets (允许多套规则)
@@ -2749,7 +3064,7 @@
                 activeSchemaId: '', // 当前在左侧栏正在编辑哪一套规则
                 
                 lorebook: [], players: [], timeline: [], global_vars: [],
-                map_data: { image: '', pins: [], regions: [] },
+                map_data: { layers: [], activeLayerId: '', image: '', pins: [], regions: [] },
 
                 // [新增] 地图交互模式状态
                 mapToolMode: 'pin', // 'pin' | 'region'
@@ -2853,6 +3168,12 @@
             }
         },
         async mounted() {
+            // [新增] 初始化数据流特效
+            this.$nextTick(() => {
+                if (this.showSplash) {
+                    this.initMatrixEffect();
+                }
+            });
             const savedSettings = localStorage.getItem('levant_settings');
             if (savedSettings) {
                 try {
@@ -2930,10 +3251,11 @@
                 let preview = "";
                 
                 this.contextConfig.order.forEach(type => {
-                    // ... (Global, Rules, Lore, Players 保持原样) ...
+                    // 全局变量
                     if (type === 'global' && this.contextConfig.includeGlobal) {
                         preview += `=== [WORLD: GLOBAL VARS] ===\n${this.global_vars.map(g => `${g.key}: ${g.value}`).join('\n')}\n\n`;
                     }
+                    // 规则
                     if (type === 'rules' && this.contextConfig.includeRules) {
                         preview += `=== [WORLD: RULES] ===\n`;
                         this.rule_sets.forEach(rs => {
@@ -2941,39 +3263,38 @@
                         });
                         preview += `\n`;
                     }
+                    // 资料
                     if (type === 'lore') {
                         const activeLore = this.contextConfig.loreList.filter(l => l.active);
                         if (activeLore.length) preview += `=== [WORLD: LORE] ===\n${activeLore.map(l => `> [${l.keys}]: ${l.content}`).join('\n')}\n\n`;
                     }
+                    // 实体
                     if (type === 'players') {
                         const activeP = this.contextConfig.playerList.filter(p => p.active);
                         if (activeP.length) preview += `=== [WORLD: ENTITIES] ===\n${activeP.map(p => { const r=this.players.find(x=>x.id===p.id); return `ID:${r.id}|${r.name}\nDesc:${r.desc}\nStats:${JSON.stringify(r.stats)}`; }).join('\n\n')}\n\n`;
                     }
 
-                    // === [核心修复] 5. 地图数据 (Map) - 适配你的筛选列表 ===
+                    // --- [关键修复点 B]：地图预览安全读取 ---
                     if (type === 'map' && this.contextConfig.includeMap) {
                         preview += `=== [TACTICAL MAP DATA] ===\n`;
                         
-                        // 1. 仅获取被勾选 active 的区域
+                        // 直接使用 contextConfig 里的数据，不要去 map_data 里 find，因为 map_data.regions 可能是空的！
                         const activeRegions = this.contextConfig.mapRegionList.filter(r => r.active);
                         if (activeRegions.length > 0) {
                             preview += "Regions (Territory Control):\n";
                             activeRegions.forEach(reg => {
-                                // 注意：因为 contextConfig 里的对象是副本，我们需要用 ID 回查 owner 的最新名称
-                                const realReg = this.map_data.regions.find(r => r.id === reg.id) || reg;
-                                const ownerName = realReg.ownerId ? this.getFactionName(realReg.ownerId) : "NEUTRAL";
-                                preview += `- Region "${realReg.name}" (Owner: ${ownerName})\n`;
+                                // 直接用 reg，不要再回查了
+                                const ownerName = reg.ownerId ? this.getFactionName(reg.ownerId) : "NEUTRAL";
+                                preview += `- Region "${reg.name}" (Owner: ${ownerName})\n`;
                             });
                         }
 
-                        // 2. 仅获取被勾选 active 的标记点
                         const activePins = this.contextConfig.mapPinList.filter(p => p.active);
                         if (activePins.length > 0) {
                             preview += "\nPoints of Interest:\n";
                             activePins.forEach(pin => {
-                                const realPin = this.map_data.pins.find(p => p.id === pin.id) || pin;
-                                const label = realPin.label || this.getPinName(realPin.linkId);
-                                preview += `- Pin "${label}" at [${realPin.x.toFixed(1)}%, ${realPin.y.toFixed(1)}%]\n`;
+                                const label = pin.label || this.getPinName(pin.linkId);
+                                preview += `- Pin "${label}" at [${pin.x.toFixed(1)}%, ${pin.y.toFixed(1)}%]\n`;
                             });
                         }
                         
@@ -2983,17 +3304,12 @@
                         preview += "\n";
                     }
 
-                    // === [核心修复] 6. 历史回溯 (History) - 适配 historyDeepDepth/historyShallowDepth ===
+                    // 历史
                     if (type === 'history' && this.contextConfig.includeHistory) {
                         preview += `=== [HISTORY MEMORY] ===\n`;
-                        
                         const totalLen = this.timeline.length;
-                        // 使用你UI中绑定的变量
                         const deepLen = this.contextConfig.historyDeepDepth || 0;
                         const shallowLen = this.contextConfig.historyShallowDepth || 0;
-
-                        // 正序切片计算: 
-                        // [Start] ... [Shallow Zone] ... [Deep Zone] ... [End]
                         const deepStart = Math.max(0, totalLen - deepLen);
                         const shallowEnd = deepStart;
                         const shallowStart = Math.max(0, shallowEnd - shallowLen);
@@ -3001,7 +3317,6 @@
                         const shallowTurns = this.timeline.slice(shallowStart, shallowEnd);
                         const deepTurns = this.timeline.slice(deepStart);
 
-                        // 渲染浅层 (只摘要)
                         if (shallowTurns.length > 0) {
                             preview += `--- Shallow Memory (Summary Only) ---\n`;
                             shallowTurns.forEach(turn => {
@@ -3012,8 +3327,6 @@
                                 preview += `\n`;
                             });
                         }
-
-                        // 渲染深层 (含详情)
                         if (deepTurns.length > 0) {
                             preview += `--- Deep Memory (Full Details) ---\n`;
                             deepTurns.forEach(turn => {
@@ -3028,13 +3341,12 @@
                                 preview += `\n`;
                             });
                         }
-
                         if (shallowTurns.length === 0 && deepTurns.length === 0) {
                             preview += "(No history available in current range)\n\n";
                         }
                     }
 
-                    // 7. Current (保持原样)
+                    // 当前指令
                     if (type === 'current' && this.contextConfig.includeCurrent) {
                         preview += `=== [CURRENT INSTRUCTION] ===\n`;
                         if (this.rawInput) preview += `> CMD: ${this.rawInput}\n`;
@@ -3047,17 +3359,129 @@
             }
         },
         methods: {
+// [修改] 启动黑客帝国数据流特效 (流星雨版)
+            initMatrixEffect() {
+                const canvas = this.$refs.matrixCanvas;
+                if (!canvas) return;
+                const ctx = canvas.getContext('2d');
+
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+
+                const chars = 'アァカサタナハマヤャラワガザダバパイィキシチニヒミリヰギジヂビピウゥクスツヌフムユュルグズブヅプエェケセテネヘメレヱゲゼデベペオォコソトノホモヨョロヲゴゾドボポヴッン0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+                const charArray = chars.split('');
+
+                // ★★★ 彩蛋流星群 ★★★
+                const easterEggs = ['LEVANT', 'EASTERN'];
+                const activeSpecialCols = {}; 
+
+                const fontSize = 14;
+                const columns = Math.floor(canvas.width / fontSize); 
+                
+                const drops = [];
+                for (let x = 0; x < columns; x++) {
+                    drops[x] = Math.random() * -100; 
+                }
+
+                const draw = () => {
+                    // 拖尾层稍微变淡一点 (0.05 -> 0.08)，让流星划过后的黑色背景恢复得稍微快一点，突出高亮
+                    ctx.fillStyle = 'rgba(2, 6, 23, 0.08)'; 
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                    ctx.font = fontSize + 'px monospace';
+
+                    for (let i = 0; i < drops.length; i++) {
+                        let text = '';
+
+                        // --- A. 正在输出高亮词汇 (流星本体) ---
+                        if (activeSpecialCols[i]) {
+                            const state = activeSpecialCols[i];
+                            text = state.word[state.charIndex];
+                            
+                            // ★★★ 流星样式 ★★★
+                            ctx.fillStyle = '#FFFFFF';   // 纯白核心
+                            ctx.shadowColor = '#FFFFFF'; // 白色光晕
+                            ctx.shadowBlur = 15;         // 光晕增强，像星星一样闪烁
+                            ctx.font = 'bold ' + (fontSize + 3) + 'px monospace'; // 字号加大，更显眼
+
+                            state.charIndex++;
+                            if (state.charIndex >= state.word.length) {
+                                delete activeSpecialCols[i];
+                            }
+                        } 
+                        // --- B. 普通背景流 ---
+                        else {
+                            // ★★★ 概率调整 ★★★
+                            // 0.999 (0.1%) -> 0.96 (4%)
+                            // 意味着每列每帧有4%的概率变成流星，屏幕上会非常热闹
+                            // 同时限制生成高度在屏幕上半部分，保证词汇能完整落下
+                            if (Math.random() > 0.99 && drops[i] * fontSize < canvas.height * 0.7) {
+                                const word = easterEggs[Math.floor(Math.random() * easterEggs.length)];
+                                activeSpecialCols[i] = { word: word, charIndex: 1 };
+                                text = word[0]; 
+                                
+                                // 流星头部的样式
+                                ctx.fillStyle = '#FFFFFF';
+                                ctx.shadowColor = '#FFFFFF';
+                                ctx.shadowBlur = 15;
+                                ctx.font = 'bold ' + (fontSize + 3) + 'px monospace';
+                            } else {
+                                // 普通乱码
+                                text = charArray[Math.floor(Math.random() * charArray.length)];
+                                
+                                // 背景字稍微暗一点，衬托流星
+                                const isCyan = Math.random() > 0.5;
+                                ctx.fillStyle = isCyan ? 'rgba(34, 211, 238, 0.5)' : 'rgba(232, 121, 249, 0.5)'; 
+                                ctx.shadowBlur = 0; 
+                                ctx.font = fontSize + 'px monospace';
+                            }
+                        }
+
+                        ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+
+                        if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+                            drops[i] = 0;
+                            if (activeSpecialCols[i]) delete activeSpecialCols[i]; 
+                        }
+
+                        drops[i]++;
+                    }
+                };
+
+                this.matrixInterval = setInterval(draw, 33);
+                
+                window.addEventListener('resize', () => {
+                     if(!this.showSplash) return;
+                     canvas.width = window.innerWidth;
+                     canvas.height = window.innerHeight;
+                });
+            },
+
+            // [修改] 进入应用时，停止动画以节省性能
+            enterApp() {
+                this.showSplash = false;
+                if (this.matrixInterval) {
+                    clearInterval(this.matrixInterval);
+                    this.matrixInterval = null;
+                }
+            },
             // [新增] 添加选项到右侧编辑器
             addOptionToEditor() {
                 if (!this.editor.options) this.editor.options = [];
-                this.editor.options.push({ label: 'New Option', desc: 'Description of the outcome...' });
+                this.editor.options.push({ 
+                    label: this.t('opt_new'), 
+                    desc: this.t('opt_desc_ph') 
+                });
             },
 
             // [新增] 添加选项到时间轴事件
             addOptionToEvent(event) {
                 if (!event.options) event.options = [];
                 // 确保是对象结构
-                event.options.push({ label: 'New Decision', desc: 'Potential consequences...' });
+                event.options.push({ 
+                    label: this.t('dec_new'), 
+                    desc: this.t('dec_desc_ph') 
+                });
             },
 
             // --- 新增工具方法 ---
@@ -3390,56 +3814,89 @@
             },
 
 
-            // 1. 上传图片 (上传后自动重置视图)
-// 1. 上传图片 (上传后自动重置视图，并初始化 Canvas)
+            // 1. 上传图片 (上传后自动重置视图，并初始化 Canvas)
             handleMapUpload(event) {
                 const file = event.target.files[0];
                 if (!file) return;
                 const reader = new FileReader();
                 reader.onload = (e) => {
-                    this.map_data.image = e.target.result;
-                    this.map_data.regions = []; // 换新地图时清空地块
-                    this.resetMapView();
+                    // 查找当前激活的 Image 层，如果没有，创建一个新的
+                    let targetLayer = this.getActiveLayer();
+                    if (!targetLayer || targetLayer.type !== 'image') {
+                        targetLayer = this.map_data.layers.find(l => l.type === 'image');
+                    }
                     
+                    if (!targetLayer) {
+                        this.addLayer('image');
+                        targetLayer = this.map_data.layers[this.map_data.layers.length - 1]; // addLayer 是 push
+                    } else if (targetLayer.type !== 'image') {
+                         this.addLayer('image');
+                         targetLayer = this.map_data.layers[this.map_data.layers.length - 1]; 
+                    }
+
+                    // 更新图层数据
+                    targetLayer.data = e.target.result;
+                    targetLayer.name = file.name || "Map Layer";
+                    
+                    // 切换到该图层
+                    this.map_data.activeLayerId = targetLayer.id;
+                    
+                    this.resetMapView();
                     this.saveGame('autosave.json');
                     
-                    // [新增] 初始化分析用 Canvas
-                    this.$nextTick(() => this.initMapCanvas(this.map_data.image));
+                    // [修复] 重新扫描底图并更新分析画布
+                    this.$nextTick(() => this.initMapCanvas());
                 };
                 reader.readAsDataURL(file);
             },
             
             // [新增] Canvas 初始化辅助函数
-            initMapCanvas(imgSrc) {
+            initMapCanvas() {
                 const canvas = document.getElementById('map-analysis-canvas');
                 if(!canvas) return;
+                
+                // 1. 寻找用于分析的底图
+                // 优先找名为 "Base Map" 的，或者第一个 type 为 image 的可见图层
+                let baseLayer = this.map_data.layers.find(l => l.type === 'image' && l.visible);
+                
+                if (!baseLayer || !baseLayer.data) {
+                    console.warn("No visible base map layer found for analysis.");
+                    return; 
+                }
+
                 const ctx = canvas.getContext('2d');
                 const img = new Image();
+                
+                // 关键：允许跨域，虽然一般是 base64
+                img.crossOrigin = "Anonymous"; 
+                
                 img.onload = () => {
                     canvas.width = img.width;
                     canvas.height = img.height;
                     ctx.drawImage(img, 0, 0);
+                    console.log("Analysis Canvas updated with layer:", baseLayer.name);
                 };
-                img.src = imgSrc;
+                
+                img.src = baseLayer.data;
             },
 
             // 2. 重置视图 (Fit Width)
             resetMapView() {
-                this.mapView = { scale: 1, x: 0, y: 0, isDragging: false, startX: 0, startY: 0 };
+                this.mapView = { scale: 1, x: 0, y: 0, isDragging: false, startX: 0, startY: 0, badgeScale: 1.0, displayMode: 'full' };
             },
 
             // 3. 鼠标滚轮 (缩放)
             onMapWheel(e) {
-                if (!this.map_data.image) return;
+                // [修复] 只要有图层或者是处于地图模式，就允许缩放，不再检查 map_data.image
+                if (!this.showMap && this.map_data.layers.length === 0) return;
+                
                 const zoomIntensity = 0.1;
                 const direction = e.deltaY > 0 ? -1 : 1;
                 let newScale = this.mapView.scale + (direction * zoomIntensity);
 
-                // [修改] 限制缩放范围 (0.5x ~ 10x)，即最高 1000%
-                newScale = Math.min(Math.max(0.5, newScale), 10);
+                // 限制缩放范围 (0.1x ~ 10x)
+                newScale = Math.min(Math.max(0.1, newScale), 10);
                 
-                // 简单的居中缩放逻辑 (为了代码简洁，暂时不做跟随鼠标位置的复杂矩阵计算)
-                // 如果需要更高级的“跟随鼠标缩放”，代码量会增加很多
                 this.mapView.scale = newScale;
             },
             exportMapConfig() {
@@ -3460,7 +3917,6 @@
                 URL.revokeObjectURL(url);
             },
 
-            // 导入地图配置
             handleMapConfigImport(event) {
                 const file = event.target.files[0];
                 if (!file) return;
@@ -3470,65 +3926,88 @@
                     try {
                         const importedData = JSON.parse(e.target.result);
                         
-                        // 简单校验数据结构
-                        if (!importedData.image || !Array.isArray(importedData.pins)) {
-                            throw new Error("Invalid map configuration file.");
+                        // --- ★★★ 修复：兼容性校验 ★★★ ---
+                        // 只要有 layers (新版) 或者有 image (旧版) 均视为有效
+                        const isNewFormat = importedData.layers && Array.isArray(importedData.layers);
+                        const isOldFormat = importedData.image || (importedData.pins && Array.isArray(importedData.pins));
+
+                        if (!isNewFormat && !isOldFormat) {
+                            throw new Error("无效的地图配置文件 (未找到 layers 或 image 数据)。");
                         }
 
-                        if (confirm("Importing map will overwrite current map data. Continue?")) {
-                            // 覆盖数据
+                        if (confirm("导入地图将覆盖当前地图数据，确定继续？")) {
+                            // 1. 覆盖数据
                             this.map_data = importedData;
                             
-                            // 兼容性处理：如果导入的是旧版数据没有 regions，补上
-                            if (!this.map_data.regions) this.map_data.regions = [];
+                            // 2. 数据补全
+                            if (!this.map_data.layers) this.map_data.layers = [];
+                            
+                            // 如果是新格式，确保有 activeLayerId
+                            if (isNewFormat) {
+                                if (!this.map_data.activeLayerId && this.map_data.layers.length > 0) {
+                                    this.map_data.activeLayerId = this.map_data.layers[0].id;
+                                }
+                            } 
+                            // 3. 如果是旧格式，执行自动迁移 (创建默认图层)
+                            else {
+                                console.log("Migrating imported legacy map...");
+                                const newLayers = [];
+                                if (this.map_data.image) {
+                                    newLayers.push({ id: 'l_base', type: 'image', name: 'Base Map', visible: true, opacity: 1, data: this.map_data.image });
+                                }
+                                if (this.map_data.regions && this.map_data.regions.length > 0) {
+                                    newLayers.push({ id: 'l_reg', type: 'region', name: 'Regions', visible: true, opacity: 1, data: this.map_data.regions });
+                                }
+                                if (this.map_data.pins && this.map_data.pins.length > 0) {
+                                    newLayers.push({ id: 'l_pin', type: 'marker', name: 'Markers', visible: true, opacity: 1, data: this.map_data.pins });
+                                }
+                                this.map_data.layers = newLayers;
+                                this.map_data.activeLayerId = newLayers.length > 0 ? newLayers[0].id : '';
+                            }
 
-                            // 重置视图并保存
+                            // 4. 重置视图并保存
                             this.resetMapView();
                             this.saveGame('autosave.json');
                             
-                            // 【关键】重新初始化 Canvas，否则导入后无法使用 Region 泛洪工具
+                            // 5. 重新初始化分析画布 (用于本体内的魔棒工具)
                             this.$nextTick(() => {
-                                this.initMapCanvas(this.map_data.image);
+                                this.initMapCanvas();
                             });
                             
-                            alert("Map imported successfully!");
+                            alert("地图配置导入成功！");
                         }
                     } catch (err) {
                         console.error(err);
-                        alert("Failed to import map: " + err.message);
+                        alert("导入失败: " + err.message);
                     }
-                    // 清空 input value，允许重复导入同一个文件
+                    // 清空 input，允许重复导入同一个文件
                     event.target.value = '';
                 };
                 reader.readAsText(file);
             },
-// [新增] 导出为 PNG 图片
+            // [新增] 导出为 PNG 图片
             async exportMapImage() {
-                if (!this.map_data.image) return alert("No map loaded.");
+                // [修复] 检查图层数量而不是 image
+                if (!this.map_data.layers || this.map_data.layers.length === 0) return alert("No map layers loaded.");
 
                 // 1. 获取地图的核心变换层
-                // 【修改】改为通过 ID 获取，更加稳健
                 const element = document.getElementById('map-capture-target');
-                
-                // 【修改】如果找不到元素，弹出提示，而不是静默失败
                 if (!element) {
                     alert("Error: Map element not found (ID: map-capture-target missing).");
                     return;
                 }
 
-                // 2. 保存当前视图状态 (为了截图后恢复)
+                // 2. 保存当前视图状态
                 const oldView = { ...this.mapView };
                 const oldCursor = document.body.style.cursor;
 
                 // 3. 提示用户并在后台调整视图
                 document.body.style.cursor = 'wait';
                 
-                // 【关键步骤】重置视图以截取全图
-                this.mapView = { scale: 1, x: 0, y: 0, isDragging: false };
+                // 重置视图以截取全图
+                this.mapView = { scale: 1, x: 0, y: 0, isDragging: false, badgeScale: oldView.badgeScale, displayMode: oldView.displayMode };
                 
-                // 等待 Vue 更新 DOM
                 await this.$nextTick();
-                // 增加一点等待时间，确保图片渲染就绪
                 await new Promise(resolve => setTimeout(resolve, 300));
 
                 try {
@@ -3538,7 +4017,6 @@
                         scale: 2,              // 2倍采样
                         useCORS: true,         
                         logging: false,
-                        // 忽略隐藏的辅助元素
                         ignoreElements: (el) => el.classList.contains('pointer-events-none') && el.tagName === 'DIV' && el.innerHTML === '' 
                     });
 
@@ -3559,15 +4037,20 @@
             },
             // 4. 鼠标按下 (开始拖拽)
             onMapMouseDown(e) {
-                if (!this.map_data.image) return;
+                // [修复] 去掉 map_data.image 检查
+                // 只有左键(button 0)才触发拖拽，避免与右键冲突
+                if (e.button !== 0) return; 
+
                 this.mapView.isDragging = true;
                 this.mapView.startX = e.clientX - this.mapView.x;
                 this.mapView.startY = e.clientY - this.mapView.y;
                 
                 // 记录点击初始位置，用于在 MouseUp 判断是点击还是拖拽
                 this.dragOrigin = { x: e.clientX, y: e.clientY };
+                
+                // 改变光标样式
+                document.body.style.cursor = 'grabbing';
             },
-
             // 5. 鼠标移动 (拖拽中)
             onMapMouseMove(e) {
                 if (!this.mapView.isDragging) return;
@@ -3580,6 +4063,7 @@
             onMapMouseUp(e) {
                 if (!this.mapView.isDragging) return;
                 this.mapView.isDragging = false;
+                document.body.style.cursor = 'default';
 
                 // 计算移动距离
                 const dist = Math.sqrt(
@@ -3622,20 +4106,32 @@
                     };
                     this.showPinModal = true;
                 } else if (this.mapToolMode === 'region') {
-                    // --- [新增] 区域泛洪模式 ---
-                    const canvas = document.getElementById('map-analysis-canvas');
-                    if(!canvas) return alert("Canvas not ready. Re-upload image.");
+                    // --- [重点修改] ---
+                    // 无论当前在哪个图层，只要模式是 region，就允许触发泛洪计算
+                    // 因为 saveMapPin 才是决定数据存哪里的地方
                     
-                    // 换算回原图像素坐标
+                    const canvas = document.getElementById('map-analysis-canvas');
+                    
+                    // 换算坐标
                     const rawX = Math.floor((clickX / rect.width) * canvas.width);
                     const rawY = Math.floor((clickY / rect.height) * canvas.height);
                     
                     this.createRegionFromPoint(rawX, rawY);
                 }
             },
-// [新增] 泛洪算法生成地块
+            // [新增] 泛洪算法生成地块
             createRegionFromPoint(startX, startY) {
                 if (this.isProcessingRegion) return;
+                
+                const canvas = document.getElementById('map-analysis-canvas');
+                // [新增] 检查 Canvas 是否有数据
+                if(!canvas || canvas.width === 0) {
+                    // 尝试最后一次初始化
+                    this.initMapCanvas();
+                    // 如果还是不行，提示用户
+                    if (!canvas || canvas.width === 0) return alert("Analysis canvas is empty. Please verify you have a visible 'Image' layer.");
+                }
+
                 this.isProcessingRegion = true;
                 document.body.style.cursor = 'wait';
 
@@ -3775,27 +4271,25 @@
             },
 
             // [新增] 点击已存在的地块
-            onRegionClick(reg, idx) {
+            onRegionClick(reg, idx, layer) {
+                this.map_data.activeLayerId = layer.id; // 自动切换到该图层
                 this.editingRegionIndex = idx;
                 this.editingPinIndex = -2; 
                 
                 // 回填表单
                 this.pinForm = {
-                    ...reg, // 加载几何数据
-                    
-                    // 映射回表单字段
-                    customLabel: reg.name,   // 地理名 -> customLabel
-                    selectedId: reg.ownerId, // 控制者 -> selectedId
-                    
-                    icon: reg.icon || 'fa-solid fa-mountain', // 默认图标
-                    color: reg.color // 通常不需要，因为颜色由 owner 决定，除非有 override
+                    ...reg, 
+                    customLabel: reg.name,   
+                    selectedId: reg.ownerId, 
+                    icon: reg.icon || 'fa-solid fa-mountain', 
+                    color: reg.color 
                 };
                 this.showPinModal = true;
             },
-            onPinClick(pin, idx) {
-                // 【关键修复】明确告诉系统：我现在是在编辑点，不是在编辑区域
+            onPinClick(pin, idx, layer) {
+                this.map_data.activeLayerId = layer.id; // 自动切换到该图层
                 this.editingPinIndex = idx;
-                this.editingRegionIndex = -2; // -2 代表不处于区域编辑模式
+                this.editingRegionIndex = -2; 
                 
                 let mode = pin.type || 'custom';
                 if (!pin.type) {
@@ -3816,10 +4310,9 @@
             },
             // 3. 保存 (新增或修改)
             saveMapPin() {
-                // 构建数据
-                // 约定：对于 Region，customLabel 是地理名(name)，selectedId 是控制者(ownerId)
-                // 对于 Pin，customLabel 是标签(label)，selectedId 是链接实体(linkId)
-                
+                const activeLayer = this.getActiveLayer();
+                if (!activeLayer) return alert("Please select a layer in Layer Manager first!");
+
                 let nameOrLabel = this.pinForm.customLabel || "Unnamed";
                 let idRef = this.pinForm.selectedId || "";
 
@@ -3838,12 +4331,37 @@
                 // --- 保存分支 ---
                 if (this.editingRegionIndex !== -2) {
                     // === Region (地块) 保存逻辑 ===
+                    
+                    // [修复开始] 智能图层定位：如果当前不在 Region 层，自动寻找或创建
+                    let targetLayer = activeLayer;
+                    
+                    if (targetLayer.type !== 'region') {
+                        // 1. 尝试找一个现有的 region 层
+                        targetLayer = this.map_data.layers.find(l => l.type === 'region');
+                        
+                        // 2. 找不到就新建
+                        if (!targetLayer) {
+                            // 简单的提示
+                            if(confirm("Current layer is NOT a Region Layer. Create a new 'Territories' layer automatically?")) {
+                                this.addLayer('region');
+                                // addLayer 会 push 到最后，所以取最后一个
+                                targetLayer = this.map_data.layers[this.map_data.layers.length - 1];
+                            } else {
+                                return; // 用户取消
+                            }
+                        }
+                        // 3. 自动切换当前激活图层 ID，保持 UI 同步，防止下次还要找
+                        this.map_data.activeLayerId = targetLayer.id;
+                    }
+                    // [修复结束]
+
                     const regionData = {
                         ...baseData,
-                        id: this.editingRegionIndex === -1 ? 'reg_' + Date.now() : this.map_data.regions[this.editingRegionIndex].id,
+                        // 注意这里使用 targetLayer 而不是 activeLayer
+                        id: this.editingRegionIndex === -1 ? 'reg_' + Date.now() : targetLayer.data[this.editingRegionIndex].id,
                         type: 'territory',
-                        name: this.pinForm.customLabel || "Region", // 地理名
-                        ownerId: this.pinForm.selectedId,           // 控制权
+                        name: this.pinForm.customLabel || "Region", 
+                        ownerId: this.pinForm.selectedId,           
                         
                         // 几何数据
                         x: this.pinForm.x, y: this.pinForm.y,
@@ -3852,36 +4370,82 @@
                         centerX: this.pinForm.centerX, centerY: this.pinForm.centerY
                     };
 
-                    if (!this.map_data.regions) this.map_data.regions = [];
-                    if (this.editingRegionIndex === -1) this.map_data.regions.push(regionData);
-                    else this.map_data.regions[this.editingRegionIndex] = regionData;
+                    // 使用 targetLayer 保存数据
+                    if (this.editingRegionIndex === -1) targetLayer.data.push(regionData);
+                    else targetLayer.data[this.editingRegionIndex] = regionData;
                     
                     this.editingRegionIndex = -2; 
                 } else {
-                    // === Pin (标记点) 保存逻辑 ===
+                    // === Pin (标记点) 保存逻辑 (Pin 逻辑通常不需要跨层自动保存，保持原样即可，或者也可以应用类似逻辑) ===
+                    if (activeLayer.type !== 'marker') return alert("Current active layer is NOT a Marker Layer! Please select a Marker Layer.");
+
                     const pinData = {
                         ...baseData,
-                        id: this.editingPinIndex === -1 ? 'pin_' + Date.now() : this.map_data.pins[this.editingPinIndex].id,
+                        id: this.editingPinIndex === -1 ? 'pin_' + Date.now() : activeLayer.data[this.editingPinIndex].id,
                         type: this.pinForm.mode,
                         label: nameOrLabel,
                         linkId: idRef,
                         x: this.pinForm.x,
                         y: this.pinForm.y
                     };
-                    if (this.editingPinIndex === -1) this.map_data.pins.push(pinData);
-                    else this.map_data.pins[this.editingPinIndex] = pinData;
+                    if (this.editingPinIndex === -1) activeLayer.data.push(pinData);
+                    else activeLayer.data[this.editingPinIndex] = pinData;
                 }
 
                 this.saveGame('autosave.json');
                 this.showPinModal = false;
             },
-
+            // --- [新增] 图层管理方法 ---
+            addLayer(type) {
+                const id = 'layer_' + type + '_' + Date.now();
+                let data = null;
+                let name = this.t('layer_new');
+                
+                if (type === 'image') { data = ''; name = this.t('layer_map'); }
+                else if (type === 'region') { data = []; name = this.t('layer_region'); }
+                else if (type === 'marker') { data = []; name = this.t('layer_marker'); }
+                
+                // 如果是 Image 层，建议放到最底下(unshift)；其他建议放到最上面(push)
+                // 这里为了逻辑简单，统一 push 到数组末尾（显示在最上层），用户可手动调整
+                this.map_data.layers.push({ id, type, name, visible: true, opacity: 1, data });
+                
+                this.map_data.activeLayerId = id;
+                if (type === 'image') {
+                    // 这里 alert 也可以优化，但为了代码简洁暂时保留或替换为 t('msg_image_layer_hint')
+                    alert("Image Layer created. Click 'Upload Map' to set image.");
+                }
+                this.saveGame('autosave.json');
+            },
+            deleteLayer(idx) {
+                if (confirm("Delete this layer? All data in it will be lost.")) {
+                    this.map_data.layers.splice(idx, 1);
+                    if (this.map_data.layers.length > 0) this.map_data.activeLayerId = this.map_data.layers[0].id;
+                    else this.map_data.activeLayerId = '';
+                    this.saveGame('autosave.json');
+                }
+            },
+            moveLayer(idx, dir) {
+                const target = idx + dir;
+                if (target >= 0 && target < this.map_data.layers.length) {
+                    const temp = this.map_data.layers[idx];
+                    this.map_data.layers[idx] = this.map_data.layers[target];
+                    this.map_data.layers[target] = temp;
+                }
+            },
+            getActiveLayer() {
+                return this.map_data.layers.find(l => l.id === this.map_data.activeLayerId);
+            },
             deleteMapPin() {
+                const activeLayer = this.getActiveLayer();
+                if (!activeLayer) return;
+
                 if(confirm("Remove this item?")) {
                     if (this.editingRegionIndex !== -2 && this.editingRegionIndex !== -1) {
-                        this.map_data.regions.splice(this.editingRegionIndex, 1);
+                         // 删除 Region
+                         if (activeLayer.type === 'region') activeLayer.data.splice(this.editingRegionIndex, 1);
                     } else if (this.editingPinIndex !== -1) {
-                        this.map_data.pins.splice(this.editingPinIndex, 1);
+                         // 删除 Pin
+                         if (activeLayer.type === 'marker') activeLayer.data.splice(this.editingPinIndex, 1);
                     }
                     this.saveGame('autosave.json');
                     this.showPinModal = false;
@@ -4178,11 +4742,10 @@
                     
                     // [新增] 读取存档后，如果有地图图片，必须重新绘制隐藏的分析用 Canvas
                     // 否则“区域泛洪/魔棒”工具会因为 Canvas 为空而失效
-                    if (this.map_data.image) {
-                        this.$nextTick(() => {
-                            this.initMapCanvas(this.map_data.image);
-                        });
-                    }
+                    // [修复] 无论数据结构如何，尝试初始化分析画布
+                    this.$nextTick(() => {
+                        this.initMapCanvas();
+                    });
 
                     this.currentSaveFile = filename;
                     this.showSaveLoadModal = false;
@@ -4261,7 +4824,39 @@ applyState(data) {
                 this.players = sanitizedData.players || []; 
                 this.timeline = sanitizedData.timeline || []; 
                 this.global_vars = sanitizedData.global_vars || [];
-                this.map_data = sanitizedData.map_data || { image: '', pins: [] }; 
+                // --- [修改] 地图数据加载与自动迁移逻辑 ---
+                const loadedMap = sanitizedData.map_data || { layers: [] };
+
+                // 如果是旧格式 (没有 layers 只有 image/regions/pins)，执行迁移
+                if ((!loadedMap.layers || loadedMap.layers.length === 0) && (loadedMap.image || (loadedMap.regions && loadedMap.regions.length > 0))) {
+                    console.log("Migrating old map format to Layer System...");
+                    const newLayers = [];
+                    
+                    // 1. 迁移底图
+                    if (loadedMap.image) {
+                        newLayers.push({ id: 'layer_bg_default', type: 'image', name: 'Base Map', visible: true, opacity: 1.0, data: loadedMap.image });
+                    }
+                    // 2. 迁移地块
+                    if (loadedMap.regions && loadedMap.regions.length > 0) {
+                        newLayers.push({ id: 'layer_reg_default', type: 'region', name: 'Territories', visible: true, opacity: 1.0, data: loadedMap.regions });
+                    }
+                    // 3. 迁移标记
+                    if (loadedMap.pins && loadedMap.pins.length > 0) {
+                        newLayers.push({ id: 'layer_pin_default', type: 'marker', name: 'Markers', visible: true, opacity: 1.0, data: loadedMap.pins });
+                    }
+                    
+                    this.map_data = {
+                        layers: newLayers,
+                        activeLayerId: newLayers.length > 0 ? newLayers[0].id : '' // 默认选中底层
+                    };
+                } else {
+                    // 已经是新格式
+                    this.map_data = loadedMap;
+                    // 确保有 activeLayerId
+                    if (!this.map_data.activeLayerId && this.map_data.layers.length > 0) {
+                        this.map_data.activeLayerId = this.map_data.layers[0].id;
+                    }
+                }
                 this.pendingEvents = sanitizedData.currentTurnPending || [];
                 this.serverConnected = true;
             },
@@ -4271,32 +4866,60 @@ applyState(data) {
                 this.saveGame('autosave.json');
             },
 
-            openContextModal() {
+openContextModal() {
                 if (!this.settings.api.key) return alert("Please set API Key in settings.");
+                
                 const rawInputText = this.rawInput.trim(); 
                 const editorDraft = this.editor.summary;
-                if (!rawInputText && !editorDraft) return alert("Please input command or summary!");
+                
+                // 1. 基础校验
+                if (!rawInputText && !editorDraft) return alert("Please input command or summary! (请输入指令或摘要)");
 
                 this.tempSystemPrompt = this.settings.prompts.system;
                 const inputText = (rawInputText + " " + editorDraft).toLowerCase();
-                this.contextConfig.loreList = this.lorebook.map(entry => {
+
+                // 2. 准备资料库
+                this.contextConfig.loreList = (this.lorebook || []).map(entry => {
                     let isActive = false;
                     if (entry.mode === 'on') isActive = true;
                     else if (entry.mode === 'auto') {
-                        const keywords = entry.keys.split(/[,，]/).map(k => k.trim().toLowerCase()).filter(k => k);
+                        const keysStr = entry.keys || "";
+                        const keywords = keysStr.split(/[,，]/).map(k => k.trim().toLowerCase()).filter(k => k);
                         isActive = keywords.some(k => inputText.includes(k));
                     }
                     return { ...entry, active: isActive, originalMode: entry.mode };
                 });
-                this.contextConfig.playerList = this.players.map(p => ({ id: p.id, name: p.name, logo: p.logo, color: p.color, active: true }));
-                this.contextConfig.mapRegionList = this.map_data.regions.map(r => ({ 
-                    ...r, 
-                    active: true 
+
+                // 3. 准备实体列表
+                this.contextConfig.playerList = (this.players || []).map(p => ({ 
+                    id: p.id, name: p.name, logo: p.logo, color: p.color, active: true 
                 }));
-                this.contextConfig.mapPinList = this.map_data.pins.map(p => ({ 
+
+                // --- [关键修复点 A]：聚合图层数据 ---
+                let allRegions = [];
+                let allPins = [];
+
+                // 优先从图层读取
+                if (this.map_data.layers && this.map_data.layers.length > 0) {
+                    this.map_data.layers.forEach(layer => {
+                        if (layer.visible && Array.isArray(layer.data)) {
+                            if (layer.type === 'region') allRegions = allRegions.concat(layer.data);
+                            if (layer.type === 'marker') allPins = allPins.concat(layer.data);
+                        }
+                    });
+                } else {
+                    // 兼容旧数据
+                    allRegions = this.map_data.regions || [];
+                    allPins = this.map_data.pins || [];
+                }
+
+                // 映射到 contextConfig
+                this.contextConfig.mapRegionList = allRegions.map(r => ({ ...r, active: true }));
+                this.contextConfig.mapPinList = allPins.map(p => ({ 
                     id: p.id, label: p.label, linkId: p.linkId, type: p.type, x: p.x, y: p.y, active: true 
                 }));
 
+                // 4. 打开弹窗
                 this.showContextModal = true;
             },
 
@@ -4311,29 +4934,46 @@ applyState(data) {
                 }
             },
 
-            // --- 新增: 处理文件上传 ---
+            // --- 修改后的文件处理逻辑 ---
             async handleScriptFiles(event) {
                 const files = event.target.files;
                 if (!files.length) return;
+                
                 for (let i = 0; i < files.length; i++) {
                     const file = files[i];
                     const reader = new FileReader();
+                    
                     reader.onload = (e) => {
+                        // readAsDataURL 读取的结果格式永远是: "data:应用类型;base64,纯Base64编码..."
                         const rawData = e.target.result; 
-                        let payload = { name: file.name, type: file.type, data: '' };
-                        if (file.type.startsWith('image')) {
-                            payload.data = rawData.split(',')[1]; // 去除 data:image/png;base64, 前缀
+                        
+                        // 提取逗号后面的纯 Base64 部分
+                        // 这样做可以保证发给后端的 data 字段是纯净的 Base64 字符串
+                        let base64Data = "";
+                        if (rawData.includes(',')) {
+                            base64Data = rawData.split(',')[1];
                         } else {
-                            payload.data = rawData; // 文本内容
+                            base64Data = rawData;
                         }
+
+                        let payload = { 
+                            name: file.name, 
+                            // 有些浏览器识别不出 docx 的 type，这里给个兜底，后端主要靠文件名后缀判断
+                            type: file.type || 'application/octet-stream', 
+                            data: base64Data 
+                        };
+                        
                         this.scriptAttachments.push(payload);
                     };
-                    if (file.type.startsWith('image')) {
-                        reader.readAsDataURL(file);
-                    } else {
-                        reader.readAsText(file);
-                    }
+                    
+                    // ★★★ 核心修改 ★★★
+                    // 不管是图片、PDF 还是 Word，统统用 readAsDataURL 读取
+                    // 这样能保证二进制数据完整转为 Base64，不会丢失任何字节
+                    reader.readAsDataURL(file);
                 }
+                
+                // 清空 input，允许重复选择同一文件
+                event.target.value = '';
             },
             // [修改] 点击选项后的处理逻辑
             selectOption(event, optData) {
@@ -5066,10 +5706,10 @@ applyState(data) {
             getDiceText(val, type) {
                 const max = parseInt(type.substring(1));
                 const ratio = val / max;
-                if (val === max) return "CRITICAL SUCCESS!";
-                if (val === 1) return "CRITICAL FAILURE!";
-                if (ratio >= 0.5) return "Pass";
-                return "Fail";
+                if (val === max) return this.t('dice_crit_success');
+                if (val === 1) return this.t('dice_crit_fail');
+                if (ratio >= 0.5) return this.t('dice_pass');
+                return this.t('dice_fail');
             },
             addCombatDie() {
                 this.combatForm.dicePool.push({ type: 'd20', val: null, label: '' });

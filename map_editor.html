@@ -1,0 +1,1305 @@
+<!-- START OF FILE map_editor.html -->
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LEVANT地图编辑器</title>
+    <link rel="icon" href="logo.png" type="image/png">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Vue 3 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        /* --- 核心样式 --- */
+        :root {
+            --bg-deep: #020408;
+            --bg-panel: #0a0f18;
+            --bg-sidebar: #080b12;
+            --bg-header: #05080c;
+            --bg-input: #05080c;
+            --bg-badge: rgba(0,0,0,0.3);
+            --bg-hover: rgba(255,255,255,0.05);
+            
+            --text-main: #e2e8f0;       
+            --text-dim: #64748b;        
+            --text-accent: #6366f1;     
+            --text-success: #10b981;    
+            --text-warning: #f59e0b;    
+            --text-danger: #ef4444;
+            
+            --border-dim: #1e293b;      
+            --radius-btn: 0.25rem;
+        }
+
+        body { 
+            background-color: var(--bg-deep); 
+            color: var(--text-main); 
+            font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif; 
+            overflow: hidden; 
+            font-size: 14px;
+            user-select: none;
+        }
+
+        .checkerboard {
+            background-image: 
+                linear-gradient(45deg, #0f172a 25%, transparent 25%), 
+                linear-gradient(-45deg, #0f172a 25%, transparent 25%), 
+                linear-gradient(45deg, transparent 75%, #0f172a 75%), 
+                linear-gradient(-45deg, transparent 75%, #0f172a 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+            background-color: #020408;
+        }
+
+        .theme-btn {
+            background: var(--bg-badge);
+            border: 1px solid var(--border-dim);
+            border-radius: var(--radius-btn);
+            transition: all 0.2s;
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .theme-btn:hover { background: var(--bg-hover); border-color: var(--text-dim); }
+        .theme-btn.active { background: var(--text-accent); color: white; border-color: var(--text-accent); }
+        
+        .theme-input {
+            background: var(--bg-input);
+            border: 1px solid var(--border-dim);
+            color: var(--text-main);
+            border-radius: var(--radius-btn);
+            padding: 4px 8px;
+            outline: none;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .theme-input:focus { border-color: var(--text-accent); }
+        
+        .color-swatch {
+            width: 24px; height: 24px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.2);
+            position: relative; cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        }
+        .color-swatch:hover::after {
+            content: "\f00d"; font-family: "Font Awesome 6 Free"; font-weight: 900;
+            position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+            background: rgba(0,0,0,0.5); color: white; font-size: 12px;
+            opacity: 0; transition: opacity 0.2s;
+        }
+        .color-swatch:hover::after { opacity: 1; }
+
+        /* 框选矩形样式 */
+        .selection-marquee {
+            position: absolute;
+            border: 1px dashed var(--text-accent);
+            background-color: rgba(99, 102, 241, 0.2);
+            pointer-events: none;
+            z-index: 9999;
+        }
+
+        /* 模态框样式 */
+        .modal-mask {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+            display: flex; justify-content: center; align-items: center; z-index: 100;
+        }
+        .modal-panel {
+            background: var(--bg-panel); border: 1px solid var(--border-dim); 
+            border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            width: 400px; overflow: hidden;
+        }
+
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg-deep); }
+        ::-webkit-scrollbar-thumb { background: var(--border-dim); border-radius: 3px; }
+    </style>
+</head>
+<body>
+
+<div id="app" class="h-screen flex flex-col">
+    
+    <!-- Top Bar -->
+    <header class="h-12 bg-[var(--bg-header)] border-b border-[var(--border-dim)] flex items-center px-4 justify-between shrink-0 z-50">
+        <div class="flex items-center gap-4">
+            <div class="flex items-center gap-2 text-[var(--text-accent)]">
+                <i class="fa-solid fa-map-location-dot text-xl"></i>
+                <div class="flex flex-col leading-none">
+                    <span class="font-bold tracking-wider text-sm">LEVANT地图编辑器</span>
+                    <span class="text-[9px] text-[var(--text-dim)] tracking-widest">v1.10</span>
+                </div>
+            </div>
+            <div class="h-6 w-px bg-[var(--border-dim)] mx-2"></div>
+            <!-- Tools -->
+            <div class="flex gap-1">
+                <button @click="setTool('move')" :class="{'active': tool==='move'}" class="theme-btn w-8 h-8 relative" title="移动画布 (Space)">
+                    <i class="fa-solid fa-arrows-up-down-left-right"></i>
+                </button>
+                <button @click="setTool('select')" :class="{'active': tool==='select'}" class="theme-btn w-8 h-8 relative" title="选择元素 (V) - 按住Shift多选/框选">
+                    <i class="fa-solid fa-arrow-pointer"></i>
+                </button>
+                <div class="h-8 w-px bg-[var(--border-dim)] mx-1"></div>
+                <button @click="setTool('region_paint')" :class="{'active': tool==='region_paint'}" class="theme-btn w-8 h-8 relative text-[var(--text-success)]" title="魔棒/泛洪填充 (W)">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                </button>
+                <button @click="setTool('auto_scan')" :class="{'active': tool==='auto_scan'}" class="theme-btn w-8 h-8 relative text-pink-500" title="自动化预处理 - 批量扫描 (A)">
+                    <i class="fa-solid fa-robot"></i>
+                </button>
+                <div class="h-8 w-px bg-[var(--border-dim)] mx-1"></div>
+                <button @click="setTool('pin')" :class="{'active': tool==='pin'}" class="theme-btn w-8 h-8 relative text-[var(--text-warning)]" title="添加标记点 (P)">
+                    <i class="fa-solid fa-map-pin"></i>
+                </button>
+            </div>
+            <div class="text-[10px] text-[var(--text-dim)] ml-2 bg-[var(--bg-badge)] px-2 py-1 rounded">
+                当前模式: <span class="text-[var(--text-main)] font-bold uppercase">{{ toolName }}</span>
+            </div>
+        </div>
+        
+        <div class="flex items-center gap-3">
+            <div class="flex items-center gap-2 mr-4 bg-[var(--bg-badge)] px-2 py-1 rounded border border-[var(--border-dim)]">
+                <i class="fa-solid fa-magnifying-glass text-[10px] text-[var(--text-dim)]"></i>
+                <button @click="view.scale = Math.max(0.1, view.scale - 0.1)" class="w-4 hover:text-white">-</button>
+                <span class="text-xs font-mono w-12 text-center">{{ (view.scale * 100).toFixed(0) }}%</span>
+                <button @click="view.scale = Math.min(5, view.scale + 0.1)" class="w-4 hover:text-white">+</button>
+                <button @click="resetView" class="text-[10px] text-[var(--text-dim)] hover:text-white ml-1">RST</button>
+            </div>
+
+            <label class="theme-btn px-3 py-1.5 gap-2 text-xs font-bold hover:bg-[var(--bg-panel)]">
+                <i class="fa-solid fa-file-import"></i> 导入
+                <input type="file" @change="importJSON" class="hidden" accept=".json">
+            </label>
+            <button @click="exportJSON" class="theme-btn px-3 py-1.5 gap-2 text-xs font-bold bg-indigo-900/50 text-[var(--text-accent)] border-indigo-500/30 hover:bg-indigo-800/50">
+                <i class="fa-solid fa-file-export"></i> 导出
+            </button>
+        </div>
+    </header>
+
+    <div class="flex-1 flex overflow-hidden relative">
+        
+        <!-- Left Sidebar -->
+        <aside class="w-72 bg-[var(--bg-sidebar)] border-r border-[var(--border-dim)] flex flex-col z-20 shadow-xl shrink-0">
+             <!-- Layer List -->
+             <div class="flex-1 flex flex-col overflow-hidden relative">
+                <div class="p-2 bg-[var(--bg-header)] border-b border-[var(--border-dim)] flex justify-between items-center shrink-0">
+                    <span class="text-[10px] font-bold text-[var(--text-dim)] uppercase tracking-widest pl-1">图层 (LAYERS)</span>
+                    <div class="flex gap-1">
+                        <button @click="addLayer('image')" title="新建地图层" class="theme-btn w-6 h-6 text-[10px]"><i class="fa-regular fa-image"></i></button>
+                        <button @click="addLayer('region')" title="新建区域层" class="theme-btn w-6 h-6 text-[10px] text-[var(--text-success)]"><i class="fa-solid fa-draw-polygon"></i></button>
+                        <button @click="addLayer('marker')" title="新建标记层" class="theme-btn w-6 h-6 text-[10px] text-[var(--text-warning)]"><i class="fa-solid fa-location-dot"></i></button>
+                    </div>
+                </div>
+                
+                <div class="flex-1 overflow-y-auto p-2 space-y-1">
+                    <div v-for="(layer, idx) in reversedLayers" :key="layer.id" 
+                         @click="activeLayerId = layer.id"
+                         :class="activeLayerId === layer.id ? 'bg-[var(--bg-panel)] border-[var(--text-accent)] shadow-inner' : 'bg-transparent border-transparent hover:bg-[var(--bg-hover)]'"
+                         class="p-2 border rounded flex items-center gap-2 cursor-pointer transition group select-none relative">
+                        
+                        <button @click.stop="layer.visible = !layer.visible" class="w-4 text-center text-[var(--text-dim)] hover:text-white">
+                            <i :class="layer.visible ? 'fa-solid fa-eye' : 'fa-solid fa-eye-slash opacity-50'"></i>
+                        </button>
+                        
+                        <div class="w-4 text-center opacity-70">
+                            <i v-if="layer.type==='image'" class="fa-regular fa-image text-blue-400"></i>
+                            <i v-else-if="layer.type==='region'" class="fa-solid fa-draw-polygon text-[var(--text-success)]"></i>
+                            <i v-else class="fa-solid fa-location-dot text-[var(--text-warning)]"></i>
+                        </div>
+                        
+                        <span class="flex-1 truncate text-xs font-bold" :class="activeLayerId === layer.id ? 'text-white' : 'text-[var(--text-dim)]'">
+                            {{ layer.name }}
+                        </span>
+
+                        <div class="hidden group-hover:flex gap-1 ml-auto">
+                            <button @click.stop="moveLayer(layer.index, 1)" title="上移" class="text-[var(--text-dim)] hover:text-white"><i class="fa-solid fa-caret-up"></i></button>
+                            <button @click.stop="moveLayer(layer.index, -1)" title="下移" class="text-[var(--text-dim)] hover:text-white"><i class="fa-solid fa-caret-down"></i></button>
+                            <button @click.stop="deleteLayer(layer.index)" title="删除" class="text-[var(--text-dim)] hover:text-red-400"><i class="fa-solid fa-times"></i></button>
+                        </div>
+                        <div v-if="activeLayerId === layer.id" class="absolute left-0 top-0 bottom-0 w-1 bg-[var(--text-accent)] rounded-l"></div>
+                    </div>
+                    <div v-if="mapData.layers.length === 0" class="text-center text-[var(--text-dim)] text-xs py-10 italic">暂无图层</div>
+                </div>
+            </div>
+
+            <!-- Properties Panel -->
+            <div class="h-1/2 min-h-[300px] border-t-4 border-[var(--bg-header)] bg-[var(--bg-sidebar)] flex flex-col shrink-0">
+                <div class="p-2 border-b border-[var(--border-dim)] bg-[var(--bg-header)] text-[10px] font-bold text-[var(--text-dim)] uppercase tracking-widest pl-3 flex justify-between">
+                    <span>属性 (PROPERTIES)</span>
+                    <span v-if="selectedIds.size > 1" class="text-[var(--text-accent)]">{{ selectedIds.size }} items selected</span>
+                </div>
+                <div class="p-4 overflow-y-auto space-y-5 text-xs">
+                    <div v-if="activeLayer" class="space-y-3">
+                        <!-- 多选提示 -->
+                        <div v-if="selectedIds.size > 1" class="bg-[var(--bg-badge)] p-3 rounded border border-indigo-500/50 text-center space-y-2">
+                            <div class="text-indigo-400 font-bold text-sm">已选中 {{ selectedIds.size }} 个对象</div>
+                            <div class="text-[var(--text-dim)] text-[10px]">按 <kbd class="bg-[var(--border-dim)] px-1 rounded text-white">Enter</kbd> 打开批量处理</div>
+                            <button @click="openBatchModal" class="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded font-bold">
+                                打开批量操作
+                            </button>
+                        </div>
+
+                        <!-- 单选或无选 -->
+                        <div v-else class="space-y-3">
+                            <div><label class="block text-[var(--text-dim)] mb-1 font-bold">图层名称</label><input v-model="activeLayer.name" class="theme-input w-full"></div>
+                            <div>
+                                <div class="flex justify-between mb-1"><label class="text-[var(--text-dim)] font-bold">透明度</label><span class="font-mono text-[var(--text-accent)]">{{ (activeLayer.opacity * 100).toFixed(0) }}%</span></div>
+                                <input type="range" v-model.number="activeLayer.opacity" min="0" max="1" step="0.05" class="w-full h-1 bg-[var(--border-dim)] rounded-lg appearance-none cursor-pointer accent-[var(--text-accent)]">
+                            </div>
+                            <div class="h-px bg-[var(--border-dim)] my-2"></div>
+                            <div v-if="activeLayer.type === 'image'">
+                                <label class="block text-[var(--text-dim)] mb-1 font-bold">地图图像</label>
+                                <div class="flex flex-col gap-2">
+                                    <label class="theme-btn py-2 gap-2 text-[var(--text-main)] hover:border-[var(--text-accent)]"><i class="fa-solid fa-upload"></i> 上传图片<input type="file" @change="uploadLayerImage" class="hidden" accept="image/*"></label>
+                                    <button @click="clearLayerImage" class="theme-btn py-2 gap-2 text-red-400 hover:border-red-500 hover:bg-red-900/10"><i class="fa-solid fa-trash"></i> 清空</button>
+                                </div>
+                                <div class="mt-2 text-[10px] text-[var(--text-dim)]">分辨率: <span class="font-mono text-white">{{ mapDimensions.w }} x {{ mapDimensions.h }}</span> px</div>
+                            </div>
+                            <!-- Item Props (Single) -->
+                            <div v-if="selectedItem && activeLayer.type !== 'image'" class="space-y-3 animate-pulse-once">
+                                <div class="flex justify-between items-center bg-[var(--bg-badge)] p-2 rounded"><span class="text-[10px] font-bold text-[var(--text-success)] uppercase"><i class="fa-solid fa-pen-to-square mr-1"></i> 编辑选中项</span><button @click="deleteSelectedItem" class="text-red-400 hover:text-red-300"><i class="fa-solid fa-trash"></i></button></div>
+                                <div><label class="block text-[var(--text-dim)] mb-1 font-bold">名称/标签</label><input v-model="selectedItem[activeLayer.type === 'region' ? 'name' : 'label']" class="theme-input w-full font-bold text-white"></div>
+                                <div v-if="activeLayer.type === 'region'"><label class="block text-[var(--text-dim)] mb-1 font-bold">所有者 ID</label><input v-model="selectedItem.ownerId" placeholder="e.g. p_empire" class="theme-input w-full font-mono text-[var(--text-accent)]"></div>
+                                <div><label class="block text-[var(--text-dim)] mb-1 font-bold">颜色</label><div class="flex gap-2"><input type="color" v-model="selectedItem.color" class="bg-transparent border-none w-8 h-8 p-0 cursor-pointer"><input v-model="selectedItem.color" class="theme-input flex-1 font-mono uppercase"></div></div>
+                                <div v-if="activeLayer.type === 'marker'"><label class="block text-[var(--text-dim)] mb-1 font-bold">图标 Class</label><div class="flex gap-2 items-center"><div class="w-8 h-8 flex items-center justify-center bg-[var(--bg-badge)] border border-[var(--border-dim)] rounded"><i :class="selectedItem.icon" :style="{color: selectedItem.color}"></i></div><input v-model="selectedItem.icon" class="theme-input flex-1 font-mono"></div></div>
+                            </div>
+                            <div v-else-if="activeLayer.type !== 'image'" class="text-[var(--text-dim)] text-center py-4 text-xs italic opacity-50 border border-dashed border-[var(--border-dim)] rounded">点击/框选元素进行编辑</div>
+                        </div>
+                    </div>
+                    <div v-else class="text-[var(--text-dim)] text-center py-10 opacity-50">请选择一个图层</div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Canvas -->
+        <main class="flex-1 relative flex flex-col bg-black overflow-hidden checkerboard">
+            
+            <div class="flex-1 relative overflow-hidden cursor-crosshair"
+                 @wheel.prevent="onWheel"
+                 @mousedown.middle="startPan"
+                 @mousedown="onCanvasDown"
+                 @mousemove="onMouseMove"
+                 @mouseup="onMouseUp"
+                 @mouseleave="onMouseUp">
+                
+                <!-- Transform Container -->
+                <div ref="transformContainer" 
+                     class="absolute origin-top-left transition-transform duration-75 ease-out will-change-transform"
+                     :style="{ 
+                         transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})`, 
+                         width: mapDimensions.w > 0 ? mapDimensions.w + 'px' : '100%', 
+                         height: mapDimensions.h > 0 ? mapDimensions.h + 'px' : '100%' 
+                     }">
+                    
+                    <div class="relative w-full h-full"> 
+                        <div v-for="(layer, lIdx) in mapData.layers" :key="layer.id"
+                             class="absolute top-0 left-0 w-full h-full pointer-events-none"
+                             :style="{ zIndex: lIdx, opacity: layer.visible ? layer.opacity : 0, display: layer.visible ? 'block' : 'none' }">
+                            
+                            <img v-if="layer.type === 'image' && layer.data" :src="layer.data" class="block w-full h-full select-none" draggable="false">
+
+                            <div v-if="layer.type === 'region'" class="absolute inset-0 w-full h-full">
+                                <div v-for="(reg, rIdx) in layer.data" :key="reg.id"
+                                     class="absolute pointer-events-auto"
+                                     :class="{'ring-2 ring-emerald-500': isSelected(reg), 'cursor-pointer': tool === 'select'}"
+                                     :style="{ left: reg.x + '%', top: reg.y + '%', width: reg.w + '%', height: reg.h + '%' }"
+                                     @mousedown.stop="selectItem('region', rIdx, layer, $event)">
+                                    <svg class="w-full h-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
+                                        <defs><mask :id="'mask-ed-'+reg.id"><image :href="reg.maskData" x="0" y="0" width="100" height="100" preserveAspectRatio="none" /></mask></defs>
+                                        <rect x="0" y="0" width="100" height="100" :fill="reg.color || '#fff'" fill-opacity="0.5" :mask="'url(#mask-ed-'+reg.id+')'" class="hover:fill-opacity-80 transition-opacity" />
+                                    </svg>
+                                    <div v-if="activeLayerId === layer.id" class="absolute w-1.5 h-1.5 bg-white rounded-full shadow border border-black -translate-x-1/2 -translate-y-1/2 pointer-events-none" :style="{ left: ((reg.centerX - reg.x)/reg.w)*100 + '%', top: ((reg.centerY - reg.y)/reg.h)*100 + '%' }"></div>
+                                </div>
+                            </div>
+
+                            <div v-if="layer.type === 'marker'" class="absolute inset-0 w-full h-full">
+                                <div v-for="(pin, pIdx) in layer.data" :key="pin.id"
+                                     class="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto text-3xl drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] transition hover:scale-125 cursor-pointer"
+                                     :class="{'text-white scale-125 drop-shadow-[0_0_10px_rgba(255,255,255,0.8)]': isSelected(pin)}"
+                                     :style="{ left: pin.x + '%', top: pin.y + '%', color: isSelected(pin) ? '' : (pin.color || '#fbbf24') }"
+                                     @mousedown.stop="selectItem('marker', pIdx, layer, $event)">
+                                     <i :class="pin.icon || 'fa-solid fa-map-pin'"></i>
+                                     <div class="absolute top-full left-1/2 -translate-x-1/2 mt-1 text-[10px] bg-black/80 text-white px-1.5 py-0.5 rounded whitespace-nowrap pointer-events-none">{{ pin.label || 'Marker' }}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 框选矩形 (视觉层) -->
+                <div v-if="selectionBox.visible" class="selection-marquee"
+                     :style="{ left: selectionBox.x + 'px', top: selectionBox.y + 'px', width: selectionBox.w + 'px', height: selectionBox.h + 'px' }">
+                </div>
+
+                <!-- 自动扫描配置面板 -->
+                <div v-if="tool === 'auto_scan'" 
+                     @mousedown.stop 
+                     class="absolute right-4 bottom-10 w-72 bg-[var(--bg-panel)] border border-[var(--border-dim)] rounded-lg shadow-2xl flex flex-col z-50 overflow-hidden">
+                    <div class="p-3 bg-[var(--bg-header)] border-b border-[var(--border-dim)] flex justify-between items-center">
+                        <span class="text-xs font-bold text-pink-500 uppercase tracking-widest"><i class="fa-solid fa-robot mr-1"></i> 自动化预处理</span>
+                        <button @click="tool='move'" class="text-[var(--text-dim)] hover:text-white"><i class="fa-solid fa-times"></i></button>
+                    </div>
+                    
+                    <div class="p-4 space-y-4 text-xs">
+                        <div class="bg-[var(--bg-badge)] p-2 rounded border border-[var(--border-dim)] text-[var(--text-dim)] leading-relaxed">
+                            <span class="text-emerald-400 font-bold">提示：</span> 请务必吸取 <span class="text-white">白色边界线</span> 和 <span class="text-blue-400">海洋</span> 作为 <span class="text-red-400 font-bold">排除色</span>！
+                        </div>
+
+                        <!-- 模式切换 -->
+                        <div class="flex gap-1 bg-[var(--bg-badge)] p-1 rounded border border-[var(--border-dim)]">
+                            <button @click="autoScan.mode = 'include'" :class="autoScan.mode==='include' ? 'bg-emerald-600 text-white shadow' : 'text-[var(--text-dim)] hover:text-white'" class="flex-1 py-1.5 rounded transition font-bold">吸取: 包含色 (地块)</button>
+                            <button @click="autoScan.mode = 'exclude'" :class="autoScan.mode==='exclude' ? 'bg-red-600 text-white shadow' : 'text-[var(--text-dim)] hover:text-white'" class="flex-1 py-1.5 rounded transition font-bold">吸取: 排除色 (边界)</button>
+                        </div>
+
+                        <!-- 颜色列表 -->
+                        <div>
+                            <div class="flex justify-between mb-1 text-[var(--text-dim)] font-bold">包含色 ({{autoScan.includeColors.length}}) <button @click="autoScan.includeColors=[]" class="text-[9px] hover:text-red-400">清空</button></div>
+                            <div class="flex flex-wrap gap-1 min-h-[30px] p-1 bg-[var(--bg-input)] rounded border border-[var(--border-dim)]">
+                                <div v-for="(col, i) in autoScan.includeColors" :key="i" @click="autoScan.includeColors.splice(i,1)" class="color-swatch" :style="{backgroundColor: `rgb(${col[0]},${col[1]},${col[2]})`}"></div>
+                                <div v-if="autoScan.includeColors.length===0" class="w-full text-center py-1 opacity-30 italic">任何非排除色</div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <div class="flex justify-between mb-1 text-[var(--text-dim)] font-bold">排除色 (边界/海洋) <button @click="autoScan.excludeColors=[]" class="text-[9px] hover:text-red-400">清空</button></div>
+                            <div class="flex flex-wrap gap-1 min-h-[30px] p-1 bg-[var(--bg-input)] rounded border border-[var(--border-dim)]">
+                                <div v-for="(col, i) in autoScan.excludeColors" :key="i" @click="autoScan.excludeColors.splice(i,1)" class="color-swatch" :style="{backgroundColor: `rgb(${col[0]},${col[1]},${col[2]})`}"></div>
+                                <div v-if="autoScan.excludeColors.length===0" class="w-full text-center py-1 opacity-30 italic">无排除</div>
+                            </div>
+                        </div>
+
+                        <!-- 模糊度与容差 -->
+                        <div class="space-y-3">
+                            <div>
+                                <div class="flex justify-between mb-1"><label class="text-[var(--text-dim)] font-bold">颜色容差 (Tolerance)</label><span class="font-mono text-[var(--text-accent)]">{{ autoScan.tolerance }}</span></div>
+                                <input type="range" v-model.number="autoScan.tolerance" min="0" max="60" class="w-full h-1 bg-[var(--border-dim)] rounded-lg appearance-none cursor-pointer accent-pink-500">
+                            </div>
+                            <div>
+                                <div class="flex justify-between mb-1"><label class="text-[var(--text-dim)] font-bold">预处理模糊 (Blur)</label><span class="font-mono text-[var(--text-accent)]">{{ autoScan.blur }}px</span></div>
+                                <input type="range" v-model.number="autoScan.blur" min="0" max="5" step="0.5" class="w-full h-1 bg-[var(--border-dim)] rounded-lg appearance-none cursor-pointer accent-blue-500">
+                            </div>
+                        </div>
+
+                        <button @click="runAutoScan" :disabled="isScanning" class="w-full py-3 bg-pink-600 hover:bg-pink-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded shadow-lg flex items-center justify-center gap-2">
+                            <i :class="isScanning ? 'fa-solid fa-circle-notch fa-spin' : 'fa-solid fa-play'"></i> {{ isScanning ? '全图分析中...' : '开始批量生成' }}
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Bottom Info -->
+                <div class="absolute bottom-0 left-0 right-0 h-6 bg-[var(--bg-header)] border-t border-[var(--border-dim)] flex items-center px-4 text-[10px] text-[var(--text-dim)] select-none z-50">
+                    <span class="mr-4"><i class="fa-solid fa-mouse-pointer mr-1"></i> {{ (mousePos.x).toFixed(0) }}, {{ (mousePos.y).toFixed(0) }}</span>
+                    <span class="mr-4" v-if="activeLayer">Selected Layer: <strong class="text-[var(--text-accent)]">{{ activeLayer.name }}</strong></span>
+                    <span class="mr-4 text-emerald-500" v-if="mapDimensions.w > 0">Canvas: {{ mapDimensions.w }}x{{ mapDimensions.h }}</span>
+                    <span class="ml-auto opacity-50">快捷键: [Space] 拖拽 | [V] 选择 | [W] 魔棒 | [A] 自动扫描 | [P] 打点 | [Shift] 多选/框选 | [Enter] 批量 | [Del] 删除</span>
+                </div>
+            </div>
+
+            <!-- Hidden Analysis Canvas -->
+            <canvas id="analysis-canvas" class="hidden"></canvas>
+        </main>
+    </div>
+
+    <!-- 批量处理模态框 -->
+    <transition name="fade">
+        <div v-if="batchModal.visible" class="modal-mask" @mousedown.self="batchModal.visible=false">
+            <div class="modal-panel" @mousedown.stop>
+                <div class="p-4 bg-[var(--bg-header)] border-b border-[var(--border-dim)] flex justify-between items-center">
+                    <h3 class="text-sm font-bold text-white"><i class="fa-solid fa-layer-group mr-2"></i>批量处理 ({{ selectedIds.size }} items)</h3>
+                    <button @click="batchModal.visible=false" class="text-[var(--text-dim)] hover:text-white"><i class="fa-solid fa-times"></i></button>
+                </div>
+                <div class="p-6 space-y-4">
+                    <!-- 批量修改所有者 -->
+                    <div>
+                        <label class="block text-xs font-bold text-[var(--text-dim)] mb-1">批量设置所有者 ID</label>
+                        <div class="flex gap-2">
+                            <input v-model="batchForm.ownerId" placeholder="e.g. p_empire" class="theme-input flex-1">
+                            <button @click="batchUpdate('ownerId')" class="theme-btn px-3 text-xs bg-indigo-600 text-white hover:bg-indigo-500 border-transparent">应用</button>
+                        </div>
+                    </div>
+                    <!-- 批量修改颜色 -->
+                    <div>
+                        <label class="block text-xs font-bold text-[var(--text-dim)] mb-1">批量设置颜色</label>
+                        <div class="flex gap-2">
+                            <input type="color" v-model="batchForm.color" class="bg-transparent border-none w-8 h-8 p-0 cursor-pointer">
+                            <button @click="batchUpdate('color')" class="theme-btn flex-1 text-xs bg-[var(--bg-badge)] hover:text-white">应用颜色</button>
+                        </div>
+                    </div>
+                    
+                    <div class="h-px bg-[var(--border-dim)] my-2"></div>
+
+                    <!-- 高级操作 -->
+                    <div class="grid grid-cols-2 gap-3">
+                        <button @click="batchMerge" :disabled="activeLayer?.type !== 'region'" class="py-3 theme-btn bg-emerald-900/30 border-emerald-500/30 text-emerald-400 hover:bg-emerald-800/30 font-bold disabled:opacity-30 disabled:cursor-not-allowed">
+                            <i class="fa-solid fa-object-group mr-1"></i> 合并地块
+                        </button>
+                        <button @click="batchDelete" class="py-3 theme-btn bg-red-900/30 border-red-500/30 text-red-400 hover:bg-red-800/30 font-bold">
+                            <i class="fa-solid fa-trash mr-1"></i> 批量删除
+                        </button>
+                    </div>
+                    <div class="text-[10px] text-[var(--text-dim)] text-center mt-2 opacity-50">
+                        * 合并地块功能仅对 [领土层] 有效。将生成一个新的融合 Mask。
+                    </div>
+                </div>
+            </div>
+        </div>
+    </transition>
+
+</div>
+
+<script>
+    const { createApp } = Vue;
+
+    createApp({
+        data() {
+            return {
+                mapData: { layers: [] },
+                activeLayerId: null,
+                view: { x: 0, y: 0, scale: 1 },
+                tool: 'move', 
+                isDragging: false,
+                lastMouse: { x: 0, y: 0 },
+                mousePos: { x: 0, y: 0 },
+                
+                // [更新] 选中状态管理
+                selectedItem: null, // 为了兼容属性面板，显示最后一个选中的
+                selectedIds: new Set(), // 存储选中项的 ID
+                
+                // [新增] 框选相关
+                selectionBox: { x: 0, y: 0, w: 0, h: 0, startX: 0, startY: 0, visible: false },
+                
+                // [新增] 批量处理
+                batchModal: { visible: false },
+                batchForm: { ownerId: '', color: '#ffffff' },
+
+                mapDimensions: { w: 0, h: 0 },
+
+                autoScan: {
+                    mode: 'include',
+                    includeColors: [],
+                    excludeColors: [],
+                    tolerance: 15,
+                    blur: 0 
+                },
+                isScanning: false
+            }
+        },
+        computed: {
+            activeLayer() { return this.mapData.layers.find(l => l.id === this.activeLayerId); },
+            reversedLayers() {
+                if (!this.mapData.layers) return [];
+                return this.mapData.layers.map((l, i) => ({...l, index: i})).reverse();
+            },
+            toolName() {
+                const names = { 'move': '画布拖拽', 'select': '元素选择', 'region_paint': '智能魔棒 (点选)', 'auto_scan': '自动预处理 (批量)', 'pin': '定点标记' };
+                return names[this.tool];
+            }
+        },
+        mounted() {
+            if (this.mapData.layers.length === 0) {
+                this.addLayer('image'); 
+            }
+            window.addEventListener('keydown', this.handleKeydown);
+            document.addEventListener('contextmenu', event => event.preventDefault());
+            this.detectMapDimensions();
+        },
+        beforeUnmount() {
+            window.removeEventListener('keydown', this.handleKeydown);
+        },
+        methods: {
+            detectMapDimensions() {
+                const imgLayer = this.mapData.layers.find(l => l.type === 'image' && l.data);
+                if (imgLayer) {
+                    const img = new Image();
+                    img.onload = () => {
+                        this.mapDimensions.w = img.naturalWidth;
+                        this.mapDimensions.h = img.naturalHeight;
+                    };
+                    img.src = imgLayer.data;
+                }
+            },
+
+            setTool(t) { this.tool = t; },
+            handleKeydown(e) {
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+                
+                if (e.code === 'Enter') {
+                    if (this.selectedIds.size > 0) this.openBatchModal();
+                }
+                
+                if (e.code === 'Space') { this.tool = 'move'; e.preventDefault(); }
+                if (e.code === 'KeyV') this.tool = 'select';
+                if (e.code === 'KeyW') this.tool = 'region_paint';
+                if (e.code === 'KeyA') this.tool = 'auto_scan';
+                if (e.code === 'KeyP') this.tool = 'pin';
+                if (e.code === 'Delete' || e.code === 'Backspace') this.batchDelete(); // 使用批量删除逻辑
+            },
+
+            addLayer(type) {
+                const id = 'layer_' + Date.now();
+                let name = '新图层';
+                let data = null;
+                if (type === 'image') { name = '底图 (Image)'; data = ''; }
+                else if (type === 'region') { name = '领土 (Region)'; data = []; }
+                else if (type === 'marker') { name = '标记 (Pin)'; data = []; }
+                this.mapData.layers.push({ id, type, name, visible: true, opacity: 1, data });
+                this.activeLayerId = id;
+            },
+
+            // --- 选中逻辑更新 ---
+            isSelected(item) {
+                return this.selectedIds.has(item.id);
+            },
+            
+            // 点击选择
+            selectItem(type, idx, layer, event) {
+                if (this.tool !== 'select') return;
+                
+                const item = layer.data[idx];
+                this.activeLayerId = layer.id;
+
+                if (event && event.shiftKey) {
+                    // 多选模式
+                    if (this.selectedIds.has(item.id)) {
+                        this.selectedIds.delete(item.id); // 反选
+                    } else {
+                        this.selectedIds.add(item.id); // 加选
+                    }
+                } else {
+                    // 单选模式 (清除其他)
+                    this.selectedIds.clear();
+                    this.selectedIds.add(item.id);
+                }
+
+                // 更新用于属性面板显示的单个 item (显示最后选中的那个)
+                if (this.selectedIds.has(item.id)) {
+                    this.selectedItem = item;
+                } else {
+                    this.selectedItem = null;
+                }
+            },
+
+            deleteSelectedItem() { this.batchDelete(); },
+
+            // --- 画布交互 (包含框选) ---
+            startPan(e) {
+                if(e.button === 1) { this.isDragging = true; this.lastMouse = { x: e.clientX, y: e.clientY }; }
+            },
+            onCanvasDown(e) {
+                if (e.button === 1) { 
+                    this.isDragging = true;
+                    this.lastMouse = { x: e.clientX, y: e.clientY };
+                    return;
+                }
+                if (e.button === 0) {
+                    if (this.tool === 'move') {
+                        this.isDragging = true;
+                        this.lastMouse = { x: e.clientX, y: e.clientY };
+                        document.body.style.cursor = 'grabbing';
+                    } else if (this.tool === 'select' && e.shiftKey) {
+                        // [新增] 开始框选
+                        this.selectionBox.visible = true;
+                        this.selectionBox.startX = e.clientX;
+                        this.selectionBox.startY = e.clientY;
+                        this.selectionBox.x = e.clientX;
+                        this.selectionBox.y = e.clientY;
+                        this.selectionBox.w = 0;
+                        this.selectionBox.h = 0;
+                    } else if (this.tool === 'select') {
+                        // 普通点击空白处：清空选择
+                        this.selectedIds.clear();
+                        this.selectedItem = null;
+                    } else if (this.tool === 'region_paint') {
+                        this.performFloodFill(e);
+                    } else if (this.tool === 'auto_scan') {
+                        this.pickColorForAutoScan(e);
+                    } else if (this.tool === 'pin') {
+                        this.addPinAtMouse(e);
+                    }
+                }
+            },
+            onMouseMove(e) {
+                if (this.isDragging) {
+                    const dx = e.clientX - this.lastMouse.x;
+                    const dy = e.clientY - this.lastMouse.y;
+                    this.view.x += dx;
+                    this.view.y += dy;
+                    this.lastMouse = { x: e.clientX, y: e.clientY };
+                }
+                
+                // [新增] 更新框选
+                if (this.selectionBox.visible) {
+                    const currentX = e.clientX;
+                    const currentY = e.clientY;
+                    
+                    const minX = Math.min(this.selectionBox.startX, currentX);
+                    const minY = Math.min(this.selectionBox.startY, currentY);
+                    const w = Math.abs(currentX - this.selectionBox.startX);
+                    const h = Math.abs(currentY - this.selectionBox.startY);
+                    
+                    this.selectionBox.x = minX;
+                    this.selectionBox.y = minY;
+                    this.selectionBox.w = w;
+                    this.selectionBox.h = h;
+                }
+
+                const rawX = (e.clientX - this.view.x) / this.view.scale;
+                const rawY = (e.clientY - this.view.y) / this.view.scale;
+                this.mousePos.x = Math.max(0, rawX);
+                this.mousePos.y = Math.max(0, rawY);
+            },
+            onMouseUp() {
+                this.isDragging = false;
+                if (this.tool === 'move') document.body.style.cursor = 'default';
+                
+                // [新增] 结束框选计算
+                if (this.selectionBox.visible) {
+                    this.selectionBox.visible = false;
+                    this.calculateMarqueeSelection();
+                }
+            },
+
+            // --- 框选计算核心 ---
+            calculateMarqueeSelection() {
+                if (!this.activeLayer || !Array.isArray(this.activeLayer.data)) return;
+                
+                // 1. 获取框选区域相对于 transformContainer 的坐标 (因为地块坐标是相对于容器的%)
+                const containerRect = this.$refs.transformContainer.getBoundingClientRect();
+                
+                // 选框在屏幕上的坐标
+                const selLeft = this.selectionBox.x;
+                const selTop = this.selectionBox.y;
+                const selRight = selLeft + this.selectionBox.w;
+                const selBottom = selTop + this.selectionBox.h;
+
+                // 2. 遍历当前图层的所有元素
+                this.activeLayer.data.forEach(item => {
+                    // 计算 Item 在屏幕上的实际位置
+                    // item.x/y/w/h 是百分比 -> 像素
+                    const itemPixelX = (item.x / 100) * containerRect.width + containerRect.left;
+                    const itemPixelY = (item.y / 100) * containerRect.height + containerRect.top;
+                    
+                    let itemPixelW = 0, itemPixelH = 0;
+                    if (this.activeLayer.type === 'region') {
+                        itemPixelW = (item.w / 100) * containerRect.width;
+                        itemPixelH = (item.h / 100) * containerRect.height;
+                    } else {
+                        // Marker 视为一个点，给一点容差
+                        itemPixelW = 20; 
+                        itemPixelH = 20;
+                        // Marker 坐标通常是中心点
+                        itemPixelX -= 10;
+                        itemPixelY -= 10; 
+                    }
+
+                    // AABB 碰撞检测
+                    const itemRight = itemPixelX + itemPixelW;
+                    const itemBottom = itemPixelY + itemPixelH;
+
+                    const isIntersecting = !(
+                        itemRight < selLeft || 
+                        itemPixelX > selRight || 
+                        itemBottom < selTop || 
+                        itemPixelY > selBottom
+                    );
+
+                    if (isIntersecting) {
+                        this.selectedIds.add(item.id);
+                    }
+                });
+                
+                // 更新 selectedItem 指向最后一个
+                if (this.selectedIds.size > 0) {
+                    const lastId = Array.from(this.selectedIds).pop();
+                    this.selectedItem = this.activeLayer.data.find(i => i.id === lastId);
+                }
+            },
+
+            // --- 批量处理逻辑 ---
+            openBatchModal() {
+                this.batchModal.visible = true;
+            },
+            
+            // 批量更新属性 (Owner, Color)
+            batchUpdate(prop) {
+                if (!this.activeLayer) return;
+                let count = 0;
+                this.activeLayer.data.forEach(item => {
+                    if (this.selectedIds.has(item.id)) {
+                        if (prop === 'ownerId') item.ownerId = this.batchForm.ownerId;
+                        if (prop === 'color') item.color = this.batchForm.color;
+                        count++;
+                    }
+                });
+                alert(`已更新 ${count} 个地块。`);
+                this.batchModal.visible = false;
+            },
+
+            // 批量删除
+            batchDelete() {
+                if (!this.activeLayer || this.selectedIds.size === 0) return;
+                if (!confirm(`确定删除选中的 ${this.selectedIds.size} 个对象？`)) return;
+
+                // 过滤掉选中的
+                this.activeLayer.data = this.activeLayer.data.filter(item => !this.selectedIds.has(item.id));
+                
+                this.selectedIds.clear();
+                this.selectedItem = null;
+                this.batchModal.visible = false;
+            },
+
+            // [核心] 批量合并地块
+            async batchMerge() {
+                if (this.selectedIds.size < 2) return alert("请至少选择 2 个地块进行合并。");
+                if (this.activeLayer.type !== 'region') return alert("仅支持合并领土层(Region)对象。");
+
+                // 1. 获取所有选中对象
+                const selectedItems = this.activeLayer.data.filter(i => this.selectedIds.has(i.id));
+                if (selectedItems.length === 0) return;
+
+                // 2. 计算总包围盒 (百分比坐标)
+                let minX = 100, minY = 100, maxX = 0, maxY = 0;
+                
+                // 为了像素级合并，我们需要基于原始底图尺寸计算
+                const mapW = this.mapDimensions.w || 1000;
+                const mapH = this.mapDimensions.h || 1000;
+
+                selectedItems.forEach(item => {
+                    if (item.x < minX) minX = item.x;
+                    if (item.y < minY) minY = item.y;
+                    if (item.x + item.w > maxX) maxX = item.x + item.w;
+                    if (item.y + item.h > maxY) maxY = item.y + item.h;
+                });
+
+                const mergedW_Pct = maxX - minX;
+                const mergedH_Pct = maxY - minY;
+                
+                const canvasW = Math.ceil((mergedW_Pct / 100) * mapW);
+                const canvasH = Math.ceil((mergedH_Pct / 100) * mapH);
+
+                if (canvasW <= 0 || canvasH <= 0) return alert("合并尺寸错误。");
+
+                // 3. 创建合并画布
+                const canvas = document.createElement('canvas');
+                canvas.width = canvasW;
+                canvas.height = canvasH;
+                const ctx = canvas.getContext('2d');
+
+                // 4. 绘制所有地块的 Mask 到画布上
+                // 需要将每个地块的相对坐标换算到新画布中
+                const promises = selectedItems.map(item => {
+                    return new Promise((resolve) => {
+                        const img = new Image();
+                        img.onload = () => {
+                            // 计算该地块在合并画布中的偏移 (像素)
+                            const offsetX = ((item.x - minX) / 100) * mapW;
+                            const offsetY = ((item.y - minY) / 100) * mapH;
+                            const drawW = (item.w / 100) * mapW;
+                            const drawH = (item.h / 100) * mapH;
+                            
+                            ctx.drawImage(img, offsetX, offsetY, drawW, drawH);
+                            resolve();
+                        };
+                        img.src = item.maskData;
+                    });
+                });
+
+                await Promise.all(promises);
+
+                // 5. 生成新的合并地块对象
+                const newRegion = {
+                    id: 'reg_merged_' + Date.now(),
+                    name: selectedItems[0].name + ' (Merged)', // 继承第一个名字
+                    ownerId: selectedItems[0].ownerId,
+                    color: selectedItems[0].color,
+                    x: minX,
+                    y: minY,
+                    w: mergedW_Pct,
+                    h: mergedH_Pct,
+                    maskData: canvas.toDataURL(),
+                    centerX: minX + mergedW_Pct/2, // 简单取中心
+                    centerY: minY + mergedH_Pct/2
+                };
+
+                // 6. 移除旧地块，添加新地块
+                this.activeLayer.data = this.activeLayer.data.filter(item => !this.selectedIds.has(item.id));
+                this.activeLayer.data.push(newRegion);
+
+                // 7. 更新选中状态
+                this.selectedIds.clear();
+                this.selectedIds.add(newRegion.id);
+                this.selectedItem = newRegion;
+                
+                this.batchModal.visible = false;
+                alert("合并完成！");
+            },
+
+            // --- 其他基础方法 (保持不变) ---
+            resetView() { this.view = { x: 0, y: 0, scale: 1 }; },
+            
+            // ... (deleteLayer, moveLayer, toggleLayerVisible, uploadLayerImage, clearLayerImage, exportJSON, importJSON 等保持原样) ...
+            deleteLayer(idx) {
+                if (confirm("确定删除该图层？")) {
+                    this.mapData.layers.splice(idx, 1);
+                    if(this.mapData.layers.length > 0) this.activeLayerId = this.mapData.layers[this.mapData.layers.length - 1].id;
+                    else this.activeLayerId = null;
+                    this.selectedItem = null;
+                    this.detectMapDimensions();
+                }
+            },
+            moveLayer(idx, dir) {
+                const target = idx + dir;
+                if (target >= 0 && target < this.mapData.layers.length) {
+                    const temp = this.mapData.layers[idx];
+                    this.mapData.layers[idx] = this.mapData.layers[target];
+                    this.mapData.layers[target] = temp;
+                }
+            },
+            toggleLayerVisible(layer) { layer.visible = !layer.visible; },
+
+            uploadLayerImage(e) {
+                const file = e.target.files[0];
+                if(!file || !this.activeLayer || this.activeLayer.type !== 'image') return;
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        this.mapDimensions.w = img.naturalWidth;
+                        this.mapDimensions.h = img.naturalHeight;
+                        this.activeLayer.data = evt.target.result;
+                        this.activeLayer.name = file.name;
+                        this.resetView();
+                    }
+                    img.src = evt.target.result;
+                };
+                reader.readAsDataURL(file);
+                e.target.value = '';
+            },
+
+            clearLayerImage() {
+                if (this.activeLayer && this.activeLayer.type === 'image') {
+                    this.activeLayer.data = '';
+                    this.mapDimensions = { w: 0, h: 0 };
+                }
+            },
+            
+            onWheel(e) {
+                const zoomIntensity = 0.1;
+                const direction = e.deltaY > 0 ? -1 : 1;
+                let newScale = this.view.scale + (direction * zoomIntensity);
+                newScale = Math.min(Math.max(0.1, newScale), 10);
+                this.view.scale = newScale;
+            },
+
+            addPinAtMouse(e) {
+                let targetLayer = this.activeLayer;
+                if (!targetLayer || targetLayer.type !== 'marker') {
+                    targetLayer = this.mapData.layers.find(l => l.type === 'marker');
+                    if (!targetLayer) {
+                        this.addLayer('marker');
+                        targetLayer = this.mapData.layers[this.mapData.layers.length - 1];
+                    }
+                    this.activeLayerId = targetLayer.id;
+                }
+
+                const rect = this.$refs.transformContainer.getBoundingClientRect();
+                const xPct = ((e.clientX - rect.left) / rect.width) * 100;
+                const yPct = ((e.clientY - rect.top) / rect.height) * 100;
+                
+                if (xPct < 0 || xPct > 100 || yPct < 0 || yPct > 100) return;
+
+                const newPin = {
+                    id: 'pin_' + Date.now(),
+                    x: parseFloat(xPct.toFixed(2)),
+                    y: parseFloat(yPct.toFixed(2)),
+                    label: 'New Marker',
+                    icon: 'fa-solid fa-map-pin',
+                    color: '#f59e0b',
+                    type: 'custom'
+                };
+                
+                targetLayer.data.push(newPin);
+                this.selectItem('marker', targetLayer.data.length - 1, targetLayer);
+                this.tool = 'select'; 
+            },
+
+            applyBlur(ctx, width, height, radius) {
+                if (radius <= 0) return;
+                ctx.filter = `blur(${radius}px)`;
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = width;
+                tempCanvas.height = height;
+                const tempCtx = tempCanvas.getContext('2d');
+                tempCtx.drawImage(ctx.canvas, 0, 0);
+                ctx.clearRect(0, 0, width, height);
+                ctx.drawImage(tempCanvas, 0, 0);
+                ctx.filter = 'none';
+            },
+
+            pickColorForAutoScan(e) {
+                const baseLayer = this.mapData.layers.find(l => l.type === 'image' && l.visible && l.data);
+                if (!baseLayer) return;
+
+                const imgEl = this.$refs.transformContainer.querySelector(`img`);
+                if (!imgEl) return;
+
+                const rect = imgEl.getBoundingClientRect();
+                const clickX = e.clientX - rect.left;
+                const clickY = e.clientY - rect.top;
+
+                if (clickX < 0 || clickX > rect.width || clickY < 0 || clickY > rect.height) return;
+
+                const canvas = document.getElementById('analysis-canvas');
+                const ctx = canvas.getContext('2d');
+                const rawImg = new Image();
+                rawImg.crossOrigin = "Anonymous";
+                rawImg.src = baseLayer.data;
+
+                rawImg.onload = () => {
+                    canvas.width = rawImg.width;
+                    canvas.height = rawImg.height;
+                    ctx.drawImage(rawImg, 0, 0);
+                    
+                    this.applyBlur(ctx, rawImg.width, rawImg.height, this.autoScan.blur);
+
+                    const scaleX = rawImg.width / rect.width;
+                    const scaleY = rawImg.height / rect.height;
+                    const startX = Math.floor(clickX * scaleX);
+                    const startY = Math.floor(clickY * scaleY);
+
+                    const p = ctx.getImageData(startX, startY, 1, 1).data;
+                    const color = [p[0], p[1], p[2]];
+
+                    if (this.autoScan.mode === 'include') {
+                        this.autoScan.includeColors.push(color);
+                    } else {
+                        this.autoScan.excludeColors.push(color);
+                    }
+                };
+            },
+
+            runAutoScan() {
+                const baseLayer = this.mapData.layers.find(l => l.type === 'image' && l.visible && l.data);
+                if (!baseLayer) return alert("未找到可见底图！");
+
+                let targetLayer = this.activeLayer;
+                if (!targetLayer || targetLayer.type !== 'region') {
+                    targetLayer = this.mapData.layers.find(l => l.type === 'region');
+                    if (!targetLayer) {
+                        this.addLayer('region');
+                        targetLayer = this.mapData.layers[this.mapData.layers.length - 1];
+                    }
+                    this.activeLayerId = targetLayer.id;
+                }
+
+                if(!confirm(`即将开始全图扫描。\n图片尺寸: ${this.mapDimensions.w}x${this.mapDimensions.h}\n请确保已吸取【边界】和【海洋】作为排除色！`)) return;
+
+                this.isScanning = true;
+                setTimeout(() => {
+                    this._executeScanLogic(baseLayer, targetLayer);
+                }, 100);
+            },
+
+            _executeScanLogic(baseLayer, targetLayer) {
+                try {
+                    const canvas = document.getElementById('analysis-canvas');
+                    const ctx = canvas.getContext('2d');
+                    const rawImg = new Image();
+                    rawImg.crossOrigin = "Anonymous";
+                    rawImg.src = baseLayer.data;
+
+                    rawImg.onload = () => {
+                        canvas.width = rawImg.width;
+                        canvas.height = rawImg.height;
+                        ctx.drawImage(rawImg, 0, 0);
+                        
+                        this.applyBlur(ctx, rawImg.width, rawImg.height, this.autoScan.blur);
+
+                        const width = canvas.width;
+                        const height = canvas.height;
+                        const imageData = ctx.getImageData(0, 0, width, height);
+                        
+                        const buf32 = new Uint32Array(imageData.data.buffer);
+                        const visited = new Uint8Array(width * height);
+
+                        const tol = this.autoScan.tolerance;
+                        
+                        const isMatchList = (color32, list) => {
+                            const r = color32 & 0xff;
+                            const g = (color32 >> 8) & 0xff;
+                            const b = (color32 >> 16) & 0xff;
+                            return list.some(c => Math.abs(r - c[0]) < tol && Math.abs(g - c[1]) < tol && Math.abs(b - c[2]) < tol);
+                        };
+
+                        let regionsFound = 0;
+                        const maxRegions = 1000; 
+
+                        for (let i = 0; i < width * height; i += 2) {
+                            if (visited[i]) continue;
+
+                            const color32 = buf32[i];
+                            if ((color32 >>> 24) < 50) { visited[i] = 1; continue; }
+
+                            if (this.autoScan.excludeColors.length > 0) {
+                                if (isMatchList(color32, this.autoScan.excludeColors)) {
+                                    visited[i] = 1;
+                                    continue;
+                                }
+                            }
+
+                            let shouldFill = false;
+                            if (this.autoScan.includeColors.length === 0) {
+                                shouldFill = true; 
+                            } else {
+                                if (isMatchList(color32, this.autoScan.includeColors)) {
+                                    shouldFill = true;
+                                }
+                            }
+
+                            if (shouldFill) {
+                                const x = i % width;
+                                const y = (i / width) | 0;
+                                const region = this._floodFillFast(x, y, width, height, buf32, visited, this.autoScan.excludeColors);
+                                
+                                if (region) {
+                                    targetLayer.data.push(region);
+                                    regionsFound++;
+                                    if (regionsFound >= maxRegions) break;
+                                }
+                            }
+                        }
+
+                        alert(`扫描完成！生成了 ${regionsFound} 个地块。`);
+                        this.isScanning = false;
+                        this.tool = 'select';
+                    };
+                } catch (e) {
+                    console.error(e);
+                    alert("扫描出错: " + e.message);
+                    this.isScanning = false;
+                }
+            },
+
+            _floodFillFast(startX, startY, width, height, buf32, visited, excludeColors) {
+                const stack = [startY * width + startX];
+                const regionPixels = []; 
+                let minX = width, maxX = 0, minY = height, maxY = 0;
+                
+                const startColor = buf32[startY * width + startX];
+                const r0 = startColor & 0xff;
+                const g0 = (startColor >> 8) & 0xff;
+                const b0 = (startColor >> 16) & 0xff;
+                const tol = this.autoScan.tolerance;
+
+                const hasExcludes = excludeColors && excludeColors.length > 0;
+
+                visited[startY * width + startX] = 1;
+                
+                let pixelCount = 0;
+                const limit = 2000000; 
+
+                while (stack.length) {
+                    const idx = stack.pop();
+                    const x = idx % width;
+                    const y = (idx / width) | 0;
+
+                    regionPixels.push(x, y);
+                    if (x < minX) minX = x; if (x > maxX) maxX = x;
+                    if (y < minY) minY = y; if (y > maxY) maxY = y;
+
+                    const neighbors = [idx-1, idx+1, idx-width, idx+width]; 
+                    const nx = [x-1, x+1, x, x];
+                    const ny = [y, y, y-1, y+1];
+
+                    for(let i=0; i<4; i++) {
+                        const nIdx = neighbors[i];
+                        const _nx = nx[i];
+                        const _ny = ny[i];
+
+                        if (_nx >= 0 && _nx < width && _ny >= 0 && _ny < height) {
+                            if (!visited[nIdx]) {
+                                const nColor = buf32[nIdx];
+                                
+                                if (hasExcludes) {
+                                    const nr = nColor & 0xff;
+                                    const ng = (nColor >> 8) & 0xff;
+                                    const nb = (nColor >> 16) & 0xff;
+                                    
+                                    let isExcluded = false;
+                                    for(let ec of excludeColors) {
+                                        if (Math.abs(nr-ec[0])<tol && Math.abs(ng-ec[1])<tol && Math.abs(nb-ec[2])<tol) {
+                                            isExcluded = true;
+                                            break;
+                                        }
+                                    }
+                                    if (isExcluded) {
+                                        visited[nIdx] = 1; 
+                                        continue; 
+                                    }
+                                }
+
+                                const nr = nColor & 0xff;
+                                const ng = (nColor >> 8) & 0xff;
+                                const nb = (nColor >> 16) & 0xff;
+                                
+                                if (Math.abs(nr-r0) < tol && Math.abs(ng-g0) < tol && Math.abs(nb-b0) < tol) {
+                                    visited[nIdx] = 1;
+                                    stack.push(nIdx);
+                                }
+                            }
+                        }
+                    }
+                    pixelCount++;
+                    if (pixelCount > limit) break;
+                }
+
+                if (pixelCount < 50) return null; 
+
+                const regionW = maxX - minX + 1;
+                const regionH = maxY - minY + 1;
+                const maskCanvas = document.createElement('canvas');
+                maskCanvas.width = regionW;
+                maskCanvas.height = regionH;
+                const maskCtx = maskCanvas.getContext('2d');
+                const maskImgData = maskCtx.createImageData(regionW, regionH);
+                
+                let sumX = 0, sumY = 0;
+                for (let i = 0; i < regionPixels.length; i += 2) {
+                    const px = regionPixels[i] - minX;
+                    const py = regionPixels[i+1] - minY;
+                    const idx = (py * regionW + px) * 4;
+                    maskImgData.data[idx] = 255; maskImgData.data[idx+1] = 255; 
+                    maskImgData.data[idx+2] = 255; maskImgData.data[idx+3] = 255;
+                    sumX += regionPixels[i];
+                    sumY += regionPixels[i+1];
+                }
+                maskCtx.putImageData(maskImgData, 0, 0);
+
+                const count = regionPixels.length / 2;
+                return {
+                    id: 'reg_' + Date.now() + Math.random().toString(16).slice(2),
+                    name: 'Auto Region',
+                    ownerId: '',
+                    color: `hsl(${Math.random()*360}, 70%, 50%)`,
+                    x: (minX / width) * 100,
+                    y: (minY / height) * 100,
+                    w: (regionW / width) * 100,
+                    h: (regionH / height) * 100,
+                    maskData: maskCanvas.toDataURL(),
+                    centerX: (sumX / count / width) * 100,
+                    centerY: (sumY / count / height) * 100
+                };
+            },
+
+            performFloodFill(e) {
+                const baseLayer = this.mapData.layers.find(l => l.type === 'image' && l.visible && l.data);
+                if (!baseLayer) return alert("未找到可见底图！");
+
+                let targetLayer = this.activeLayer;
+                if (!targetLayer || targetLayer.type !== 'region') {
+                    targetLayer = this.mapData.layers.find(l => l.type === 'region');
+                    if (!targetLayer) {
+                        this.addLayer('region');
+                        targetLayer = this.mapData.layers[this.mapData.layers.length - 1];
+                    }
+                    this.activeLayerId = targetLayer.id;
+                }
+
+                const rect = this.$refs.transformContainer.getBoundingClientRect();
+                const clickX_Screen = e.clientX - rect.left;
+                const clickY_Screen = e.clientY - rect.top;
+
+                if (clickX_Screen < 0 || clickX_Screen > rect.width || clickY_Screen < 0 || clickY_Screen > rect.height) return;
+
+                document.body.style.cursor = 'wait';
+
+                const canvas = document.getElementById('analysis-canvas');
+                const ctx = canvas.getContext('2d');
+                const rawImg = new Image();
+                rawImg.crossOrigin = "Anonymous";
+                rawImg.src = baseLayer.data;
+
+                rawImg.onload = () => {
+                    canvas.width = rawImg.width;
+                    canvas.height = rawImg.height;
+                    ctx.drawImage(rawImg, 0, 0);
+                    
+                    this.applyBlur(ctx, rawImg.width, rawImg.height, this.autoScan.blur);
+
+                    const scaleX = rawImg.width / rect.width;
+                    const scaleY = rawImg.height / rect.height;
+                    const startX = Math.floor(clickX_Screen * scaleX);
+                    const startY = Math.floor(clickY_Screen * scaleY);
+
+                    const width = canvas.width;
+                    const height = canvas.height;
+                    const imageData = ctx.getImageData(0, 0, width, height);
+                    const buf32 = new Uint32Array(imageData.data.buffer);
+                    const visited = new Uint8Array(width * height);
+                    
+                    const region = this._floodFillFast(startX, startY, width, height, buf32, visited, this.autoScan.excludeColors);
+
+                    if (region) {
+                        region.name = 'New Region';
+                        region.color = '#10b981';
+                        targetLayer.data.push(region);
+                        this.selectItem('region', targetLayer.data.length - 1, targetLayer);
+                        this.tool = 'select'; 
+                    } else {
+                        alert("区域过小或无效");
+                    }
+                    document.body.style.cursor = 'default';
+                };
+            },
+
+            exportJSON() {
+                // [更新] 导出逻辑，兼容 activeLayerId
+                const exportObj = {
+                    layers: this.mapData.layers,
+                    activeLayerId: this.activeLayerId
+                };
+                const dataStr = JSON.stringify(exportObj, null, 2);
+                const blob = new Blob([dataStr], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `Map_Config_${Date.now()}.json`;
+                link.click();
+            },
+
+            importJSON(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    try {
+                        const data = JSON.parse(evt.target.result);
+                        if (data.layers) {
+                            this.mapData = data;
+                            if (data.activeLayerId) this.activeLayerId = data.activeLayerId;
+                        } else if (data.image) {
+                            this.mapData.layers = [
+                                { id: 'l1', type: 'image', name: '底图', visible: true, opacity: 1, data: data.image },
+                                { id: 'l2', type: 'region', name: '领土', visible: true, opacity: 1, data: data.regions || [] },
+                                { id: 'l3', type: 'marker', name: '标记', visible: true, opacity: 1, data: data.pins || [] }
+                            ];
+                        }
+                        if (!this.activeLayerId && this.mapData.layers.length > 0) {
+                            this.activeLayerId = this.mapData.layers[this.mapData.layers.length - 1].id;
+                        }
+                        this.detectMapDimensions();
+                        this.resetView();
+                        alert("地图导入成功！");
+                    } catch (err) {
+                        alert("JSON 解析失败: " + err.message);
+                    }
+                    e.target.value = '';
+                };
+                reader.readAsText(file);
+            }
+        }
+    }).mount('#app');
+</script>
+</body>
+</html>

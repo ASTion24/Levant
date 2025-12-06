@@ -15,6 +15,11 @@ from logging.handlers import RotatingFileHandler
 import google.generativeai as genai
 from openai import OpenAI  # 用于支持 DeepSeek, Qwen, Yi, Local LLM 等
 import anthropic # 新增 Claude 支持
+import base64
+import io
+import re  # <--- 新增正则模块，用于精准清洗 Base64
+from pypdf import PdfReader  # 用于解析 PDF
+from docx import Document    # 用于解析 Word
 
 # --- 0. 目录与日志设置 ---
 SAVES_DIR = "saves"
@@ -111,17 +116,31 @@ class MapRegion(BaseModel):
     centerY: float
     maskData: str 
     
-    # [修改] 这里必须匹配前端 saveMapPin 生成的 JSON 字段
+    # 逻辑信息
     type: str = "territory"
-    name: str = "New Region"  # 前端用的是 name
-    ownerId: str = ""         # 前端用的是 ownerId
+    name: str = "New Region"
+    ownerId: str = ""
     
     # 视觉
     icon: str = ""
     color: str = ""
 
+# [新增] 图层数据模型
+class MapLayer(BaseModel):
+    id: str
+    type: str  # "image", "region", "marker"
+    name: str
+    visible: bool = True
+    opacity: float = 1.0
+    data: Any = None # Image层是字符串，Region/Marker层是列表
+
 # [修改] 地图总数据
 class MapData(BaseModel):
+    # 新的核心数据结构
+    layers: List[MapLayer] = []
+    activeLayerId: str = ""
+
+    # --- 旧字段 (保留以兼容读取旧存档) ---
     image: str = "" 
     pins: List[MapPin] = []
     regions: List[MapRegion] = []
@@ -173,6 +192,7 @@ class AIRequest(BaseModel):
     model: str
     systemPrompt: str
     context: str
+    history: str = ""
     userPrompt: str
     useProxy: bool = False
     proxyPort: str = "7890"
@@ -310,16 +330,136 @@ def smart_clean_payload(obj):
     
     return obj
 
+# --- 辅助函数：判断模型是否支持视觉 ---
+def is_vision_model(provider: str, model_name: str) -> bool:
+    """根据模型名称和提供商，启发式判断是否支持图片输入"""
+    model = model_name.lower()
+    # 1. 明确支持视觉的系列
+    if "gemini" in model: return True
+    if "claude" in model: return True
+    if "gpt-4" in model and ("vision" in model or "o" in model): return True # gpt-4o, gpt-4-turbo
+    if "qwen-vl" in model: return True
+    if "llava" in model: return True
+    
+    # 2. 明确不支持视觉的系列 (DeepSeek V3/R1 目前仅文本)
+    if "deepseek" in model: return False 
+    
+    # 3. 兜底策略：默认视为不支持，防止报错
+    return False 
+
+# --- 核心：智能附件处理器 (ETL) ---
+def process_attachments_smart(attachments, allow_native_doc=False, allow_image=False):
+    text_to_append = ""
+    media_parts = []
+
+    for att in attachments:
+        name = att.get('name', 'unknown')
+        mime_type = att.get('type', '')
+        data_b64 = att.get('data', '')
+
+        # 1. 再次清洗 (防止前端没切干净)
+        data_b64 = re.sub(r'^data:.*?;base64,', '', data_b64).strip()
+
+        # [调试日志] 打印前20个字符，检查是否看起来像正常的 Base64
+        # PDF 通常以 JVBERi 开头; ZIP(Docx) 通常以 UEsDB 开头
+        if len(data_b64) > 20:
+             logger.info(f"Processing {name}, header snippet: {data_b64[:20]}...")
+
+        try:
+            # === 1. 图片处理 ===
+            if "image" in mime_type:
+                if allow_image:
+                    media_parts.append({"type": "image", "mime_type": mime_type, "data": data_b64})
+                else:
+                    text_to_append += f"\n[System: User uploaded image '{name}', but current model does not support vision. Image discarded.]\n"
+                continue
+
+            # === 2. PDF / Word / 文本处理 ===
+            if allow_native_doc and ("pdf" in mime_type):
+                 media_parts.append({"type": "document", "mime_type": mime_type, "data": data_b64})
+                 continue
+
+            # 解码
+            try:
+                # 兼容性解码
+                file_bytes = base64.b64decode(data_b64.encode('utf-8'), validate=False)
+            except Exception as b64_err:
+                logger.error(f"Base64 Decode Error for {name}: {b64_err}")
+                text_to_append += f"\n[System: File '{name}' corrupted during upload.]\n"
+                continue
+
+            file_stream = io.BytesIO(file_bytes)
+            extracted_content = ""
+            header = ""
+            
+            # --- PDF ---
+            if "pdf" in mime_type or name.lower().endswith(".pdf"):
+                try:
+                    reader = PdfReader(file_stream)
+                    if reader.is_encrypted:
+                        try: reader.decrypt("")
+                        except: pass
+                    
+                    # 检查文件头签名
+                    file_stream.seek(0)
+                    sig = file_stream.read(4)
+                    if sig != b'%PDF':
+                        logger.warning(f"File {name} does not look like a PDF. Signature: {sig}")
+
+                    file_stream.seek(0)
+                    pages_text = []
+                    for page in reader.pages:
+                        t = page.extract_text()
+                        if t: pages_text.append(t)
+                    extracted_content = "\n".join(pages_text) if pages_text else "[PDF contains no text]"
+                    header = f"=== PDF CONTENT: {name} ==="
+                except Exception as e:
+                    logger.warning(f"PDF Error {name}: {e}")
+                    header = f"=== PDF ERROR: {name} ==="
+                    extracted_content = "[Unreadable PDF]"
+
+            # --- Word ---
+            elif "word" in mime_type or "document" in mime_type or name.lower().endswith(".docx"):
+                try:
+                    doc = Document(file_stream)
+                    extracted_content = "\n".join([p.text for p in doc.paragraphs])
+                    header = f"=== WORD CONTENT: {name} ==="
+                except Exception as e:
+                     logger.warning(f"DOCX Error {name}: {e}")
+                     header = f"=== WORD ERROR: {name} ==="
+                     extracted_content = "[Unreadable DOCX]"
+            
+            # --- Text ---
+            else:
+                try:
+                    extracted_content = file_bytes.decode('utf-8')
+                    header = f"=== TEXT FILE: {name} ==="
+                except:
+                    try:
+                        extracted_content = file_bytes.decode('gbk')
+                        header = f"=== TEXT FILE: {name} ==="
+                    except:
+                        header = f"=== BINARY FILE IGNORED: {name} ==="
+
+            if extracted_content:
+                if len(extracted_content) > 50000:
+                     extracted_content = extracted_content[:50000] + "\n...[Truncated]"
+                text_to_append += f"\n\n{header}\n{extracted_content}\n"
+            
+        except Exception as e:
+            logger.error(f"Processing failed for {name}: {e}")
+            text_to_append += f"\n[System: Error processing {name}]\n"
+
+    return text_to_append, media_parts
+
 @app.post("/api/ai/generate")
-def ai_generate(req: AIRequest):  # <--- 去掉 async
-    # --- ★ 修改 1: 在请求开始时记录收到的数据 ★ ---
-    # 使用 smart_clean_payload 替代简单的 dump
+def ai_generate(req: AIRequest):
+    # 1. 日志记录
     raw_dump = req.model_dump()
     safe_log_req = smart_clean_payload(raw_dump)
-    
     logger.info(f"AI Request Received. Payload:\n{json.dumps(safe_log_req, indent=2, ensure_ascii=False)}")
     
-    # 代理设置 (保持不变)
+    # 2. 代理设置
     if req.useProxy and req.proxyPort:
         os.environ["HTTP_PROXY"] = f"http://127.0.0.1:{req.proxyPort}"
         os.environ["HTTPS_PROXY"] = f"http://127.0.0.1:{req.proxyPort}"
@@ -328,50 +468,95 @@ def ai_generate(req: AIRequest):  # <--- 去掉 async
         os.environ.pop("HTTPS_PROXY", None)
 
     try:
-        # === 分支 A: Gemini (Google) ===
-        if req.provider.lower() == "gemini":
+        provider = req.provider.lower()
+        model_name = req.model.lower()
+        
+        # 判断模型能力
+        can_see_image = is_vision_model(provider, model_name)
+        
+        # === A. Gemini (原生支持 PDF 和 图片) ===
+        if provider == "gemini":
             if not req.apiKey: raise HTTPException(status_code=400, detail="Missing API Key")
             genai.configure(api_key=req.apiKey)
             model = genai.GenerativeModel(model_name=req.model or "gemini-1.5-flash")
             
-            content_parts = []
-            content_parts.append(req.systemPrompt + "\n\n" + req.context + "\n\n" + req.userPrompt)
+            # 允许 Native Doc (PDF) 和 Image
+            text_part, media_parts = process_attachments_smart(req.attachments, allow_native_doc=True, allow_image=True)
             
-            for att in req.attachments:
-                if "image" in att["type"]:
-                    content_parts.append({"mime_type": att["type"], "data": att["data"]})
-                else:
-                    content_parts.append(f"\n=== ATTACHMENT ({att['type']}) ===\n{att['data']}")
-
-            response = model.generate_content(content_parts)
+            # 拼接文本上下文
+            prompt_full = req.systemPrompt + "\n\n=== CONTEXT ===\n" + req.context + text_part + "\n\n=== INSTRUCTION ===\n" + req.userPrompt
+            
+            # 构造 Gemini 请求部分
+            content_list = [prompt_full]
+            for m in media_parts:
+                content_list.append({"mime_type": m["mime_type"], "data": m["data"]})
+            
+            response = model.generate_content(content_list)
             result_text = response.text if response.text else "Blocked."
-            
-            # --- ★ 修改 2: 在返回前记录 AI 的原始响应 ★ ---
-            logger.info(f"AI Response Generated. Raw result:\n---\n{result_text}\n---")
+            logger.info(f"AI Response (Gemini): {result_text}")
             return {"result": result_text}
 
-        # === 分支 B: OpenAI Compatible (DeepSeek, GPT-4o, etc) ===
-        elif req.provider.lower() in ["openai", "deepseek", "qwen", "custom", "siliconflow", "others"]:
+        # === B. Claude (支持图片，但不支持原生 PDF 文件流，需转文本) ===
+        elif provider == "claude":
+            if not req.apiKey: raise HTTPException(status_code=400, detail="Missing API Key")
+            client = anthropic.Anthropic(api_key=req.apiKey)
+            
+            # 不允许 Native Doc (转文本)，允许 Image
+            text_part, media_parts = process_attachments_smart(req.attachments, allow_native_doc=False, allow_image=True)
+            
+            final_text = f"=== CONTEXT ===\n{req.context}\n{text_part}\n=== INSTRUCTION ===\n{req.userPrompt}"
+            
+            content_blocks = []
+            # 添加图片
+            for m in media_parts:
+                mime = m["mime_type"]
+                # Claude 严格的 mime 校验
+                if mime not in ["image/jpeg", "image/png", "image/gif", "image/webp"]:
+                    mime = "image/jpeg"
+                content_blocks.append({
+                    "type": "image",
+                    "source": {"type": "base64", "media_type": mime, "data": m["data"]}
+                })
+            
+            # 添加文本
+            content_blocks.append({"type": "text", "text": final_text})
+
+            message = client.messages.create(
+                model=req.model or "claude-3-5-sonnet-20240620",
+                max_tokens=4096,
+                system=req.systemPrompt,
+                messages=[{"role": "user", "content": content_blocks}]
+            )
+            result_text = message.content[0].text
+            logger.info(f"AI Response (Claude): {result_text}")
+            return {"result": result_text}
+
+        # === C. OpenAI Compatible (DeepSeek, GPT, Qwen, etc) ===
+        else:
             if not req.apiKey: raise HTTPException(status_code=400, detail="Missing API Key")
             base_url = req.baseUrl.strip() or "https://api.openai.com/v1"
             client = OpenAI(api_key=req.apiKey, base_url=base_url)
+            
+            # 根据模型能力决定是否允许图片
+            # 不允许 Native Doc (OpenAI API 不支持直接传 PDF)，根据 can_see_image 决定是否允许 Image
+            text_part, media_parts = process_attachments_smart(req.attachments, allow_native_doc=False, allow_image=can_see_image)
 
+            final_text = f"=== CONTEXT ===\n{req.context}\n{text_part}\n=== INSTRUCTION ===\n{req.userPrompt}"
+            
             messages = [{"role": "system", "content": req.systemPrompt}]
             
-            user_content = []
-            text_payload = f"=== CONTEXT ===\n{req.context}\n\n=== INSTRUCTION ===\n{req.userPrompt}"
-            user_content.append({"type": "text", "text": text_payload})
-
-            for att in req.attachments:
-                if "image" in att["type"]:
+            # 如果有媒体文件 (图片)，必须使用 content 数组格式
+            if len(media_parts) > 0:
+                user_content = [{"type": "text", "text": final_text}]
+                for m in media_parts:
                     user_content.append({
                         "type": "image_url",
-                        "image_url": {"url": f"data:{att['type']};base64,{att['data']}"}
+                        "image_url": {"url": f"data:{m['mime_type']};base64,{m['data']}"}
                     })
-                else:
-                    user_content.append({"type": "text", "text": f"\n[FILE: {att.get('name', 'doc')}]\n{att['data']}"})
-
-            messages.append({"role": "user", "content": user_content})
+                messages.append({"role": "user", "content": user_content})
+            else:
+                # 只有文本，直接发字符串 (DeepSeek 最兼容的格式)
+                messages.append({"role": "user", "content": final_text})
 
             completion = client.chat.completions.create(
                 model=req.model,
@@ -379,49 +564,9 @@ def ai_generate(req: AIRequest):  # <--- 去掉 async
                 temperature=0.7,
             )
             result_text = completion.choices[0].message.content
-            logger.info(f"AI Response Generated. Raw result:\n---\n{result_text}\n---")
+            logger.info(f"AI Response (OpenAI/Compatible): {result_text}")
             return {"result": result_text}
 
-        # === 分支 C: Claude (Anthropic) ===
-        elif req.provider.lower() == "claude":
-            if not req.apiKey: raise HTTPException(status_code=400, detail="Missing API Key")
-            client = anthropic.Anthropic(api_key=req.apiKey)
-            
-            # 构建消息
-            message_content = []
-            text_payload = f"=== CONTEXT ===\n{req.context}\n\n=== INSTRUCTION ===\n{req.userPrompt}"
-            
-            # 处理附件 (Claude 支持 image/jpeg, image/png, image/gif, image/webp)
-            for att in req.attachments:
-                if "image" in att["type"]:
-                    media_type = att["type"]
-                    message_content.append({
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": media_type,
-                            "data": att["data"]
-                        }
-                    })
-                else:
-                    text_payload += f"\n\n[ATTACHMENT: {att.get('name', 'file')}]\n{att['data']}"
-
-            message_content.append({"type": "text", "text": text_payload})
-
-            message = client.messages.create(
-                model=req.model or "claude-3-5-sonnet-20240620",
-                max_tokens=4096,
-                temperature=0.7,
-                system=req.systemPrompt,
-                messages=[{"role": "user", "content": message_content}]
-            )
-            result_text = message.content[0].text
-            logger.info(f"AI Response Generated. Raw result:\n---\n{result_text}\n---")
-            return {"result": result_text}
-
-        else:
-            logger.warning(f"Unsupported provider requested: {req.provider}")
-            
     except Exception as e:
         logger.error(f"AI Generation Failed: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"AI Error: {str(e)}")
@@ -441,6 +586,14 @@ async def read_index():
 async def get_logo():
     if os.path.exists("logo.png"): return FileResponse("logo.png")
     return {"error": "Logo not found"}
+
+# --- [新增] 地图编辑器路由 ---
+@app.get("/map_editor")
+async def get_map_editor():
+    if not os.path.exists("map_editor.html"): 
+        return Response(content="<h1>map_editor.html not found</h1>", media_type="text/html")
+    with open("map_editor.html", "r", encoding="utf-8") as f:
+        return Response(content=f.read(), media_type="text/html")
 
 if __name__ == "__main__":
     webbrowser.open("http://127.0.0.1:8000")
