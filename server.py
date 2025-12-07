@@ -6,6 +6,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel
 from typing import List, Dict, Any
 import json
+from fastapi.staticfiles import StaticFiles
 import os
 import time
 import logging
@@ -42,6 +43,15 @@ logging.basicConfig(
 logger = logging.getLogger("Levant")
 
 app = FastAPI(title="LevantD Engine Backend")
+
+# --- ★★★ [新增] 挂载静态音频目录 ★★★ ---
+# 这一步告诉后端：如果有人访问 /sounds/xxx，就去项目根目录下的 sounds 文件夹找
+if not os.path.exists("sounds"):
+    os.makedirs("sounds") # 如果没有文件夹，自动创建一个
+
+# 将 /sounds 路径映射到本地 sounds 文件夹
+app.mount("/sounds", StaticFiles(directory="sounds"), name="sounds")
+
 
 # --- 全局异常捕获中间件 (记录所有未捕获的错误) ---
 @app.middleware("http")
@@ -89,9 +99,13 @@ class Faction(BaseModel):
     parentId: str = ""
     name: str = "Unknown Faction"
     logo: str = "fa-solid fa-users"
+    
+    # [新增] 兼容 Galgame 立绘字段，默认为空字符串，保证旧存档读取不报错
+    avatar: str = "" 
+    
     color: str = "#000000"
     desc: str = ""
-    # 【核心修复】必须有这一行，否则保存时实体的规则关联会被丢弃！
+    # 【核心修复】必须有这一行...
     schemaId: str = "default" 
     stats: Dict[str, Any] = {}
 
@@ -294,6 +308,25 @@ def delete_save(filename: str):
             raise HTTPException(status_code=500, detail=f"Error deleting file: {str(e)}")
     else:
         raise HTTPException(status_code=404, detail="File not found")
+
+# ★★★ [新增] 获取背景音乐列表接口 ★★★
+@app.get("/api/music-list")
+def get_music_list():
+    folder = "sounds"
+    if not os.path.exists(folder):
+        print(f"!!! [Backend] Folder '{folder}' not found!")
+        return {"files": []}
+    
+    # 扫描文件
+    music_files = [
+        f for f in os.listdir(folder) 
+        if f.lower().endswith(('.mp3', '.wav', '.ogg', '.flac'))
+    ]
+    
+    # ★★★ [新增] 打印日志到后台黑框 ★★★
+    print(f"--- [Music Scan] Found {len(music_files)} files: {music_files}")
+    
+    return {"files": music_files}
 
 # [优化] 智能日志清洗函数
 def smart_clean_payload(obj):
@@ -586,6 +619,15 @@ async def read_index():
 async def get_logo():
     if os.path.exists("logo.png"): return FileResponse("logo.png")
     return {"error": "Logo not found"}
+
+# ★★★ 新增：允许浏览器加载 api_layer.js ★★★
+@app.get("/api_layer.js")
+async def get_api_layer():
+    if os.path.exists("api_layer.js"): 
+        # 防止缓存，方便你调试
+        return FileResponse("api_layer.js", headers={"Cache-Control": "no-cache"}) 
+    return Response(status_code=404)
+
 
 # --- [新增] 地图编辑器路由 ---
 @app.get("/map_editor")
