@@ -94,19 +94,37 @@ class LoreEntry(BaseModel):
     # 如果 AI 生成了 title，Pydantic 默认会忽略多余字段，但 keys 必须有值
     # 前端会负责把 title 塞进 keys 里，这里兜底防止报错
 
+# [修改] 立绘差分数据模型
+class AvatarVariant(BaseModel):
+    id: str
+    tag: str
+    url: str
+    # [新增] 视觉调整参数
+    scale: float = 1.0
+    offsetY: float = 0.0
+
 class Faction(BaseModel):
     id: str = "unknown_id"
     parentId: str = ""
     name: str = "Unknown Faction"
     logo: str = "fa-solid fa-users"
     
-    # [新增] 兼容 Galgame 立绘字段，默认为空字符串，保证旧存档读取不报错
+    # [兼容旧存档] 默认立绘
     avatar: str = "" 
+    # [新增] 默认立绘的视觉调整参数
+    avatarScale: float = 1.0
+    avatarOffsetY: float = 0.0
     
+    # [新增] 立绘差分列表
+    avatars: List[AvatarVariant] = []
+
     color: str = "#000000"
     desc: str = ""
-    # 【核心修复】必须有这一行...
+    
+    # ★★★ [关键修复] 必须显式定义 schemaId，否则会被后端丢弃！ ★★★
     schemaId: str = "default" 
+    
+    # 属性键值对
     stats: Dict[str, Any] = {}
 
 class MapPin(BaseModel):
@@ -134,6 +152,10 @@ class MapRegion(BaseModel):
     type: str = "territory"
     name: str = "New Region"
     ownerId: str = ""
+    
+    # ★★★ [新增] 属性规则支持 ★★★
+    schemaId: str = ""          # 绑定的规则集 ID
+    stats: Dict[str, Any] = {}  # 具体的属性数值 (如: {"pop": "1000", "def": "S"})
     
     # 视觉
     icon: str = ""
@@ -171,13 +193,14 @@ class EventImpact(BaseModel):
 
 class TimelineEvent(BaseModel):
     factionId: str = "global"
+    # [新增] 该事件指定的立绘标签 (例如 "angry")，为空则使用默认
+    avatarTag: str = "" 
     timeStart: str = "?"
     timeEnd: str = "?"
     summary: str = "New Event"
     content: str = ""
     impacts: List[EventImpact] = []
     isOpen: bool = False
-    # [新增] 选项列表，用于交互式推演
     options: List[Any] = []
 
 class Turn(BaseModel):

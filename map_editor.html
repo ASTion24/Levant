@@ -167,6 +167,11 @@
                 <button @click="resetView" class="text-[10px] text-[var(--text-dim)] hover:text-white ml-1">RST</button>
             </div>
 
+            <!-- [新增] 规则管理按钮 -->
+            <button @click="ruleModal.visible = true" class="theme-btn px-3 py-1.5 gap-2 text-xs font-bold text-amber-500 border-amber-500/30 hover:bg-amber-900/20 mr-2">
+                <i class="fa-solid fa-sliders"></i> 规则定义
+            </button>
+
             <label class="theme-btn px-3 py-1.5 gap-2 text-xs font-bold hover:bg-[var(--bg-panel)]">
                 <i class="fa-solid fa-file-import"></i> 导入
                 <input type="file" @change="importJSON" class="hidden" accept=".json">
@@ -263,6 +268,35 @@
                                 <div v-if="activeLayer.type === 'region'"><label class="block text-[var(--text-dim)] mb-1 font-bold">所有者 ID</label><input v-model="selectedItem.ownerId" placeholder="e.g. p_empire" class="theme-input w-full font-mono text-[var(--text-accent)]"></div>
                                 <div><label class="block text-[var(--text-dim)] mb-1 font-bold">颜色</label><div class="flex gap-2"><input type="color" v-model="selectedItem.color" class="bg-transparent border-none w-8 h-8 p-0 cursor-pointer"><input v-model="selectedItem.color" class="theme-input flex-1 font-mono uppercase"></div></div>
                                 <div v-if="activeLayer.type === 'marker'"><label class="block text-[var(--text-dim)] mb-1 font-bold">图标 Class</label><div class="flex gap-2 items-center"><div class="w-8 h-8 flex items-center justify-center bg-[var(--bg-badge)] border border-[var(--border-dim)] rounded"><i :class="selectedItem.icon" :style="{color: selectedItem.color}"></i></div><input v-model="selectedItem.icon" class="theme-input flex-1 font-mono"></div></div>
+                                
+                                <!-- [新增] 属性规则绑定与编辑 -->
+                                <div class="pt-3 border-t border-[var(--border-dim)] mt-2">
+                                    <div class="flex justify-between mb-2">
+                                        <label class="block text-[var(--text-warning)] font-bold uppercase">属性数据</label>
+                                        <button @click="ruleModal.visible=true" class="text-[9px] text-[var(--text-dim)] hover:text-white underline">管理规则</button>
+                                    </div>
+                                    
+                                    <!-- 规则集选择 -->
+                                    <select v-model="selectedItem.schemaId" @change="initItemStats(selectedItem)" class="theme-input w-full mb-3 text-[var(--text-success)] font-bold">
+                                        <option value="">-- 无属性规则 --</option>
+                                        <option v-for="rs in rule_sets" :key="rs.id" :value="rs.id">{{ rs.name }}</option>
+                                    </select>
+
+                                    <!-- 动态属性输入框 -->
+                                    <div v-if="selectedItem.schemaId" class="space-y-2 bg-[var(--bg-input)] p-2 rounded border border-[var(--border-dim)]">
+                                        <div v-for="field in getFieldsBySchemaId(selectedItem.schemaId)" :key="field.key">
+                                            <div class="flex justify-between text-[10px] text-[var(--text-dim)] mb-0.5">
+                                                <span>{{ field.label }}</span>
+                                                <span class="font-mono opacity-50">{{ field.key }}</span>
+                                            </div>
+                                            <!-- 使用 $forceUpdate 确保深度响应，或者在 init 时确保 stats 存在 -->
+                                            <input v-model="selectedItem.stats[field.key]" class="theme-input w-full text-white border-none bg-[var(--bg-badge)] focus:bg-[var(--bg-hover)]">
+                                        </div>
+                                        <div v-if="getFieldsBySchemaId(selectedItem.schemaId).length === 0" class="text-center text-[10px] text-[var(--text-dim)] italic">该规则集未定义字段</div>
+                                    </div>
+                                </div>
+                                <!-- [新增结束] -->
+
                             </div>
                             <div v-else-if="activeLayer.type !== 'image'" class="text-[var(--text-dim)] text-center py-4 text-xs italic opacity-50 border border-dashed border-[var(--border-dim)] rounded">点击/框选元素进行编辑</div>
                         </div>
@@ -300,14 +334,41 @@
                             <img v-if="layer.type === 'image' && layer.data" :src="layer.data" class="block w-full h-full select-none" draggable="false">
 
                             <div v-if="layer.type === 'region'" class="absolute inset-0 w-full h-full">
+                                <!-- [最终版] 高亮改为 SVG 描边和叠加层 -->
                                 <div v-for="(reg, rIdx) in layer.data" :key="reg.id"
-                                     class="absolute pointer-events-auto"
-                                     :class="{'ring-2 ring-emerald-500': isSelected(reg), 'cursor-pointer': tool === 'select'}"
-                                     :style="{ left: reg.x + '%', top: reg.y + '%', width: reg.w + '%', height: reg.h + '%' }"
-                                     @mousedown.stop="selectItem('region', rIdx, layer, $event)">
+                                     class="absolute pointer-events-none"
+                                     :style="{ 
+                                         left: reg.x + '%', 
+                                         top: reg.y + '%', 
+                                         width: reg.w + '%', 
+                                         height: reg.h + '%'
+                                     }">
                                     <svg class="w-full h-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
                                         <defs><mask :id="'mask-ed-'+reg.id"><image :href="reg.maskData" x="0" y="0" width="100" height="100" preserveAspectRatio="none" /></mask></defs>
-                                        <rect x="0" y="0" width="100" height="100" :fill="reg.color || '#fff'" fill-opacity="0.5" :mask="'url(#mask-ed-'+reg.id+')'" class="hover:fill-opacity-80 transition-opacity" />
+                                        
+                                        <!-- 1. 基础地块颜色 -->
+                                        <rect x="0" y="0" width="100" height="100" 
+                                              :fill="reg.color || '#fff'" 
+                                              fill-opacity="0.5" 
+                                              :mask="'url(#mask-ed-'+reg.id+')'" 
+                                              class="transition-opacity" />
+
+                                        <!-- 2. ★★★ 高亮叠加层 (仅在选中时显示) ★★★ -->
+                                        <g v-if="isSelected(reg)">
+                                            <!-- A. 深色叠加层，增加对比度 -->
+                                            <rect x="0" y="0" width="100" height="100" 
+                                                  fill="#0f172a" 
+                                                  fill-opacity="0.4" 
+                                                  :mask="'url(#mask-ed-'+reg.id+')'" />
+                                            
+                                            <!-- B. 亮色描边层，突出轮廓 -->
+                                            <rect x="0" y="0" width="100" height="100" 
+                                                  fill="none" 
+                                                  stroke="#38bdf8" 
+                                                  stroke-width="1.5" 
+                                                  :mask="'url(#mask-ed-'+reg.id+')'" />
+                                        </g>
+
                                     </svg>
                                     <div v-if="activeLayerId === layer.id" class="absolute w-1.5 h-1.5 bg-white rounded-full shadow border border-black -translate-x-1/2 -translate-y-1/2 pointer-events-none" :style="{ left: ((reg.centerX - reg.x)/reg.w)*100 + '%', top: ((reg.centerY - reg.y)/reg.h)*100 + '%' }"></div>
                                 </div>
@@ -315,10 +376,15 @@
 
                             <div v-if="layer.type === 'marker'" class="absolute inset-0 w-full h-full">
                                 <div v-for="(pin, pIdx) in layer.data" :key="pin.id"
-                                     class="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto text-3xl drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] transition hover:scale-125 cursor-pointer"
-                                     :class="{'text-white scale-125 drop-shadow-[0_0_10px_rgba(255,255,255,0.8)]': isSelected(pin)}"
-                                     :style="{ left: pin.x + '%', top: pin.y + '%', color: isSelected(pin) ? '' : (pin.color || '#fbbf24') }"
-                                     @mousedown.stop="selectItem('marker', pIdx, layer, $event)">
+                                     class="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto text-3xl transition-all duration-200 hover:scale-125 cursor-pointer"
+                                     :style="{ 
+                                         left: pin.x + '%', 
+                                         top: pin.y + '%', 
+                                         color: pin.color || '#fbbf24',
+                                         filter: isSelected(pin) ? 'drop-shadow(0 0 8px #fff) drop-shadow(0 0 3px #fff) brightness(1.5)' : 'drop-shadow(0 2px 4px rgba(0,0,0,0.8))',
+                                         transform: isSelected(pin) ? 'scale(1.25)' : 'scale(1)'
+                                     }"
+                                     @mousedown="selectItem('marker', pIdx, layer, $event)">
                                      <i :class="pin.icon || 'fa-solid fa-map-pin'"></i>
                                      <div class="absolute top-full left-1/2 -translate-x-1/2 mt-1 text-[10px] bg-black/80 text-white px-1.5 py-0.5 rounded whitespace-nowrap pointer-events-none">{{ pin.label || 'Marker' }}</div>
                                 </div>
@@ -426,6 +492,18 @@
                             <button @click="batchUpdate('color')" class="theme-btn flex-1 text-xs bg-[var(--bg-badge)] hover:text-white">应用颜色</button>
                         </div>
                     </div>
+
+                    <!-- [新增] 批量修改规则集 -->
+                    <div>
+                        <label class="block text-xs font-bold text-[var(--text-dim)] mb-1">批量设置属性规则 (Schema)</label>
+                        <div class="flex gap-2">
+                            <select v-model="batchForm.schemaId" class="theme-input flex-1 text-[var(--text-success)] font-bold">
+                                <option value="">-- 选择规则集 --</option>
+                                <option v-for="rs in rule_sets" :key="rs.id" :value="rs.id">{{ rs.name }}</option>
+                            </select>
+                            <button @click="batchUpdate('schemaId')" class="theme-btn px-3 text-xs bg-amber-600 text-white hover:bg-amber-500 border-transparent">应用</button>
+                        </div>
+                    </div>
                     
                     <div class="h-px bg-[var(--border-dim)] my-2"></div>
 
@@ -445,7 +523,51 @@
             </div>
         </div>
     </transition>
-
+    <!-- 规则管理模态框 -->
+    <transition name="fade">
+        <div v-if="ruleModal.visible" class="modal-mask" @mousedown.self="ruleModal.visible=false">
+            <div class="modal-panel w-[600px]" @mousedown.stop>
+                <div class="p-4 bg-[var(--bg-header)] border-b border-[var(--border-dim)] flex justify-between items-center">
+                    <h3 class="text-sm font-bold text-amber-500"><i class="fa-solid fa-sliders mr-2"></i>规则集定义 (Rule Sets)</h3>
+                    <button @click="ruleModal.visible=false" class="text-[var(--text-dim)] hover:text-white"><i class="fa-solid fa-times"></i></button>
+                </div>
+                <div class="flex h-[400px]">
+                    <!-- 左侧：规则集列表 -->
+                    <div class="w-1/3 border-r border-[var(--border-dim)] bg-[var(--bg-sidebar)] p-2 flex flex-col gap-2">
+                        <button @click="addNewRuleSet" class="theme-btn w-full py-2 text-xs font-bold text-[var(--text-success)] border-dashed"><i class="fa-solid fa-plus mr-1"></i> 新建规则集</button>
+                        <div class="flex-1 overflow-y-auto space-y-1">
+                            <div v-for="(rs, idx) in rule_sets" :key="rs.id" 
+                                 @click="activeRuleSetId = rs.id"
+                                 class="p-2 rounded cursor-pointer flex justify-between items-center group"
+                                 :class="activeRuleSetId === rs.id ? 'bg-[var(--bg-panel)] border border-amber-500/50 text-white' : 'hover:bg-[var(--bg-hover)] text-[var(--text-dim)]'">
+                                <span class="truncate text-xs font-bold">{{ rs.name }}</span>
+                                <button @click.stop="deleteRuleSet(idx)" class="hidden group-hover:block text-red-400 hover:text-red-300"><i class="fa-solid fa-times"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- 右侧：字段编辑 -->
+                    <div class="flex-1 bg-[var(--bg-panel)] p-4 flex flex-col">
+                        <div v-if="getActiveRuleSet()" class="flex-1 flex flex-col">
+                            <div class="mb-4">
+                                <label class="block text-[10px] text-[var(--text-dim)] uppercase mb-1">规则集名称</label>
+                                <input v-model="getActiveRuleSet().name" class="theme-input w-full text-sm font-bold text-amber-500">
+                            </div>
+                            <div class="flex-1 overflow-y-auto mb-4 bg-[var(--bg-badge)] rounded border border-[var(--border-dim)] p-2 space-y-2">
+                                <div v-for="(field, fIdx) in getActiveRuleSet().fields" :key="fIdx" class="flex gap-2 items-center">
+                                    <input v-model="field.label" placeholder="显示名 (如: 人口)" class="theme-input flex-1">
+                                    <input v-model="field.key" placeholder="Key (如: pop)" class="theme-input w-24 text-center font-mono text-[var(--text-accent)]">
+                                    <button @click="deleteField(fIdx)" class="text-red-400 hover:text-white px-2"><i class="fa-solid fa-times"></i></button>
+                                </div>
+                                <div v-if="getActiveRuleSet().fields.length === 0" class="text-center text-[var(--text-dim)] text-xs py-4">暂无字段</div>
+                            </div>
+                            <button @click="addFieldToActive" class="theme-btn w-full py-2 text-xs font-bold bg-[var(--bg-sidebar)] hover:text-white"><i class="fa-solid fa-plus mr-1"></i> 添加字段</button>
+                        </div>
+                        <div v-else class="flex-1 flex items-center justify-center text-[var(--text-dim)] italic">请选择左侧规则集</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </transition>
 </div>
 
 <script>
@@ -471,7 +593,13 @@
                 
                 // [新增] 批量处理
                 batchModal: { visible: false },
-                batchForm: { ownerId: '', color: '#ffffff' },
+                // [修改] 增加 schemaId 字段
+                batchForm: { ownerId: '', color: '#ffffff', schemaId: '' },
+
+                // [新增] 规则集支持
+                rule_sets: [],
+                ruleModal: { visible: false },
+                activeRuleSetId: '',
 
                 mapDimensions: { w: 0, h: 0 },
 
@@ -482,7 +610,10 @@
                     tolerance: 15,
                     blur: 0 
                 },
-                isScanning: false
+                isScanning: false,
+
+                // [新增] 用于像素级命中检测的 Mask 缓存
+                maskCanvasCache: new Map()
             }
         },
         computed: {
@@ -508,6 +639,93 @@
             window.removeEventListener('keydown', this.handleKeydown);
         },
         methods: {
+            // [新增] 核心：像素级命中检测辅助函数
+            async isPointInRegionMask(region, point) {
+                // point = {x, y} in map-local pixel coordinates
+                
+                // 1. 简单包围盒预检测 (快速排除)
+                const mapW = this.mapDimensions.w;
+                const mapH = this.mapDimensions.h;
+                const regionLeft = (region.x / 100) * mapW;
+                const regionTop = (region.y / 100) * mapH;
+                const regionWidth = (region.w / 100) * mapW;
+                const regionHeight = (region.h / 100) * mapH;
+
+                if (point.x < regionLeft || point.x > regionLeft + regionWidth || point.y < regionTop || point.y > regionTop + regionHeight) {
+                    return false;
+                }
+
+                // 2. 检查缓存
+                let maskImageData = this.maskCanvasCache.get(region.id);
+
+                if (!maskImageData) {
+                    // 首次加载：绘制 mask 到离屏 canvas 并缓存像素数据
+                    const img = new Image();
+                    await new Promise(resolve => {
+                        img.onload = resolve;
+                        img.src = region.maskData;
+                    });
+                    
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = img.width;
+                    tempCanvas.height = img.height;
+                    const tempCtx = tempCanvas.getContext('2d');
+                    tempCtx.drawImage(img, 0, 0);
+                    maskImageData = tempCtx.getImageData(0, 0, img.width, img.height);
+                    this.maskCanvasCache.set(region.id, maskImageData);
+                }
+
+                // 3. 计算点击点在 mask 上的相对坐标
+                const relativeX = point.x - regionLeft;
+                const relativeY = point.y - regionTop;
+
+                const maskCoordX = Math.floor((relativeX / regionWidth) * maskImageData.width);
+                const maskCoordY = Math.floor((relativeY / regionHeight) * maskImageData.height);
+
+                // 4. 读取像素的 Alpha 通道
+                const pixelIndex = (maskCoordY * maskImageData.width + maskCoordX) * 4;
+                const alpha = maskImageData.data[pixelIndex + 3];
+
+                // 5. 判断 Alpha 是否 > 0 (不透明)
+                return alpha > 128; // 使用一个阈值防止边缘半透明像素的误判
+            },
+            // --- 规则集管理 ---
+            addNewRuleSet() {
+                const id = 'rs_' + Date.now();
+                this.rule_sets.push({ id, name: '新规则集', fields: [] });
+                this.activeRuleSetId = id;
+            },
+            deleteRuleSet(idx) {
+                if (confirm('删除此规则集？使用此规则的地块将失去属性定义。')) {
+                    this.rule_sets.splice(idx, 1);
+                    if(this.rule_sets.length > 0) this.activeRuleSetId = this.rule_sets[0].id;
+                    else this.activeRuleSetId = '';
+                }
+            },
+            getActiveRuleSet() {
+                return this.rule_sets.find(r => r.id === this.activeRuleSetId);
+            },
+            addFieldToActive() {
+                const rs = this.getActiveRuleSet();
+                if(rs) rs.fields.push({ label: '新属性', key: 'new_attr' });
+            },
+            deleteField(idx) {
+                const rs = this.getActiveRuleSet();
+                if(rs) rs.fields.splice(idx, 1);
+            },
+            getFieldsBySchemaId(id) {
+                const rs = this.rule_sets.find(r => r.id === id);
+                return rs ? rs.fields : [];
+            },
+            // 当选择了规则集后，确保 item.stats 对象存在，防止报错
+            initItemStats(item) {
+                if (!item.stats) item.stats = {};
+                // 可选：预填默认值
+                const fields = this.getFieldsBySchemaId(item.schemaId);
+                fields.forEach(f => {
+                    if (item.stats[f.key] === undefined) item.stats[f.key] = '-';
+                });
+            },
             detectMapDimensions() {
                 const imgLayer = this.mapData.layers.find(l => l.type === 'image' && l.data);
                 if (imgLayer) {
@@ -554,39 +772,51 @@
             
             // 点击选择
             selectItem(type, idx, layer, event) {
+                // 如果是移动模式，不处理
+                if (this.tool === 'move') return;
+
+                // 阻止冒泡 (虽然在 onCanvasDown 里手动调用时没用，但对 Marker 的原生点击有用)
+                if (event && event.stopPropagation) event.stopPropagation();
+
                 if (this.tool !== 'select') return;
                 
                 const item = layer.data[idx];
                 this.activeLayerId = layer.id;
 
+                // ★★★ Shift 逻辑处理 ★★★
                 if (event && event.shiftKey) {
-                    // 多选模式
+                    // 多选模式：反转状态
                     if (this.selectedIds.has(item.id)) {
-                        this.selectedIds.delete(item.id); // 反选
+                        this.selectedIds.delete(item.id); // 以前选中 -> 现在取消 (实现反选)
                     } else {
-                        this.selectedIds.add(item.id); // 加选
+                        this.selectedIds.add(item.id);    // 以前没选 -> 现在选中 (实现加选)
                     }
                 } else {
-                    // 单选模式 (清除其他)
+                    // 单选模式：清空其他，只选当前
                     this.selectedIds.clear();
                     this.selectedIds.add(item.id);
                 }
 
-                // 更新用于属性面板显示的单个 item (显示最后选中的那个)
+                // 更新属性面板显示的 Item (如果有选中，显示最后一个选中的；如果全取消了，置空)
                 if (this.selectedIds.has(item.id)) {
                     this.selectedItem = item;
                 } else {
-                    this.selectedItem = null;
+                    // 如果取消了当前项，尝试找一个还在选中列表里的显示，或者置空
+                    if (this.selectedIds.size > 0) {
+                        const lastId = Array.from(this.selectedIds).pop();
+                        this.selectedItem = layer.data.find(i => i.id === lastId);
+                    } else {
+                        this.selectedItem = null;
+                    }
                 }
             },
-
             deleteSelectedItem() { this.batchDelete(); },
 
             // --- 画布交互 (包含框选) ---
             startPan(e) {
                 if(e.button === 1) { this.isDragging = true; this.lastMouse = { x: e.clientX, y: e.clientY }; }
             },
-            onCanvasDown(e) {
+            async onCanvasDown(e) {
                 if (e.button === 1) { 
                     this.isDragging = true;
                     this.lastMouse = { x: e.clientX, y: e.clientY };
@@ -597,19 +827,54 @@
                         this.isDragging = true;
                         this.lastMouse = { x: e.clientX, y: e.clientY };
                         document.body.style.cursor = 'grabbing';
-                    } else if (this.tool === 'select' && e.shiftKey) {
-                        // [新增] 开始框选
-                        this.selectionBox.visible = true;
-                        this.selectionBox.startX = e.clientX;
-                        this.selectionBox.startY = e.clientY;
-                        this.selectionBox.x = e.clientX;
-                        this.selectionBox.y = e.clientY;
-                        this.selectionBox.w = 0;
-                        this.selectionBox.h = 0;
+                        
                     } else if (this.tool === 'select') {
-                        // 普通点击空白处：清空选择
-                        this.selectedIds.clear();
-                        this.selectedItem = null;
+                        
+                        // 1. ★★★ 像素级命中检测 (Pixel-Perfect Hit Test) ★★★
+                        const mapRect = this.$refs.transformContainer.getBoundingClientRect();
+                        
+                        // 计算鼠标在未缩放地图上的像素坐标
+                        const mapLocalPoint = {
+                            x: ((e.clientX - mapRect.left) / mapRect.width) * this.mapDimensions.w,
+                            y: ((e.clientY - mapRect.top) / mapRect.height) * this.mapDimensions.h
+                        };
+
+                        let hitFound = false;
+                        if (this.activeLayer && this.activeLayer.type === 'region') {
+                            const regions = this.activeLayer.data;
+                            // 从上往下遍历 (渲染顺序的倒序)
+                            for (let i = regions.length - 1; i >= 0; i--) {
+                                const region = regions[i];
+                                if (await this.isPointInRegionMask(region, mapLocalPoint)) {
+                                    // 命中！
+                                    this.selectItem('region', i, this.activeLayer, e);
+                                    hitFound = true;
+                                    break; // 找到后立即停止
+                                }
+                            }
+                        }
+
+                        // 2. 如果没有命中任何地块，再处理背景操作
+                        if (!hitFound) {
+                            if (e.shiftKey) {
+                                // Shift + 点击空白处 -> 开始追加框选
+                                this.selectionBox.visible = true;
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                const localX = e.clientX - rect.left;
+                                const localY = e.clientY - rect.top;
+                                this.selectionBox.startX = localX;
+                                this.selectionBox.startY = localY;
+                                this.selectionBox.x = localX;
+                                this.selectionBox.y = localY;
+                                this.selectionBox.w = 0;
+                                this.selectionBox.h = 0;
+                            } else {
+                                // 普通点击空白处 -> 清空所有选择
+                                this.selectedIds.clear();
+                                this.selectedItem = null;
+                            }
+                        }
+
                     } else if (this.tool === 'region_paint') {
                         this.performFloodFill(e);
                     } else if (this.tool === 'auto_scan') {
@@ -630,8 +895,10 @@
                 
                 // [新增] 更新框选
                 if (this.selectionBox.visible) {
-                    const currentX = e.clientX;
-                    const currentY = e.clientY;
+                    // ★★★ 核心修复：获取局部坐标 ★★★
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const currentX = e.clientX - rect.left;
+                    const currentY = e.clientY - rect.top;
                     
                     const minX = Math.min(this.selectionBox.startX, currentX);
                     const minY = Math.min(this.selectionBox.startY, currentY);
@@ -664,31 +931,39 @@
             calculateMarqueeSelection() {
                 if (!this.activeLayer || !Array.isArray(this.activeLayer.data)) return;
                 
-                // 1. 获取框选区域相对于 transformContainer 的坐标 (因为地块坐标是相对于容器的%)
-                const containerRect = this.$refs.transformContainer.getBoundingClientRect();
+                // ★★★ 核心修复：坐标系对齐 ★★★
                 
-                // 选框在屏幕上的坐标
+                // 1. 获取地图本身的矩形 (受缩放和拖拽影响)
+                const mapRect = this.$refs.transformContainer.getBoundingClientRect();
+                
+                // 2. 获取视口容器的矩形 (即 transformContainer 的父级)
+                const viewRect = this.$refs.transformContainer.parentElement.getBoundingClientRect();
+
+                // 3. 计算地图相对于视口的偏移量 (Local Offset)
+                const mapLocalLeft = mapRect.left - viewRect.left;
+                const mapLocalTop = mapRect.top - viewRect.top;
+                
+                // 4. 选框坐标 (已经是局部坐标了，直接用)
                 const selLeft = this.selectionBox.x;
                 const selTop = this.selectionBox.y;
                 const selRight = selLeft + this.selectionBox.w;
                 const selBottom = selTop + this.selectionBox.h;
 
-                // 2. 遍历当前图层的所有元素
+                // 5. 遍历当前图层的所有元素
                 this.activeLayer.data.forEach(item => {
-                    // 计算 Item 在屏幕上的实际位置
-                    // item.x/y/w/h 是百分比 -> 像素
-                    const itemPixelX = (item.x / 100) * containerRect.width + containerRect.left;
-                    const itemPixelY = (item.y / 100) * containerRect.height + containerRect.top;
+                    // 计算 Item 在视口内的局部像素位置
+                    // 公式：(百分比 * 地图当前宽度) + 地图当前偏移
+                    const itemPixelX = (item.x / 100) * mapRect.width + mapLocalLeft;
+                    const itemPixelY = (item.y / 100) * mapRect.height + mapLocalTop;
                     
                     let itemPixelW = 0, itemPixelH = 0;
                     if (this.activeLayer.type === 'region') {
-                        itemPixelW = (item.w / 100) * containerRect.width;
-                        itemPixelH = (item.h / 100) * containerRect.height;
+                        itemPixelW = (item.w / 100) * mapRect.width;
+                        itemPixelH = (item.h / 100) * mapRect.height;
                     } else {
-                        // Marker 视为一个点，给一点容差
+                        // Marker 视为一个点，给一点容差 (不随缩放变化太大，或者跟随 mapRect.width 缩放亦可，这里保持固定大小体验更好)
                         itemPixelW = 20; 
                         itemPixelH = 20;
-                        // Marker 坐标通常是中心点
                         itemPixelX -= 10;
                         itemPixelY -= 10; 
                     }
@@ -721,7 +996,7 @@
                 this.batchModal.visible = true;
             },
             
-            // 批量更新属性 (Owner, Color)
+            // 批量更新属性 (Owner, Color, Schema)
             batchUpdate(prop) {
                 if (!this.activeLayer) return;
                 let count = 0;
@@ -729,6 +1004,14 @@
                     if (this.selectedIds.has(item.id)) {
                         if (prop === 'ownerId') item.ownerId = this.batchForm.ownerId;
                         if (prop === 'color') item.color = this.batchForm.color;
+                        
+                        // [新增] 批量应用规则集
+                        if (prop === 'schemaId') {
+                            item.schemaId = this.batchForm.schemaId;
+                            // 关键：切换规则后，立即初始化 stats 对象，补全字段
+                            this.initItemStats(item);
+                        }
+                        
                         count++;
                     }
                 });
@@ -916,7 +1199,9 @@
                     label: 'New Marker',
                     icon: 'fa-solid fa-map-pin',
                     color: '#f59e0b',
-                    type: 'custom'
+                    type: 'custom',
+                    schemaId: '', // [新增]
+                    stats: {}     // [新增]
                 };
                 
                 targetLayer.data.push(newPin);
@@ -1188,7 +1473,9 @@
                     h: (regionH / height) * 100,
                     maskData: maskCanvas.toDataURL(),
                     centerX: (sumX / count / width) * 100,
-                    centerY: (sumY / count / height) * 100
+                    centerY: (sumY / count / height) * 100,
+                    schemaId: '', // [新增]
+                    stats: {}     // [新增]
                 };
             },
 
@@ -1243,6 +1530,8 @@
                     if (region) {
                         region.name = 'New Region';
                         region.color = '#10b981';
+                        region.schemaId = ''; // [新增]
+                        region.stats = {};    // [新增]
                         targetLayer.data.push(region);
                         this.selectItem('region', targetLayer.data.length - 1, targetLayer);
                         this.tool = 'select'; 
@@ -1254,17 +1543,22 @@
             },
 
             exportJSON() {
-                // [更新] 导出逻辑，兼容 activeLayerId
-                const exportObj = {
-                    layers: this.mapData.layers,
-                    activeLayerId: this.activeLayerId
+                // [升级] 导出逻辑：打包规则集
+                const exportPackage = {
+                    meta: { type: 'Levant_Map_Package', version: '1.15', exportedAt: Date.now() },
+                    map_data: {
+                        layers: this.mapData.layers,
+                        activeLayerId: this.activeLayerId
+                    },
+                    embedded_rules: this.rule_sets // 携带规则集
                 };
-                const dataStr = JSON.stringify(exportObj, null, 2);
+                
+                const dataStr = JSON.stringify(exportPackage, null, 2);
                 const blob = new Blob([dataStr], { type: "application/json" });
                 const url = URL.createObjectURL(blob);
                 const link = document.createElement('a');
                 link.href = url;
-                link.download = `Map_Config_${Date.now()}.json`;
+                link.download = `MapPackage_${Date.now()}.json`;
                 link.click();
             },
 
@@ -1274,25 +1568,63 @@
                 const reader = new FileReader();
                 reader.onload = (evt) => {
                     try {
-                        const data = JSON.parse(evt.target.result);
-                        if (data.layers) {
-                            this.mapData = data;
-                            if (data.activeLayerId) this.activeLayerId = data.activeLayerId;
-                        } else if (data.image) {
-                            this.mapData.layers = [
-                                { id: 'l1', type: 'image', name: '底图', visible: true, opacity: 1, data: data.image },
-                                { id: 'l2', type: 'region', name: '领土', visible: true, opacity: 1, data: data.regions || [] },
-                                { id: 'l3', type: 'marker', name: '标记', visible: true, opacity: 1, data: data.pins || [] }
-                            ];
+                        const jsonRaw = JSON.parse(evt.target.result);
+                        
+                        // [升级] 智能识别包格式
+                        let newMapData = null;
+                        
+                        // Case A: 完整包 (含规则)
+                        if (jsonRaw.type === 'Levant_Map_Package' && jsonRaw.map_data) {
+                            newMapData = jsonRaw.map_data;
+                            // 合并规则集 (简单的 ID 去重合并)
+                            if (jsonRaw.embedded_rules) {
+                                jsonRaw.embedded_rules.forEach(newRs => {
+                                    if (!this.rule_sets.some(r => r.id === newRs.id)) {
+                                        this.rule_sets.push(newRs);
+                                    }
+                                });
+                            }
+                            alert(`导入成功！包含 ${jsonRaw.embedded_rules?.length || 0} 个规则集。`);
+                        } 
+                        // Case B: 仅地图数据 (V2)
+                        else if (jsonRaw.layers) {
+                            newMapData = jsonRaw;
                         }
-                        if (!this.activeLayerId && this.mapData.layers.length > 0) {
-                            this.activeLayerId = this.mapData.layers[this.mapData.layers.length - 1].id;
+                        // Case C: 旧版数据 (V1)
+                        else if (jsonRaw.image) {
+                            newMapData = {
+                                layers: [
+                                    { id: 'l1', type: 'image', name: '底图', visible: true, opacity: 1, data: jsonRaw.image },
+                                    { id: 'l2', type: 'region', name: '领土', visible: true, opacity: 1, data: jsonRaw.regions || [] },
+                                    { id: 'l3', type: 'marker', name: '标记', visible: true, opacity: 1, data: jsonRaw.pins || [] }
+                                ],
+                                activeLayerId: 'l2'
+                            };
                         }
-                        this.detectMapDimensions();
-                        this.resetView();
-                        alert("地图导入成功！");
+
+                        if (newMapData) {
+                            // 数据清洗：确保每个地块都有 schemaId 和 stats 字段
+                            newMapData.layers.forEach(l => {
+                                if (Array.isArray(l.data)) {
+                                    l.data.forEach(item => {
+                                        if (!item.stats) item.stats = {};
+                                        if (!item.schemaId) item.schemaId = '';
+                                    });
+                                }
+                            });
+
+                            this.mapData = newMapData;
+                            if (newMapData.activeLayerId) this.activeLayerId = newMapData.activeLayerId;
+                            else if (this.mapData.layers.length > 0) this.activeLayerId = this.mapData.layers[this.mapData.layers.length-1].id;
+                            
+                            this.detectMapDimensions();
+                            this.resetView();
+                        } else {
+                            throw new Error("未知文件格式");
+                        }
                     } catch (err) {
-                        alert("JSON 解析失败: " + err.message);
+                        alert("导入失败: " + err.message);
+                        console.error(err);
                     }
                     e.target.value = '';
                 };

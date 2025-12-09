@@ -21,6 +21,23 @@
     <script src="api_layer.js"></script>
     
     <style>
+        /* ★★★ [新增] 对话气泡小三角 ★★★ */
+        .speech-bubble {
+            position: relative;
+        }
+
+        .speech-bubble::before {
+            content: '';
+            position: absolute;
+            left: -10px; /* 三角形指向左侧 */
+            top: 14px; /* 对齐头像中间位置 */
+            width: 0;
+            height: 0;
+            border-top: 8px solid transparent;
+            border-bottom: 8px solid transparent;
+            border-right: 10px solid var(--bg-badge); /* 三角形颜色和背景一致 */
+            filter: drop-shadow(-1px 0 0 var(--border-dim)); /* 给三角形加个边框，更融合 */
+        }
         /* --- Logo 浮现动画 --- */
         .fade-slide-up-enter-active {
             transition: all 1.2s cubic-bezier(0.22, 1, 0.36, 1); /* 这种贝塞尔曲线会有弹性的感觉 */
@@ -206,6 +223,14 @@
             border: 1px solid var(--border-highlight);
             border-top: 1px solid rgba(255,255,255,0.15); /* 顶部高光 */
             box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3); 
+        }
+        /* --- ★★★ [性能优化] 地图拖拽时禁用子元素交互 ★★★ --- */
+        .map-dragging .pointer-events-auto {
+            pointer-events: none !important;
+        }
+        /* 优化图层渲染，开启 GPU 加速 */
+        .map-layer-optimized {
+            will-change: transform, opacity;
         }
 
         .info-card {
@@ -434,7 +459,151 @@
         .context-item:active { cursor: grabbing; }
         .context-item.active { border-left: 3px solid #10b981; }
         .context-item.disabled { opacity: 0.5; }
+        /* --- ★★★ [优化版] Galgame / VN 模式专用样式 ★★★ --- */
+        .vn-container {
+            position: absolute; inset: 0; z-index: 900;
+            background-color: #000;
+            display: flex; flex-direction: column;
+            overflow: hidden;
+            font-family: "Noto Serif SC", "Songti SC", serif; /* 剧情模式推荐衬线体 */
+        }
 
+        /* 1. 动态背景：缓慢缩放，营造电影感 */
+        @keyframes bg-pan {
+            0% { transform: scale(1.05); }
+            100% { transform: scale(1.15); }
+        }
+        .vn-background {
+            position: absolute; inset: -20px; z-index: 0;
+            background-size: cover; background-position: center;
+            filter: brightness(0.4) blur(2px); /* 压暗背景，突出人物 */
+            animation: bg-pan 20s alternate infinite linear;
+        }
+
+        /* 2. 立绘层：增加呼吸效果 */
+        .vn-tachie-stage {
+            position: absolute; inset: 0; z-index: 10;
+            display: flex; justify-content: center; align-items: flex-end;
+            pointer-events: none;
+            padding-bottom: 0; 
+        }
+
+        /* 立绘呼吸动画 */
+        @keyframes tachie-breathe {
+            0%, 100% { transform: translateY(0) scale(1); }
+            50% { transform: translateY(-3px) scale(1.005); }
+        }
+
+        .vn-tachie-img {
+            height: 95%; width: auto; max-width: none;
+            filter: drop-shadow(0 0 15px rgba(0,0,0,0.5));
+            animation: tachie-breathe 4s ease-in-out infinite;
+            transform-origin: bottom center;
+            transition: filter 0.3s;
+        }
+
+        /* 3. 对话框 UI：现代黑金/科技风格 */
+        .vn-ui-layer {
+            position: absolute; bottom: 0; left: 0; right: 0; height: 320px; z-index: 100;
+            background: linear-gradient(to top, rgba(0,0,0,1) 10%, rgba(0,0,0,0.8) 40%, transparent 100%);
+            display: flex; flex-direction: column; justify-content: flex-end;
+            padding: 0 5% 40px 5%;
+            cursor: pointer;
+        }
+
+        /* 名字铭牌 */
+        .vn-name-box {
+            align-self: flex-start;
+            background: rgba(0, 0, 0, 0.8);
+            border-left: 4px solid #fff;
+            padding: 8px 24px;
+            margin-bottom: 10px;
+            transform: skewX(-15deg); /* 倾斜设计 */
+            box-shadow: 5px 5px 0 rgba(0,0,0,0.3);
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255,255,255,0.1);
+            display: flex; align-items: center; gap: 10px;
+        }
+        .vn-name-text {
+            transform: skewX(15deg); /* 文字反倾斜 */
+            font-size: 24px; font-weight: 900; color: #fff;
+            letter-spacing: 0.05em;
+            text-shadow: 0 0 10px rgba(255,255,255,0.3);
+        }
+
+        /* 文本框 */
+        .vn-text-box {
+            background: rgba(15, 23, 42, 0.85);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 4px;
+            padding: 25px 40px;
+            min-height: 160px;
+            position: relative;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            display: flex;
+        }
+        /* 装饰线 */
+        .vn-text-box::before {
+            content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 2px;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent);
+        }
+
+        .vn-text-content {
+            font-size: 20px; line-height: 1.7; color: #e2e8f0;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+            flex: 1;
+        }
+
+        /* 旁白模式特殊样式 */
+        .vn-text-box.narrator-mode {
+            background: rgba(0, 0, 0, 0.6);
+            border: none;
+            text-align: center;
+            display: flex; align-items: center; justify-content: center;
+            font-style: italic;
+        }
+        .vn-text-box.narrator-mode .vn-text-content {
+            color: #94a3b8; font-size: 22px;
+        }
+
+        /* 下一句提示符 (跳动三角形) */
+        .vn-next-indicator {
+            position: absolute; bottom: 15px; right: 20px;
+            font-size: 14px; color: #38bdf8;
+            animation: bounce 1s infinite;
+        }
+
+        /* 4. 选项层优化 */
+        .vn-options-overlay {
+            position: absolute; inset: 0; z-index: 200;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(8px);
+            display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 24px;
+            animation: fadeIn 0.5s ease;
+        }
+        .vn-option-btn {
+            width: 70%; max-width: 800px; padding: 25px 40px;
+            background: linear-gradient(90deg, rgba(15, 23, 42, 0.9) 0%, rgba(15, 23, 42, 0.7) 100%);
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            border-left: 6px solid #38bdf8;
+            color: #fff; font-size: 18px; font-weight: bold; text-align: left;
+            transition: all 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+            cursor: pointer; position: relative; overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        .vn-option-btn:hover {
+            transform: translateX(20px);
+            background: rgba(56, 189, 248, 0.15);
+            border-color: #38bdf8;
+            box-shadow: 0 0 20px rgba(56, 189, 248, 0.4);
+        }
+        .vn-option-btn::after {
+            content: 'DECISION'; position: absolute; right: 10px; bottom: 5px;
+            font-size: 60px; font-weight: 900; color: rgba(255,255,255,0.03);
+            font-style: italic; pointer-events: none;
+        }
+        
         /* --- 海报生成专用样式 --- */
         #poster-canvas {
             position: fixed; left: -9999px; top: 0; width: 1080px; padding: 0; margin: 0;
@@ -920,6 +1089,80 @@
     <!-- 修改：增加 lg:flex-row 响应式方向，移动端默认 flex-col -->
     <main class="flex-1 flex flex-col lg:flex-row overflow-hidden z-10 relative">
         
+        <!-- ★★★ [优化] VN 剧场模式层 ★★★ -->
+        <transition name="fade">
+            <div v-if="vnMode" class="vn-container">
+                <!-- 1. 背景层 -->
+                <div class="vn-background" :style="{ backgroundImage: `url(${getMapBackground() || 'logo.png'})` }"></div>
+                
+                <!-- 2. 立绘层 -->
+                <div class="vn-tachie-stage">
+                    <!-- [修改] 移除了 transition 标签，使立绘切换变为即时刷新，不再有淡入淡出 -->
+                    <img v-if="vnCurrentLine && vnCurrentLine.role !== 'narrator' && getFactionAvatar(vnCurrentLine.role, vnCurrentLine.tag)"
+                         :key="vnCurrentLine.role + vnCurrentLine.tag"
+                         :src="getFactionAvatar(vnCurrentLine.role, vnCurrentLine.tag)"
+                         class="vn-tachie-img"
+                         :style="getAvatarStyleObj(vnCurrentLine.role, vnCurrentLine.tag)">
+                </div>
+
+                <!-- 3. UI 层 (对话框) -->
+                <div class="vn-ui-layer" @click="vnNextLine">
+                    
+                    <!-- 名字铭牌 (非旁白时显示) -->
+                    <transition name="slide-up">
+                        <div class="vn-name-box" v-if="vnCurrentLine && vnCurrentLine.role !== 'narrator'"
+                             :style="{ borderLeftColor: getFactionColor(vnCurrentLine.role) }">
+                            <div class="vn-name-text" :style="{ color: getFactionColor(vnCurrentLine.role) }">
+                                {{ getFactionName(vnCurrentLine.role) }}
+                            </div>
+                            <!-- 小 Logo -->
+                            <i :class="getFactionLogo(vnCurrentLine.role)" class="text-white opacity-50 text-xl transform skew-x-12"></i>
+                        </div>
+                    </transition>
+                    
+                    <!-- 文本框 -->
+                    <div class="vn-text-box" :class="{ 'narrator-mode': vnCurrentLine && vnCurrentLine.role === 'narrator' }">
+                        <div class="vn-text-content">
+                            <!-- 使用 v-html 允许简单的格式，如换行 -->
+                            <span v-html="vnDisplayedText"></span>
+                            <!-- 光标 -->
+                            <span v-if="vnIsTyping" class="inline-block w-2 h-5 bg-emerald-400 ml-1 animate-pulse align-middle"></span>
+                        </div>
+                        
+                        <!-- 下一句指示器 (打字结束且不是最后一句时显示) -->
+                        <div v-if="!vnIsTyping" class="vn-next-indicator">
+                             <i class="fa-solid fa-play"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. 选项层 -->
+                <div v-if="vnShowOptions" class="vn-options-overlay">
+                    <div class="text-3xl font-black text-white mb-8 uppercase tracking-[0.2em] drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]">
+                        Critical Decision
+                    </div>
+                    <button v-for="(opt, idx) in vnCurrentEvent.options" :key="idx" 
+                            @click="selectOption(vnCurrentEvent, opt); vnMode = false"
+                            class="vn-option-btn group">
+                        <div>
+                            <div class="text-xl mb-1">{{ typeof opt === 'object' ? opt.label : opt }}</div>
+                            <div v-if="typeof opt === 'object'" class="text-sm text-gray-400 font-normal">{{ opt.desc }}</div>
+                        </div>
+                    </button>
+                    <button v-if="!vnCurrentEvent.options || vnCurrentEvent.options.length === 0" 
+                            @click="vnMode = false"
+                            class="vn-option-btn justify-center text-center opacity-70 hover:opacity-100">
+                        [ END SCENE ]
+                    </button>
+                </div>
+                
+                <!-- 退出按钮 -->
+                <button @click="vnMode = false" class="absolute top-6 right-6 z-[300] text-white/30 hover:text-white bg-black/20 hover:bg-red-600/80 rounded-sm w-12 h-12 flex items-center justify-center transition border border-white/10 backdrop-blur-md">
+                    <i class="fa-solid fa-power-off"></i>
+                </button>
+            </div>
+        </transition>
+        
         <!-- 左侧：资料库 -->
         <!-- 修改：增加 h-full 和 overflow-hidden -->
         <aside role="region" aria-label="Library Panel" 
@@ -1122,19 +1365,34 @@
                                     <div class="flex items-center gap-4 font-mono-tech text-sm font-bold tracking-wider text-[var(--text-dim)]">
                                         <span class="text-[var(--text-dim)]"><i class="fa-regular fa-clock mr-2"></i>{{ formatTimeSpan(event) }}</span>
                                         <span class="w-px h-4 bg-[var(--border-dim)]"></span>
-                                        <span class="uppercase flex items-center gap-2" :style="{ color: getFactionColor(event.factionId) }">
-                                            <!-- [修改] Header Logo -->
-                                            <img v-if="isImage(getFactionLogo(event.factionId))" 
-                                                 :src="getFactionLogo(event.factionId)" 
-                                                 class="h-4 w-auto max-w-[30px] object-contain border border-white/20 rounded-[1px] shadow-sm">
-                                            <i v-else class="fa-solid fa-tower-broadcast text-xs opacity-60"></i>
-                                            {{ getFactionName(event.factionId) }}
-                                        </span>
+                                        <div class="flex items-center gap-3">
+                                            <!-- 遍历所有参与者 -->
+                                            <span v-for="(fid, fIdx) in (event.factionIds && event.factionIds.length ? event.factionIds : [event.factionId])" 
+                                                :key="fIdx"
+                                                class="uppercase flex items-center gap-1.5" 
+                                                :style="{ color: getFactionColor(fid) }">
+                                                
+                                                <!-- 分隔符 (仅在非第一个元素前显示) -->
+                                                <span v-if="fIdx > 0" class="text-[var(--text-dim)] text-[10px] opacity-50 mx-0.5">&</span>
+
+                                                <!-- Logo -->
+                                                <img v-if="isImage(getFactionLogo(fid))" 
+                                                    :src="getFactionLogo(fid)" 
+                                                    class="h-4 w-auto max-w-[24px] object-contain border border-white/20 rounded-[1px] shadow-sm">
+                                                <i v-else :class="getFactionLogo(fid) || 'fa-solid fa-users'" class="text-xs opacity-80"></i>
+                                                
+                                                <!-- Name (如果是多个，字体稍微小一点点) -->
+                                                <span :class="(event.factionIds && event.factionIds.length > 1) ? 'text-[10px]' : 'text-xs'">
+                                                    {{ getFactionName(fid) }}
+                                                </span>
+                                            </span>
+                                        </div>
                                     </div>
+                                    <!-- 修改后 -->
                                     <div class="flex gap-4 items-center">
-                                        <!-- [新增] 剧场模式/AVG模式切换按钮 -->
-                                        <button @click.stop="event.isVNMode = !event.isVNMode" :class="event.isVNMode ? 'text-pink-500' : 'text-[var(--text-dim)]'" class="hover:text-pink-400 transition" title="切换 AVG 剧场模式">
-                                            <i class="fa-solid fa-masks-theater"></i>
+                                        <!-- 新增：进入沉浸式剧场 -->
+                                        <button @click.stop="startVNMode(event)" class="text-[var(--text-dim)] hover:text-pink-500 transition" title="Play Scene (Galgame Mode)">
+                                            <i class="fa-solid fa-clapperboard"></i>
                                         </button>
                                         
                                         <button @click.stop="exportAsImage('event', event)" class="text-[var(--text-dim)] hover:text-emerald-400 transition" title="生成情报简报海报"><i class="fa-solid fa-camera"></i></button>
@@ -1147,6 +1405,34 @@
                                     <!-- 编辑模式 -->
                                     <div v-if="isEditingEvent(tIdx, eIdx)" @click.stop class="mb-6 space-y-4">
                                         <div class="flex gap-2"><input v-model="event.timeStart" class="input-tech p-2 w-1/2 theme-rounded-sm font-bold text-center" placeholder="t('label_start')"><input v-model="event.timeEnd" class="input-tech p-2 w-1/2 theme-rounded-sm font-bold text-center" placeholder="t('label_end')"></div>
+                                        
+                                        <!-- [新增] 内联多行动方修改 -->
+                                        <div class="bg-[var(--bg-deep)] p-2 theme-rounded-sm border border-[var(--border-dim)] flex flex-wrap gap-2 items-center">
+                                            <div class="text-[10px] font-bold text-[var(--text-dim)] uppercase mr-2">ACTORS:</div>
+                                            
+                                            <!-- 遍历当前 IDs -->
+                                            <div v-for="(fid, idx) in (event.factionIds || [event.factionId])" :key="idx" 
+                                                class="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border bg-black/20"
+                                                :style="{ color: getFactionColor(fid), borderColor: getFactionColor(fid) }">
+                                                {{ getFactionName(fid) }}
+                                                <button @click="event.factionIds.splice(idx, 1); if(event.factionIds.length) event.factionId = event.factionIds[0];" class="hover:text-red-500 ml-1"><i class="fa-solid fa-times"></i></button>
+                                            </div>
+
+                                            <!-- 添加按钮 -->
+                                            <select @change="(e) => { 
+                                                if(!event.factionIds) event.factionIds = event.factionId ? [event.factionId] : [];
+                                                if(!event.factionIds.includes(e.target.value)) {
+                                                    event.factionIds.push(e.target.value);
+                                                    event.factionId = event.factionIds[0]; // 更新主ID用于颜色
+                                                }
+                                                e.target.value=''; 
+                                            }" class="bg-transparent text-[var(--text-dim)] text-xs font-bold outline-none cursor-pointer w-4 hover:text-white">
+                                                <option value="" disabled selected>+</option>
+                                                <option value="global">{{ t('option_global') }}</option>
+                                                <option v-for="p in players" :value="p.id" :disabled="(event.factionIds||[]).includes(p.id)">{{ p.name }}</option>
+                                            </select>
+                                        </div>                                        
+                                        <!-- [新增结束] -->
                                         <textarea v-model="event.summary" class="w-full h-24 input-tech p-3 theme-rounded-sm text-lg font-bold resize-none" placeholder="t('label_summary') + '...'"></textarea>
                                         
                                         <div class="bg-[var(--bg-badge)] p-3 theme-rounded-sm border border-[var(--border-dim)]">
@@ -1329,85 +1615,53 @@
                                         
                                         <!-- 编辑模式 (保持不变) -->
                                         <div v-if="isEditingEvent(tIdx, eIdx)" @click.stop class="p-8"><textarea v-model="event.content" class="w-full h-96 input-tech p-4 font-mono-tech rounded"></textarea></div>
-                                        
-                                <!-- [修改后 v4.0] 分支 A: 纯净 16:9 自适应版 (无黑边) -->
-                                        <!-- 
-                                        1. aspect-video: 强制 16:9 比例
-                                        2. w-full: 宽度填满父容器
-                                        3. h-auto: 高度自动根据宽度计算，绝不留黑边
-                                        -->
-                                        <div v-else-if="event.isVNMode" class="relative w-full aspect-video bg-black rounded-lg shadow-2xl overflow-hidden border border-[var(--border-dim)] select-none group ring-1 ring-white/10">
-                                            
-                                            <!-- A. 背景层 -->
-                                            <div class="absolute inset-0 bg-cover bg-center transition-all duration-700 ease-in-out"
-                                                :style="{ 
-                                                    backgroundImage: `url(${getMapBackground() || 'logo.png'})`, 
-                                                    filter: 'blur(3px) brightness(0.5)' 
-                                                }">
-                                            </div>
-                                            <!-- 装饰：暗角 -->
-                                            <div class="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.6)_100%)]"></div>
 
-                                            <!-- B. 立绘层 (Tachie) -->
-                                            <div class="absolute bottom-0 left-1/2 -translate-x-1/2 h-[95%] w-full flex items-end justify-center pointer-events-none z-0">
-                                                <!-- [修改] 使用 getFactionAvatar 优先获取立绘 -->
-                                                <img v-if="getFactionAvatar(event.factionId)" 
-                                                        :src="getFactionAvatar(event.factionId)" 
-                                                        class="h-full w-auto max-w-full object-contain drop-shadow-[0_5px_15px_rgba(0,0,0,0.8)]">
-                                                
-                                                <!-- 兜底：如果没有立绘（且Logo也不是图片），显示抽象Logo图标 -->
-                                                <i v-else :class="getFactionLogo(event.factionId)" class="text-[20vh] opacity-10 mb-[10%]" :style="{ color: getFactionColor(event.factionId) }"></i>
-                                            </div>
-
-                                            <!-- C. UI 层：选项 (Options) -->
-                                            <!-- 使用 % 定位，保证在不同缩放比例下位置相对固定 -->
-                                            <div v-if="event.options && event.options.length > 0" class="absolute bottom-[30%] left-0 right-0 z-20 flex flex-col items-center gap-2 w-full px-[10%]">
-                                                <button v-for="(opt, optIdx) in event.options" :key="optIdx" 
-                                                        @click.stop="selectOption(event, opt)"
-                                                        class="w-full max-w-2xl py-[1.5%] px-6 bg-black/80 hover:bg-[var(--text-accent)]/90 border border-white/20 hover:border-white text-white transition-all duration-200 shadow-lg text-left group backdrop-blur-sm flex items-center justify-between text-xs lg:text-sm">
-                                                    
-                                                    <div v-if="typeof opt === 'object'" class="flex-1 min-w-0">
-                                                        <span class="font-bold group-hover:text-white truncate block">{{ opt.label }}</span>
-                                                        <!-- 只有在屏幕够宽时才显示描述，防止挤压 -->
-                                                        <span class="text-[10px] text-gray-400 group-hover:text-white/80 mt-0.5 hidden sm:block truncate">{{ opt.desc }}</span>
-                                                    </div>
-                                                    <div v-else class="font-bold truncate">{{ opt }}</div>
-                                                    
-                                                    <i class="fa-solid fa-chevron-right opacity-0 group-hover:opacity-100 ml-3 text-xs shrink-0"></i>
-                                                </button>
-                                            </div>
-
-                                            <!-- D. UI 层：对话框 -->
-                                            <!-- 高度锁定为容器高度的 28% -->
-                                            <div class="absolute bottom-0 left-0 right-0 z-10 w-full h-[28%] bg-black/85 border-t border-white/10 backdrop-blur-md flex flex-col">
-                                                
-                                                <!-- 顶部彩色条 -->
-                                                <div class="absolute top-0 left-0 right-0 h-[2px] shadow-[0_0_15px_currentColor]" :style="{ color: getFactionColor(event.factionId), backgroundColor: getFactionColor(event.factionId) }"></div>
-
-                                                <!-- 名字栏 -->
-                                                <div class="absolute -top-[1.8em] left-0 bg-black/90 border-t border-r border-white/10 px-4 py-1 flex items-center gap-2 rounded-tr-lg">
-                                                    <div class="w-1.5 h-1.5 rounded-full animate-pulse" :style="{ backgroundColor: getFactionColor(event.factionId) }"></div>
-                                                    <span class="text-xs lg:text-sm font-black tracking-widest text-white uppercase truncate max-w-[150px]">{{ getFactionName(event.factionId) }}</span>
-                                                </div>
-
-                                                <!-- 文本内容 -->
-                                                <div class="flex-1 p-4 lg:p-6 overflow-y-auto scrollbar-hide">
-                                                    <!-- 使用 vh 或 % 设置字体大小，确保在小窗口下字不会太大 -->
-                                                    <div class="text-[clamp(12px,2.2vh,18px)] text-gray-200 font-serif leading-relaxed tracking-wide md-content drop-shadow-sm" 
-                                                        v-html="renderMarkdown(event.content)">
-                                                    </div>
-                                                </div>
-
-                                                <!-- 下一步提示 -->
-                                                <div class="absolute bottom-2 right-3 animate-bounce text-white/40 text-sm">
-                                                    <i class="fa-solid fa-caret-down"></i>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <!-- 分支 B: 原始文档模式 (保持不变) -->
                                         <div v-else>
-                                            <div class="md-content text-lg" v-html="renderMarkdown(event.content)"></div>
+                                            
+                                            <!-- 分支 A: 如果是剧本格式 (JSON)，渲染为剧本列表 -->
+                                            <div v-if="isJsonScript(event.content)" class="space-y-4 font-serif text-lg leading-relaxed text-[var(--text-main)]">
+                                                <div v-for="(line, lIdx) in parseScript(event.content)" :key="lIdx" class="flex gap-4 items-start">
+                                                    
+                                                    <!-- 1. 头像+名字容器 (左侧) -->
+                                                    <div class="shrink-0 w-32 flex flex-col items-end">
+                                                        
+                                                        <!-- A. 角色头像 -->
+                                                        <!-- 如果是旁白 (narrator)，则不显示头像 -->
+                                                        <div v-if="line.role !== 'narrator'" class="w-10 h-10 theme-rounded-sm bg-[var(--bg-badge)] border border-[var(--border-dim)] flex items-center justify-center text-lg shadow-inner overflow-hidden mb-1">
+                                                            <!-- 优先显示图片 Logo -->
+                                                            <img v-if="isImage(getFactionLogo(line.role))" 
+                                                                :src="getFactionLogo(line.role)" 
+                                                                class="w-full h-full object-contain">
+                                                            <!-- 否则显示 FontAwesome Icon -->
+                                                            <i v-else 
+                                                            :class="getFactionLogo(line.role)" 
+                                                            :style="{ color: getFactionColor(line.role) }">
+                                                            </i>
+                                                        </div>
+                                                        
+                                                        <!-- B. 角色名 -->
+                                                        <div class="font-bold text-sm" 
+                                                            :style="{ color: line.role === 'narrator' ? 'var(--text-dim)' : getFactionColor(line.role) }">
+                                                            {{ line.role === 'narrator' ? '旁白' : getFactionName(line.role) }}
+                                                        </div>
+                                                    </div>
+
+                                                    <!-- 2. 对话气泡 (右侧) -->
+                                                    <div class="flex-1 mt-1">
+                                                        <!-- 如果是旁白，使用引用块样式 -->
+                                                        <div v-if="line.role === 'narrator'" class="pl-3 border-l-2 border-[var(--border-dim)] text-[var(--text-dim)] italic">
+                                                            {{ line.text }}
+                                                        </div>
+                                                        <!-- 如果是对话，使用气泡样式 -->
+                                                        <div v-else class="bg-[var(--bg-badge)] p-4 theme-rounded-sm border border-[var(--border-dim)] relative speech-bubble">
+                                                            {{ line.text }}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- 分支 B: 如果是普通文本，走 Markdown 渲染 -->
+                                            <div v-else class="md-content text-lg" v-html="renderMarkdown(event.content)"></div>
                                             <!-- 原有的选项显示代码保留在这里，作为文档模式下的备选 -->
                                             <div v-if="event.options && event.options.length > 0" class="mt-8 pt-6 border-t border-[var(--border-dim)]">
                                                 <!-- ... 原有的选项列表代码 ... -->
@@ -1508,6 +1762,7 @@
                         <button @click="cycleMapDisplayMode" :title="'Current: ' + mapView.displayMode" class="text-[var(--text-dim)] hover:text-[var(--text-main)] transition w-6 text-center">
                             <i v-if="mapView.displayMode === 'full'" class="fa-solid fa-tags"></i>
                             <i v-else-if="mapView.displayMode === 'icon'" class="fa-solid fa-icons"></i>
+                            <i v-else-if="mapView.displayMode === 'flag'" class="fa-solid fa-flag"></i> <!-- 新增旗帜图标 -->
                             <i v-else class="fa-solid fa-circle-dot"></i>
                         </button>
 
@@ -1523,14 +1778,15 @@
                 <!-- 地图画布容器 -->
                 <!-- 关键样式: overflow-hidden (隐藏超出部分), cursor-move (提示可拖拽) -->
                 <div class="map-viewport flex-1 overflow-hidden relative bg-[#050505] cursor-move"
-                     @wheel.prevent="onMapWheel"
-                     @mousedown="onMapMouseDown"
-                     @mousemove="onMapMouseMove"
-                     @mouseup="onMapMouseUp"
-                     @mouseleave="onMapMouseUp"
-                     @touchstart="onMapMouseDown"
-                     @touchmove="onMapMouseMove"
-                     @touchend="onMapMouseUp">
+                    :class="{ 'map-dragging': mapView.isDragging }" 
+                    @wheel.prevent="onMapWheel"
+                    @mousedown="onMapMouseDown"
+                    @mousemove="onMapMouseMove"
+                    @mouseup="onMapMouseUp"
+                    @mouseleave="onMapMouseUp"
+                    @touchstart="onMapMouseDown"
+                    @touchmove="onMapMouseMove"
+                    @touchend="onMapMouseUp">
                     
                     <!-- 空状态 -->
                     <div v-if="!map_data.image" class="absolute inset-0 flex flex-col items-center justify-center text-[var(--text-dim)] opacity-30 pointer-events-none gap-4">
@@ -1549,9 +1805,9 @@
                         :style="{ transform: `translate(${mapView.x}px, ${mapView.y}px) scale(${mapView.scale})`, width: '100%', gridTemplateAreas: '\'stack\'' }"
                         @click="onMapBackgroundClick">
                         
-                        <!-- [修复] 图层渲染循环 -->
+                        <!-- [修复] 图层渲染循环 (添加 map-layer-optimized 类) -->
                         <div v-for="(layer, lIdx) in map_data.layers" :key="layer.id"
-                             class="w-full h-full pointer-events-none"
+                             class="w-full h-full pointer-events-none map-layer-optimized"
                              :style="{ zIndex: lIdx, opacity: layer.visible ? layer.opacity : 0, display: layer.visible ? 'block' : 'none', gridArea: 'stack' }">
 
                             <!-- Type A: 图像层 (Image) -->
@@ -1560,61 +1816,101 @@
 
                             <!-- Type B: 地块层 (Region) -->
                             <template v-if="layer.type === 'region'">
-                                <!-- 这一层必须 absolute inset-0 覆盖在 Grid 单元格上，否则如果是空 div 可能会导致尺寸异常 -->
+                                <!-- 这一层必须 absolute inset-0 覆盖在 Grid 单元格上 -->
                                 <div class="absolute inset-0 w-full h-full">
                                     <!-- B1. 遮罩交互区 (SVG Mask) -->
-                                    <div v-for="(reg, rIdx) in layer.data" :key="reg.id"
-                                         class="absolute pointer-events-auto"
-                                         :class="mapToolMode === 'region' && map_data.activeLayerId === layer.id ? 'cursor-pointer' : ''"
-                                         :style="{ left: reg.x + '%', top: reg.y + '%', width: reg.w + '%', height: reg.h + '%' }"
-                                         @click.stop="onRegionClick(reg, rIdx, layer)">
-                                         
-                                         <svg class="w-full h-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
-                                            <defs>
-                                                <mask :id="'mask-' + reg.id">
-                                                    <image :href="reg.maskData" x="0" y="0" width="100" height="100" preserveAspectRatio="none" />
-                                                </mask>
-                                            </defs>
-                                            <rect x="0" y="0" width="100" height="100" 
-                                                  :fill="getRegionColor(reg)" 
-                                                  fill-opacity="0.5"
-                                                  :mask="'url(#mask-' + reg.id + ')'" 
-                                                  class="transition-opacity duration-200 hover:opacity-80" />
-                                         </svg>
+                            <!-- [修改] class 中将 pointer-events-auto 改为 pointer-events-none -->
+                            <div v-for="(reg, rIdx) in layer.data" :key="reg.id"
+                                v-memo="[reg.id, reg.x, reg.y, reg.w, reg.h, reg.color, reg.ownerId, reg.icon, mapToolMode, map_data.activeLayerId === layer.id, mapView.displayMode, dataVersion]"
+                                class="absolute pointer-events-none region-hit-target"
+                                :data-rid="reg.id"
+                                :data-lid="layer.id"
+                                :data-idx="rIdx"
+                                :class="mapToolMode === 'region' ? 'cursor-pointer' : ''"
+                                :style="{ left: reg.x + '%', top: reg.y + '%', width: reg.w + '%', height: reg.h + '%' }"
+                                @click.stop="onRegionClick(reg, rIdx, layer)">
+                                
+                                <!-- [修改] 给 SVG 增加 pointer-events-auto，让实际形状恢复交互 -->
+                                <svg class="w-full h-full overflow-visible pointer-events-auto" viewBox="0 0 100 100" preserveAspectRatio="none">
+                                    <defs>
+                                        <mask :id="'mask-' + reg.id">
+                                            <image :href="reg.maskData" x="0" y="0" width="100" height="100" preserveAspectRatio="none" />
+                                        </mask>
+                                    </defs>
+                                            
+                                    <!-- 分支 A: 旗帜填充模式 (智能包围盒投影) -->
+                                            <g v-if="mapView.displayMode === 'flag' && isImage(getRegionOwnerLogo(reg))">
+                                                <!-- 1. 底色层 -->
+                                                <rect x="0" y="0" width="100" height="100" 
+                                                    :fill="getRegionColor(reg)" 
+                                                    fill-opacity="1" 
+                                                    :mask="'url(#mask-' + reg.id + ')'" />
+                                                
+                                                <!-- 2. 图案层 (调用 getFlagTransform 获取精准坐标) -->
+                                                <!-- 
+                                                    preserveAspectRatio="none": 
+                                                    这里必须设为 none！因为我们的 getFlagTransform 函数
+                                                    已经手动计算出了保持比例所需的精确 width/height。
+                                                    如果我们再让 SVG 去自作聪明地 slice，反而会破坏我们的计算。
+                                                -->
+                                                <image :href="getRegionOwnerLogo(reg)"
+                                                    :x="getFlagTransform(reg, layer).x"
+                                                    :y="getFlagTransform(reg, layer).y"
+                                                    :width="getFlagTransform(reg, layer).w"
+                                                    :height="getFlagTransform(reg, layer).h"
+                                                    preserveAspectRatio="none" 
+                                                    :mask="'url(#mask-' + reg.id + ')'"
+                                                    class="transition-opacity duration-200 hover:opacity-90" />
+                                            </g>
+                                                
+                                            <!-- 分支 B: 默认纯色填充 -->
+                                            <rect v-else
+                                                x="0" y="0" width="100" height="100" 
+                                                :fill="getRegionColor(reg)" 
+                                                fill-opacity="0.5"
+                                                :mask="'url(#mask-' + reg.id + ')'" 
+                                                class="transition-opacity duration-200 hover:opacity-80" />
+                                        </svg>
                                     </div>
 
                                     <!-- B2. 徽章显示区 -->
+                                    <!-- ★★★ [性能优化] v-memo: 分离渲染，标牌和缩放/显示模式强相关 ★★★ -->
+                                    <!-- B2. 徽章显示区 -->
                                     <div v-for="(reg, rIdx) in layer.data" :key="'lbl-'+reg.id"
-                                         class="absolute w-0 h-0 flex items-center justify-center pointer-events-none"
-                                         :style="{ left: reg.centerX + '%', top: reg.centerY + '%' }">
-                                         
-                                         <div class="flex items-center gap-1.5 bg-black/70 backdrop-blur-[2px] border border-white/10 px-2 py-1 theme-rounded-sm shadow-[0_4px_6px_rgba(0,0,0,0.5)] transition-all duration-200"
-                                              :style="{ transform: `scale(${mapView.badgeScale})` }">
-                                             
-                                             <!-- A. 微型模式 (Dot) -->
-                                             <div v-if="mapView.displayMode === 'dot'" class="w-2 h-2 rounded-full" :style="{ backgroundColor: getRegionColor(reg) }"></div>
+                                        v-memo="[reg.id, reg.centerX, reg.centerY, reg.name, reg.ownerId, reg.icon, reg.color, mapView.badgeScale, mapView.displayMode]"
+                                        class="absolute w-0 h-0 flex items-center justify-center pointer-events-none"
+                                        :style="{ left: reg.centerX + '%', top: reg.centerY + '%' }">
+                                        
+                                        <!-- ★★★ [新增] 包裹一层 v-if，只有非 flag 模式才显示徽章 ★★★ -->
+                                        <div v-if="mapView.displayMode !== 'flag'" 
+                                            class="flex items-center gap-1.5 bg-black/70 backdrop-blur-[2px] border border-white/10 px-2 py-1 theme-rounded-sm shadow-[0_4px_6px_rgba(0,0,0,0.5)] transition-all duration-200"
+                                            :style="{ transform: `scale(${mapView.badgeScale})` }">
+                                            
+                                            <!-- (内部内容保持不变: dot/icon/full 逻辑) -->
+                                            <!-- A. 微型模式 (Dot) -->
+                                            <div v-if="mapView.displayMode === 'dot'" class="w-2 h-2 rounded-full" :style="{ backgroundColor: getRegionColor(reg) }"></div>
 
-                                             <!-- B. 图标模式/全模式 (Icon) -->
-                                             <template v-else>
+                                            <!-- B. 图标模式/全模式 (Icon) -->
+                                            <template v-else>
                                                 <img v-if="isImage(getRegionOwnerLogo(reg))" 
                                                     :src="getRegionOwnerLogo(reg)" 
                                                     class="h-5 w-auto max-w-[40px] object-contain shadow-sm border border-white/10 rounded-[1px] self-center">
                                                 <i v-else :class="getRegionOwnerLogo(reg)" 
                                                     class="text-sm drop-shadow-[0_1px_2px_rgba(0,0,0,1)] self-center" 
                                                     :style="{ color: getRegionColor(reg) }"></i>
-                                                 
-                                                 <!-- C. 仅全模式显示文字 (Text) -->
-                                                 <div v-if="mapView.displayMode === 'full'" class="flex flex-col leading-none">
+                                                
+                                                <!-- C. 仅全模式显示文字 (Text) -->
+                                                <div v-if="mapView.displayMode === 'full'" class="flex flex-col leading-none">
                                                     <span class="text-[10px] font-bold whitespace-nowrap shadow-black drop-shadow-md"
                                                         :style="{ color: getRegionColor(reg) }">
                                                         {{ reg.name || 'Unnamed' }}
                                                     </span>
-                                                     <span v-if="reg.ownerId" class="text-[8px] font-mono text-[var(--text-dim)] uppercase tracking-tight scale-90 origin-left mt-0.5 truncate">
+                                                    <span v-if="reg.ownerId" class="text-[8px] font-mono text-[var(--text-dim)] uppercase tracking-tight scale-90 origin-left mt-0.5 truncate">
                                                         {{ getFactionName(reg.ownerId) }}
-                                                     </span>
-                                                 </div>
-                                             </template>
-                                         </div>
+                                                    </span>
+                                                </div>
+                                            </template>
+                                        </div>
                                     </div>
                                 </div>
                             </template>
@@ -1623,7 +1919,9 @@
                             <template v-if="layer.type === 'marker'">
                                 <!-- 同样加上 absolute inset-0 -->
                                 <div class="absolute inset-0 w-full h-full">
+                                    <!-- ★★★ [性能优化] v-memo: 标记点优化 ★★★ -->
                                     <div v-for="(pin, pIdx) in layer.data" :key="pin.id" 
+                                         v-memo="[pin.id, pin.x, pin.y, pin.type, pin.label, pin.linkId, pin.color, pin.icon, mapToolMode, map_data.activeLayerId === layer.id, mapView.badgeScale, mapView.displayMode]"
                                          class="absolute transform -translate-x-1/2 -translate-y-1/2 transition group flex flex-col items-center justify-center origin-center pointer-events-auto"
                                          :class="mapToolMode === 'pin' && map_data.activeLayerId === layer.id ? 'cursor-pointer' : ''"
                                          :style="{ left: pin.x + '%', top: pin.y + '%', transform: `translate(-50%, -50%) scale(${mapView.badgeScale})` }"
@@ -1913,13 +2211,22 @@
                 </div>
             </div>
 
+            <!-- 右侧面板下半部分：编辑器与底栏 -->
             <div class="flex-1 flex flex-col bg-[var(--bg-panel)] relative overflow-hidden">
                 
                 <!-- 1. 顶部：AI 按钮栏 -->
                 <div class="p-4 bg-[var(--bg-sidebar)] border-b border-[var(--border-dim)] shadow-xl z-20 shrink-0">
-                    <div class="flex justify-between items-center mb-2">
-                        <span class="text-[10px] font-bold text-indigo-400 uppercase tracking-widest"><i class="fa-solid fa-microchip mr-1"></i> {{ t('ai_core_label') }}</span>
-                        <!-- [新增] 安科模式开关 -->
+                    <div class="flex justify-between items-center mb-2 gap-2">
+                        <span class="text-[10px] font-bold text-indigo-400 uppercase tracking-widest flex-1"><i class="fa-solid fa-microchip mr-1"></i> {{ t('ai_core_label') }}</span>
+                        <!-- 新增：模式切换 -->
+                        <button @click="useGalgamePrompt = !useGalgamePrompt" 
+                            :class="useGalgamePrompt ? 'bg-purple-600 border-purple-500 text-white' : 'bg-[var(--bg-badge)] border-[var(--border-dim)] text-[var(--text-dim)]'"
+                            class="px-3 py-1.5 theme-rounded-sm border text-[10px] font-bold transition-all duration-300 flex items-center gap-2">
+                            <i :class="useGalgamePrompt ? 'fa-solid fa-comments' : 'fa-solid fa-file-lines'"></i>
+                            <span>{{ useGalgamePrompt ? 'MODE: GALGAME' : 'MODE: REPORT' }}</span>
+                        </button>
+
+                        <!-- 安科模式开关 -->
                         <button @click="generateOptions = !generateOptions" 
                             :class="generateOptions ? 'bg-pink-600 border-pink-500 text-white shadow-[0_0_15px_rgba(219,39,119,0.4)]' : 'bg-[var(--bg-badge)] border-[var(--border-dim)] text-[var(--text-dim)] hover:text-[var(--text-main)]'"
                             class="px-3 py-1.5 theme-rounded-sm border text-[10px] font-bold transition-all duration-300 flex items-center gap-2">
@@ -1934,18 +2241,33 @@
                 </div>
 
                 <!-- 2. 中间：滚动输入区域 (关键：flex-1 overflow-y-auto) -->
-                <div class="flex-1 overflow-y-auto p-0 min-h-0">
+                <div class="flex-1 overflow-y-auto p-0 min-h-0 relative"> <!-- relative 是为了让浮动按钮定位 -->
                     
                     <!-- 行动方 & 时间 -->
-                    <div class="p-5 border-b border-[var(--border-dim)] flex gap-4 bg-[var(--bg-header)]">
-                        <div class="flex-1">
-                            <label class="block text-[10px] font-bold text-[var(--text-dim)] uppercase mb-1 tracking-wider">{{ t('label_actor') }}</label>
-                            <select v-model="editor.factionId" class="w-full input-tech theme-rounded-sm p-3 text-sm font-bold outline-none">
-                                <option value="" disabled selected>{{ t('option_ai_auto') }}</option>
-                                <option value="global">{{ t('option_global') }}</option>
-                                <option v-for="p in players" :value="p.id">{{ p.name }}</option>
-                            </select>
-                        </div>
+                    <div class="p-5 border-b border-[var(--border-dim)] flex gap-4 bg-[var(--bg-header)] items-start">
+                        <div class="flex-1 space-y-2">
+                            <div>
+                                <label class="block text-[10px] font-bold text-[var(--text-dim)] uppercase mb-1 tracking-wider">{{ t('label_actor') }} (Multi)</label>
+                                <div class="w-full input-tech theme-rounded-sm p-2 flex flex-wrap gap-2 min-h-[46px]">
+                                    <!-- 1. 已选列表 -->
+                                    <div v-for="(fid, idx) in editor.factionIds" :key="idx" 
+                                        class="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border cursor-default bg-[var(--bg-deep)]"
+                                        :style="{ color: getFactionColor(fid), borderColor: getFactionColor(fid) }">
+                                        <span>{{ getFactionName(fid) }}</span>
+                                        <button @click="editor.factionIds.splice(idx, 1); updateEditorPrimary()" class="hover:text-red-500 ml-1"><i class="fa-solid fa-times"></i></button>
+                                    </div>
+
+                                    <!-- 2. 添加下拉框 -->
+                                    <select @change="addActorToEditor($event)" class="bg-transparent text-[var(--text-dim)] text-xs font-bold outline-none cursor-pointer w-6 flex-1 min-w-[20px] hover:text-[var(--text-main)] transition" title="Add Actor">
+                                        <option value="" disabled selected>+</option>
+                                        <option value="global">{{ t('option_global') }}</option>
+                                        <option v-for="p in players" :value="p.id" :disabled="editor.factionIds.includes(p.id)">{{ p.name }}</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div> <!-- ✅ 补上这个闭合标签 -->
+
+                        <!-- 下面是时间输入框，现在它们会正确排列在右侧了 -->
                         <div class="w-1/4">
                             <label class="block text-[10px] font-bold text-[var(--text-dim)] uppercase mb-1 tracking-wider">{{ t('label_start') }}</label>
                             <input v-model="editor.timeStart" class="w-full input-tech theme-rounded-sm p-3 text-sm font-mono-tech text-center outline-none">
@@ -1962,18 +2284,17 @@
                         <textarea v-model="editor.summary" class="w-full h-24 input-tech theme-rounded-sm p-3 text-lg font-bold text-[var(--text-main)] resize-none outline-none leading-normal" placeholder="..."></textarea>
                     </div>
 
-                    <!-- 状态变更 (已升级) -->
+                    <!-- 状态变更 -->
                     <div class="p-5 border-b border-[var(--border-dim)] bg-[var(--bg-badge)]">
                         <label class="block text-[10px] font-bold text-amber-500 uppercase mb-3 tracking-widest">{{ t('label_impact') }}</label>
                         
-                            <!-- Impact 列表显示区 (已升级) -->
+                            <!-- Impact 列表显示区 -->
                             <div class="flex flex-wrap gap-3 mb-4">
                                 <div v-for="(imp, idx) in editor.impacts" :key="idx" class="impact-badge pr-0 overflow-hidden relative" 
                                     :style="{ borderColor: getImpactColor(imp) }">
                                     
                                     <!-- 1. 属性变更 Badge -->
                                     <template v-if="imp.type === 'STAT_CHANGE'">
-                                        <!-- 分支 A: 全局变量变更 -->
                                         <template v-if="imp.targetId === 'global'">
                                             <div class="flex items-center gap-2 pr-2 border-r border-slate-500/40">
                                                 <i class="fa-solid fa-globe text-slate-400"></i>
@@ -1984,7 +2305,6 @@
                                                 <span class="font-bold">{{ resolveVal(imp.oldValue) }} → {{ resolveVal(imp.newValue) }}</span>
                                             </div>
                                         </template>
-                                        <!-- 分支 B: 普通实体变更 -->
                                         <template v-else>
                                             <div class="flex items-center gap-2 pr-2 border-r" :style="{ borderColor: getFactionColor(imp.targetId) + '40' }">
                                                 <img v-if="isImage(getFactionLogo(imp.targetId))" :src="getFactionLogo(imp.targetId)" class="h-4 w-auto max-w-[24px] object-contain rounded-[1px] border border-white/10">
@@ -1998,109 +2318,80 @@
                                         </template>
                                     </template>
                                 
-                                <!-- 2. 地块转移 Badge -->
+                                <!-- 其他类型 (略，保持不变) -->
                                 <template v-else-if="imp.type === 'REGION_TRANSFER'">
                                     <i class="fa-solid fa-map-location-dot mr-1 text-indigo-400"></i>
                                     <span class="text-[var(--text-dim)] text-xs">{{ imp.targetName }}</span>
                                     <i class="fa-solid fa-arrow-right text-[10px] mx-1 opacity-50"></i>
-                                    <i :class="getFactionLogo(imp.newValue)" class="mr-1" :style="{color: getFactionColor(imp.newValue)}"></i>
                                     <span class="font-bold text-xs" :style="{color: getFactionColor(imp.newValue)}">{{ getFactionName(imp.newValue) }}</span>
                                 </template>
-
-                                <!-- 3. 创建实体 Badge -->
                                 <template v-else-if="imp.type === 'ENTITY_CREATE'">
                                     <i class="fa-solid fa-user-plus mr-1 text-emerald-400"></i>
-                                    <span class="text-xs">New Entity:</span>
-                                    <span class="font-bold text-xs text-emerald-400 ml-1">{{ imp.data.name }}</span>
+                                    <span class="font-bold text-xs text-emerald-400 ml-1">{{ imp.data?.name }}</span>
                                 </template>
-
-                                <!-- 4. 移除实体 Badge -->
                                 <template v-else-if="imp.type === 'ENTITY_REMOVE'">
                                     <i class="fa-solid fa-user-minus mr-1 text-red-400"></i>
-                                    <span class="text-xs text-[var(--text-dim)]">Removed:</span>
                                     <span class="font-bold text-xs text-red-400 ml-1">{{ getFactionName(imp.targetId) }}</span>
                                 </template>
-                                <!-- 5. 移动标记 Badge [新增] -->
                                 <template v-else-if="imp.type === 'PIN_MOVE'">
                                     <i class="fa-solid fa-arrows-up-down-left-right mr-1 text-pink-400"></i>
                                     <span class="font-bold text-xs text-pink-400">{{ imp.targetName }}</span>
                                     <span class="font-mono text-[10px] ml-1 opacity-70">to [{{ imp.newValue }}]</span>
                                 </template>
+
                                 <button @click="removeImpact(idx)" class="ml-2 w-8 self-stretch flex items-center justify-center bg-black/10 hover:bg-red-500/20 text-[var(--text-dim)] hover:text-red-400"><i class="fa-solid fa-times"></i></button>
                             </div>
                         </div>
                         
-                        <!-- Impact 编辑器 (已升级) -->
+                        <!-- Impact 编辑器 -->
                         <div class="bg-[var(--bg-badge)] p-2 theme-rounded-sm border border-[var(--border-dim)]">
-                            <!-- A. 类型选择 (中文替换) -->
-                            <div class="flex p-1 gap-1 bg-[var(--bg-deep)] theme-rounded-sm border border-[var(--border-dim)] mb-2">
-                                <button @click="impactForm.type = 'STAT_CHANGE'" :class="impactForm.type === 'STAT_CHANGE' ? 'bg-indigo-600 text-white' : 'text-[var(--text-dim)] hover:bg-[var(--bg-panel)]'" class="flex-1 py-1 text-[10px] font-bold theme-rounded-sm transition">{{ t('btn_type_stat') }}</button>
-                                <button @click="impactForm.type = 'REGION_TRANSFER'" :class="impactForm.type === 'REGION_TRANSFER' ? 'bg-indigo-600 text-white' : 'text-[var(--text-dim)] hover:bg-[var(--bg-panel)]'" class="flex-1 py-1 text-[10px] font-bold theme-rounded-sm transition">{{ t('btn_type_region') }}</button>
-                                <button @click="impactForm.type = 'ENTITY_CREATE'" :class="impactForm.type === 'ENTITY_CREATE' ? 'bg-emerald-600 text-white' : 'text-[var(--text-dim)] hover:bg-[var(--bg-panel)]'" class="flex-1 py-1 text-[10px] font-bold theme-rounded-sm transition">{{ t('btn_type_create') }}</button>
-                                <button @click="impactForm.type = 'ENTITY_REMOVE'" :class="impactForm.type === 'ENTITY_REMOVE' ? 'bg-red-600 text-white' : 'text-[var(--text-dim)] hover:bg-[var(--bg-panel)]'" class="flex-1 py-1 text-[10px] font-bold theme-rounded-sm transition">{{ t('btn_type_remove') }}</button>
-                                <button @click="impactForm.type = 'PIN_MOVE'" :class="impactForm.type === 'PIN_MOVE' ? 'bg-pink-600 text-white' : 'text-[var(--text-dim)] hover:bg-[var(--bg-panel)]'" class="flex-1 py-1 text-[10px] font-bold theme-rounded-sm transition">{{ t('btn_type_pin') }}</button>
+                            <!-- 类型选择 -->
+                            <div class="flex p-1 gap-1 bg-[var(--bg-deep)] theme-rounded-sm border border-[var(--border-dim)] mb-2 overflow-x-auto">
+                                <button @click="impactForm.type = 'STAT_CHANGE'" :class="impactForm.type === 'STAT_CHANGE' ? 'bg-indigo-600 text-white' : 'text-[var(--text-dim)] hover:bg-[var(--bg-panel)]'" class="flex-1 py-1 px-2 text-[10px] font-bold theme-rounded-sm transition whitespace-nowrap">{{ t('btn_type_stat') }}</button>
+                                <button @click="impactForm.type = 'REGION_TRANSFER'" :class="impactForm.type === 'REGION_TRANSFER' ? 'bg-indigo-600 text-white' : 'text-[var(--text-dim)] hover:bg-[var(--bg-panel)]'" class="flex-1 py-1 px-2 text-[10px] font-bold theme-rounded-sm transition whitespace-nowrap">{{ t('btn_type_region') }}</button>
+                                <button @click="impactForm.type = 'ENTITY_CREATE'" :class="impactForm.type === 'ENTITY_CREATE' ? 'bg-emerald-600 text-white' : 'text-[var(--text-dim)] hover:bg-[var(--bg-panel)]'" class="flex-1 py-1 px-2 text-[10px] font-bold theme-rounded-sm transition whitespace-nowrap">{{ t('btn_type_create') }}</button>
+                                <button @click="impactForm.type = 'ENTITY_REMOVE'" :class="impactForm.type === 'ENTITY_REMOVE' ? 'bg-red-600 text-white' : 'text-[var(--text-dim)] hover:bg-[var(--bg-panel)]'" class="flex-1 py-1 px-2 text-[10px] font-bold theme-rounded-sm transition whitespace-nowrap">{{ t('btn_type_remove') }}</button>
+                                <button @click="impactForm.type = 'PIN_MOVE'" :class="impactForm.type === 'PIN_MOVE' ? 'bg-pink-600 text-white' : 'text-[var(--text-dim)] hover:bg-[var(--bg-panel)]'" class="flex-1 py-1 px-2 text-[10px] font-bold theme-rounded-sm transition whitespace-nowrap">{{ t('btn_type_pin') }}</button>
                             </div>
 
-                            <!-- B. 条件表单 (中文替换) -->
+                            <!-- 条件表单 -->
                             <div class="flex gap-3 items-center">
                                 <!-- Form 1: Stat Change -->
                                 <template v-if="impactForm.type === 'STAT_CHANGE'">
-                                    <!-- [修改] 目标选择框：增加 Global 选项 -->
                                     <select v-model="impactForm.targetId" class="input-tech text-xs p-2 w-1/3 outline-none">
                                         <option value="" disabled>{{ t('ph_target_entity') }}</option>
-                                        <option value="global" class="text-amber-500 font-bold">【全局环境】</option> <!-- 新增 -->
+                                        <option value="global" class="text-amber-500 font-bold">【全局环境】</option>
                                         <option v-for="p in players" :value="p.id">{{ p.name }}</option>
                                     </select>
-
-                                    <!-- [修改] 属性选择框：根据是否选择 Global 切换列表 -->
                                     <select v-model="impactForm.attrKey" class="input-tech text-xs p-2 w-1/4 outline-none">
                                         <option value="" disabled>{{ t('ph_attribute') }}</option>
-                                        
-                                        <!-- 如果选了 Global，循环显示 global_vars -->
                                         <template v-if="impactForm.targetId === 'global'">
                                             <option v-for="g in global_vars" :value="g.key">{{ g.key }}</option>
                                         </template>
-                                        
-                                        <!-- 否则，根据所选目标的类型，显示对应的属性字段 -->
                                         <template v-else>
-                                            <!-- 计算属性: 根据 impactForm.targetId 找到实体，再找到 schemaId，再找到 fields -->
-                                            <option v-for="field in getFieldsForImpactTarget(impactForm.targetId)" :value="field.key">
-                                                {{ field.label }}
-                                            </option>
+                                            <option v-for="field in getFieldsForImpactTarget(impactForm.targetId)" :value="field.key">{{ field.label }}</option>
                                         </template>
                                     </select>
-
-                                    <!-- 显示当前值 (也需要适配 Global) -->
                                     <div class="px-2 text-[10px] text-center text-[var(--text-dim)] font-mono bg-[var(--bg-badge)] theme-rounded-sm h-8 flex items-center justify-center min-w-[40px]">
                                         {{ getAttrValueDisplay(impactForm.targetId, impactForm.attrKey) }} <i class="fa-solid fa-arrow-right ml-1"></i>
                                     </div>
-                                    
                                     <input v-model="impactForm.newValue" @keyup.enter="addImpact" :placeholder="t('ph_new_value')" class="input-tech text-emerald-400 font-bold font-mono-tech theme-rounded-sm p-2 flex-1 outline-none text-center">
                                 </template>
-                                <!-- Form 2: Region Transfer -->
+                                
+                                <!-- 其他类型表单 (REGION/CREATE/REMOVE/PIN) ... (保持原有代码逻辑) -->
                                 <template v-if="impactForm.type === 'REGION_TRANSFER'">
                                     <select v-model="impactForm.targetName" class="input-tech text-xs p-2 w-1/2 outline-none"><option value="" disabled>{{ t('ph_target_region') }}</option><option v-for="reg in map_data.regions" :value="reg.name">{{ reg.name }}</option></select>
                                     <select v-model="impactForm.newValue" class="input-tech text-xs p-2 flex-1 outline-none"><option value="" disabled>{{ t('ph_new_controller') }}</option><option v-for="p in players" :value="p.id">{{ p.name }}</option></select>
                                 </template>
-
-                                <!-- Form 3: Create Entity -->
                                 <template v-if="impactForm.type === 'ENTITY_CREATE'">
                                     <input v-model="impactForm.newValue" :placeholder="t('ph_new_entity_name')" class="input-tech font-bold theme-rounded-sm p-2 flex-1 outline-none">
                                 </template>
-
-                                <!-- Form 4: Remove Entity -->
                                 <template v-if="impactForm.type === 'ENTITY_REMOVE'">
                                     <select v-model="impactForm.targetId" class="input-tech text-xs p-2 w-full outline-none"><option value="" disabled>{{ t('ph_entity_remove') }}</option><option v-for="p in players" :value="p.id">{{ p.name }}</option></select>
                                 </template>
-                                <!-- Form 5: Move Pin [新增] -->
                                 <template v-if="impactForm.type === 'PIN_MOVE'">
-                                    <select v-model="impactForm.targetId" class="input-tech text-xs p-2 w-1/2 outline-none">
-                                        <option value="" disabled>Select Pin</option>
-                                        <option v-for="pin in map_data.pins" :value="pin.id">{{ pin.label || getPinName(pin.linkId) }}</option>
-                                    </select>
-                                    <div class="flex flex-1 gap-1">
-                                        <input v-model="impactForm.newValue" placeholder="X,Y (e.g. 50,50)" class="input-tech text-xs p-2 w-full font-mono outline-none text-center" title="Format: x,y">
-                                    </div>
+                                    <select v-model="impactForm.targetId" class="input-tech text-xs p-2 w-1/2 outline-none"><option value="" disabled>Select Pin</option><option v-for="pin in map_data.pins" :value="pin.id">{{ pin.label || getPinName(pin.linkId) }}</option></select>
+                                    <input v-model="impactForm.newValue" placeholder="X,Y" class="input-tech text-xs p-2 w-full font-mono outline-none text-center">
                                 </template>
                                 
                                 <button @click="addImpact" class="h-8 w-10 theme-rounded-sm bg-emerald-600 hover:bg-emerald-500 text-white flex items-center justify-center shrink-0"><i class="fa-solid fa-plus"></i></button>
@@ -2109,47 +2400,34 @@
                     </div>
 
                     <!-- 详细内容 (设置 min-h 防止挤压) -->
-                    <!-- [修改后] 右侧编辑器区域 -->
-                    <div class="p-5 flex flex-col min-h-[400px] relative pb-20"> <!-- 1. 增加 pb-20 防止底部被遮挡 -->
-                        
+                    <div class="p-5 flex flex-col min-h-[400px] relative pb-20"> 
                         <label class="block text-[10px] font-bold text-indigo-400 uppercase mb-2 tracking-widest">{{ t('label_details') }}</label>
                         
                         <!-- 内容输入框 -->
                         <textarea v-model="editor.content" class="flex-1 input-tech theme-rounded-sm p-4 text-base font-mono-tech text-[var(--text-main)] resize-none outline-none leading-relaxed h-full min-h-[200px]" :placeholder="t('ph_editor_content')"></textarea>
                         
-                        <!-- [修改点] 安科选项编辑区 -->
+                        <!-- 安科手动选项 -->
                         <div class="mt-4 pt-4 border-t border-[var(--border-dim)]">
-                            <!-- 2. 标题行：左对齐，按钮紧跟文字 -->
                             <div class="flex items-center gap-3 mb-2">
                                 <div class="text-[10px] font-bold text-pink-500 uppercase tracking-widest"><i class="fa-solid fa-list-ul mr-1"></i> {{ t('lbl_manual_options') }}</div>
-                                <button @click="addOptionToEditor" class="text-[10px] bg-pink-900/20 text-pink-400 border border-pink-500/30 px-2 py-0.5 theme-rounded-sm hover:bg-pink-600 hover:text-white transition flex items-center gap-1" title="Add new option">
+                                <button @click="addOptionToEditor" class="text-[10px] bg-pink-900/20 text-pink-400 border border-pink-500/30 px-2 py-0.5 theme-rounded-sm hover:bg-pink-600 hover:text-white transition flex items-center gap-1">
                                     <i class="fa-solid fa-plus"></i> {{ t('btn_add') }}
                                 </button>
                             </div>
-
-                            <!-- 选项列表 -->
                             <div v-if="editor.options && editor.options.length > 0" class="space-y-2">
                                 <div v-for="(opt, oi) in editor.options" :key="oi" class="bg-[var(--bg-badge)] p-2 theme-rounded-sm border border-[var(--border-dim)] flex gap-2 items-start group">
                                     <div class="flex-1 space-y-1">
-                                        <!-- Label 输入 -->
-                                        <div class="flex items-center gap-2">
-                                            <span class="text-[9px] text-pink-500 font-bold uppercase w-8 text-right">{{ t('lbl_opt_label') }}</span>
-                                            <input v-model="opt.label" class="flex-1 bg-[var(--bg-input)] text-xs font-bold text-[var(--text-main)] px-1 py-0.5 theme-rounded-sm border border-[var(--border-dim)] outline-none focus:border-pink-500 placeholder-pink-500/30" :placeholder="t('ph_opt_label')">                                        </div>
-                                        <!-- Desc 输入 -->
-                                        <div class="flex items-center gap-2">
-                                            <span class="text-[9px] text-[var(--text-dim)] font-bold uppercase w-8 text-right">{{ t('lbl_opt_desc') }}</span>
-                                            <input v-model="opt.desc" class="flex-1 bg-[var(--bg-input)] text-xs text-[var(--text-dim)] px-1 py-0.5 theme-rounded-sm border border-[var(--border-dim)] outline-none focus:border-pink-500 placeholder-[var(--text-dim)]/30" :placeholder="t('ph_opt_desc')">                                        </div>
+                                        <input v-model="opt.label" class="w-full bg-transparent text-xs font-bold text-[var(--text-main)] outline-none border-b border-[var(--border-dim)] placeholder-pink-500/30" :placeholder="t('ph_opt_label')">
+                                        <input v-model="opt.desc" class="w-full bg-transparent text-xs text-[var(--text-dim)] outline-none placeholder-[var(--text-dim)]/30" :placeholder="t('ph_opt_desc')">
                                     </div>
-                                    <!-- 删除按钮 -->
-                                    <button @click="editor.options.splice(oi,1)" class="text-[var(--text-dim)] hover:text-red-400 w-8 h-8 flex items-center justify-center shrink-0"><i class="fa-solid fa-times"></i></button>
+                                    <button @click="editor.options.splice(oi,1)" class="text-[var(--text-dim)] hover:text-red-400"><i class="fa-solid fa-times"></i></button>
                                 </div>
                             </div>
-                            <div v-else class="text-[10px] text-[var(--text-dim)] italic opacity-30 py-1 pl-1">
-                                {{ t('msg_no_manual_options') }}
-                            </div>
+                            <div v-else class="text-[10px] text-[var(--text-dim)] italic opacity-30 py-1 pl-1">{{ t('msg_no_manual_options') }}</div>
                         </div>
 
-                        <!-- 悬浮的 Add to Pending 按钮 (保持不变) -->
+                        <!-- ★★★ 之前丢失的 "Add to Pending" 按钮 ★★★ -->
+                        <!-- 悬浮在编辑器右下角 -->
                         <div class="absolute bottom-8 right-8 z-20">
                             <button @click="addToStaging" class="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-3 theme-rounded-sm shadow-xl font-bold text-sm transition transform active:scale-95 hover:-translate-y-1 flex items-center gap-2">
                                 <i class="fa-solid fa-plus"></i> {{ t('btn_add_pending') }}
@@ -2159,6 +2437,7 @@
                 </div>
 
                 <!-- 3. 底部：Commit 按钮 (关键：shrink-0 z-50) -->
+                <!-- ★★★ 之前丢失的 Footer 区域 ★★★ -->
                 <div class="bg-[var(--bg-sidebar)] p-5 border-t border-[var(--border-dim)] flex justify-between items-center shadow-[0_-10px_40px_var(--shadow-color)] z-50 shrink-0 relative">
                     <div class="flex items-center gap-3">
                         <span class="text-[10px] text-[var(--text-dim)] font-bold uppercase tracking-widest">{{ t('label_next_turn_b') }}</span>
@@ -2585,6 +2864,12 @@
                                      class="px-3 py-1 text-[10px] font-bold theme-rounded-sm transition">
                                  {{ t('tab_prompt_god') }}
                              </button>
+                             <!-- [新增] Galgame 提示词切换按钮 (紫色) -->
+                             <button @click="settingsPromptTab = 'galgame'" 
+                                     :class="settingsPromptTab === 'galgame' ? 'bg-purple-600 text-white' : 'bg-[var(--bg-badge)] text-[var(--text-dim)] hover:text-[var(--text-main)]'"
+                                     class="px-3 py-1 text-[10px] font-bold theme-rounded-sm transition">
+                                 {{ t('tab_prompt_galgame') }}
+                             </button>
                          </div>
 
                          <!-- 1. System Prompt 编辑框 -->
@@ -2603,6 +2888,12 @@
                          <div v-if="settingsPromptTab === 'god'">
                              <div class="text-[10px] text-[var(--text-dim)] mb-1">{{ t('desc_prompt_god') }}</div>
                              <textarea v-model="settings.prompts.god_mode" class="w-full h-64 input-tech theme-rounded-sm p-3 text-xs font-mono resize-none outline-none text-[var(--text-dim)]"></textarea>
+                         </div>
+
+                         <!-- [新增] 4. Galgame Prompt 编辑框 -->
+                         <div v-if="settingsPromptTab === 'galgame'">
+                             <div class="text-[10px] text-[var(--text-dim)] mb-1">{{ t('desc_prompt_galgame') }}</div>
+                             <textarea v-model="settings.prompts.galgame" class="w-full h-64 input-tech theme-rounded-sm p-3 text-xs font-mono resize-none outline-none text-[var(--text-dim)]"></textarea>
                          </div>
                     </section>
                 </div>
@@ -2671,34 +2962,139 @@
                         </div>
                     </div>
                     <div><label class="block text-xs font-bold text-[var(--text-dim)] uppercase mb-2">{{ t('label_desc') }}</label><textarea v-model="editingFaction.desc" class="w-full h-24 input-tech p-3 theme-rounded-sm text-sm resize-none outline-none"></textarea></div>
-                    <!-- [新增] 立绘设置区域 -->
+                    <!-- [终极版] 立绘设置区域 (16:9大屏预览 + 缩略图列表) -->
                     <div class="mt-4 pt-4 border-t border-[var(--border-dim)]">
-                        <label class="block text-xs font-bold text-[var(--text-dim)] uppercase mb-2">角色立绘 / 半身像 (AVG显示用)</label>
-                        <div class="flex gap-4 items-start">
-                            <!-- 预览区：竖长比例，模拟立绘 -->
-                            <div class="w-16 h-24 theme-rounded-sm border border-[var(--border-dim)] bg-[var(--bg-badge)] flex items-center justify-center overflow-hidden relative group cursor-pointer shrink-0">
-                                <!-- 有图显示图 -->
-                                <img v-if="isImage(editingFaction.avatar)" :src="editingFaction.avatar" class="w-full h-full object-cover">
-                                <!-- 没图显示占位符 -->
-                                <i v-else class="fa-solid fa-user-tag text-2xl text-[var(--text-dim)] opacity-50"></i>
-                                
-                                <!-- 上传遮罩 -->
-                                <label class="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition cursor-pointer text-white text-[10px] font-bold text-center leading-tight">
-                                    UPLOAD<br>AVATAR
-                                    <!-- 注意这里调用时传入了 'avatar' -->
-                                    <input type="file" @change="(e) => handleFactionImageUpload(e, 'avatar')" class="hidden" accept="image/*">
-                                </label>
+                        <div class="flex justify-between items-center mb-2">
+                            <label class="text-xs font-bold text-[var(--text-dim)] uppercase">立绘校准 (Calibration)</label>
+                            <div v-if="previewAvatarIndex === -1" class="text-[10px] font-bold text-emerald-500 bg-emerald-900/20 px-2 py-0.5 rounded border border-emerald-500/30">CURRENT: DEFAULT</div>
+                            <div v-else class="text-[10px] font-bold text-pink-500 bg-pink-900/20 px-2 py-0.5 rounded border border-pink-500/30">CURRENT: {{ editingFaction.avatars[previewAvatarIndex]?.tag || 'VARIANT' }}</div>
+                        </div>
+
+                        <!-- A. 大预览视窗 (强制 16:9) -->
+                        <!-- w-full 让它填满弹窗宽度，aspect-video 强制 16:9 比例 -->
+                        <div class="w-full aspect-video bg-black/80 border border-[var(--border-dim)] theme-rounded-sm relative overflow-hidden flex items-end justify-center group bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTEwIDBoMTB2MTBIMTB6TTAgMTBoMTB2MTBIMHoiIGZpbGw9IiMzMzMiIGZpbGwtb3BhY2l0eT0iMC4xIi8+PC9zdmc+')] shadow-inner mb-4">
+                            
+                            <!-- 辅助线: 中心线 -->
+                            <div class="absolute left-1/2 top-0 h-full w-px bg-white/20 z-0 pointer-events-none"></div>
+                            <!-- 辅助线: 底部文字安全区 (约28%) -->
+                            <div class="absolute bottom-0 w-full h-[28%] bg-red-500/5 z-0 pointer-events-none border-t border-red-500/20 flex justify-center items-center">
+                                <span class="text-[9px] text-red-500/30 font-mono tracking-widest">TEXT AREA SAFE ZONE</span>
                             </div>
 
-                            <!-- 输入区 -->
-                            <div class="flex-1 space-y-2">
-                                <input v-model="editingFaction.avatar" placeholder="Image URL / Base64 for AVG Mode" class="w-full input-tech p-2 theme-rounded-sm text-xs font-mono outline-none text-[var(--text-dim)] truncate">
-                                <p class="text-[10px] text-[var(--text-dim)] leading-relaxed">
-                                    <i class="fa-solid fa-circle-info mr-1"></i>
-                                    仅在“剧场模式”下显示。建议使用<strong>背景透明</strong>的 PNG 图片。留空则默认使用 Logo。
-                                </p>
-                                <button v-if="editingFaction.avatar" @click="editingFaction.avatar = ''" class="text-[10px] text-red-400 hover:text-red-300 underline">清除立绘</button>
+                            <!-- 渲染逻辑: 默认立绘 -->
+                            <template v-if="previewAvatarIndex === -1">
+                                <img v-if="isImage(editingFaction.avatar)" 
+                                     :src="editingFaction.avatar" 
+                                     class="w-auto h-full max-w-none object-contain transition-transform duration-100 select-none pointer-events-none"
+                                     :style="{ 
+                                         transform: `scale(${editingFaction.avatarScale}) translateY(${editingFaction.avatarOffsetY}%)`,
+                                         transformOrigin: 'bottom center'
+                                     }">
+                                <div v-else class="text-[var(--text-dim)] flex flex-col items-center gap-2 mb-8 opacity-50">
+                                    <i class="fa-solid fa-image text-4xl"></i>
+                                    <span class="text-xs">No Default Image</span>
+                                </div>
+                            </template>
+
+                            <!-- 渲染逻辑: 差分立绘 -->
+                            <template v-else-if="editingFaction.avatars[previewAvatarIndex]">
+                                <img :src="editingFaction.avatars[previewAvatarIndex].url" 
+                                     class="w-auto h-full max-w-none object-contain transition-transform duration-100 select-none pointer-events-none"
+                                     :style="{ 
+                                         transform: `scale(${editingFaction.avatars[previewAvatarIndex].scale}) translateY(${editingFaction.avatars[previewAvatarIndex].offsetY}%)`,
+                                         transformOrigin: 'bottom center'
+                                     }">
+                            </template>
+                        </div>
+
+                        <!-- B. 控制面板 (Tag + Sliders) -->
+                        <div class="bg-[var(--bg-badge)] p-3 theme-rounded-sm border border-[var(--border-dim)] mb-4">
+                            
+                            <!-- B1. 顶部操作栏 -->
+                            <div class="flex justify-between items-center mb-3 pb-2 border-b border-[var(--border-dim)] border-dashed">
+                                <!-- Tag 输入框 (仅差分模式) -->
+                                <div v-if="previewAvatarIndex !== -1 && editingFaction.avatars[previewAvatarIndex]" class="flex items-center gap-2 flex-1">
+                                    <span class="text-[9px] font-bold text-[var(--text-dim)] uppercase">TAG NAME:</span>
+                                    <input v-model="editingFaction.avatars[previewAvatarIndex].tag" class="bg-[var(--bg-input)] px-2 py-1 theme-rounded-sm text-xs font-bold text-pink-400 outline-none focus:border-pink-500 border border-transparent transition w-32">
+                                </div>
+                                <div v-else class="text-xs font-bold text-emerald-500 flex-1"><i class="fa-solid fa-star mr-1"></i> Default State</div>
+
+                                <!-- 操作按钮 -->
+                                <div class="flex gap-3">
+                                    <label class="cursor-pointer text-[10px] font-bold text-[var(--text-dim)] hover:text-[var(--text-main)] flex items-center gap-1 transition" title="Replace Image">
+                                        <i class="fa-solid fa-arrow-right-arrow-left"></i> Replace
+                                        <!-- ★★★ 修改点：直接绑定 handleAvatarReplace ★★★ -->
+                                        <input type="file" @change="handleAvatarReplace" class="hidden" accept="image/*">
+                                    </label>
+                                    <button v-if="previewAvatarIndex !== -1" @click="() => { editingFaction.avatars.splice(previewAvatarIndex, 1); previewAvatarIndex = -1; }" class="text-[10px] font-bold text-[var(--text-dim)] hover:text-red-400 flex items-center gap-1 transition">
+                                        <i class="fa-solid fa-trash"></i> Delete
+                                    </button>
+                                    <button v-if="previewAvatarIndex === -1 && editingFaction.avatar" @click="editingFaction.avatar = ''" class="text-[10px] font-bold text-[var(--text-dim)] hover:text-red-400 flex items-center gap-1 transition">
+                                        <i class="fa-solid fa-eraser"></i> Clear
+                                    </button>
+                                </div>
                             </div>
+
+                            <!-- B2. 滑块控制 (数据绑定) -->
+                            <div v-if="previewAvatarIndex === -1">
+                                <div class="flex gap-4">
+                                    <div class="flex-1">
+                                        <div class="flex justify-between text-[9px] text-[var(--text-dim)] mb-1 uppercase font-bold"><span>Zoom Scale</span><span class="text-emerald-500">{{ editingFaction.avatarScale?.toFixed(2) }}x</span></div>
+                                        <input type="range" v-model.number="editingFaction.avatarScale" min="0.5" max="3.0" step="0.05" class="w-full h-1.5 bg-[var(--border-dim)] rounded-lg appearance-none cursor-pointer accent-emerald-500">
+                                    </div>
+                                    <div class="flex-1">
+                                        <div class="flex justify-between text-[9px] text-[var(--text-dim)] mb-1 uppercase font-bold"><span>Vertical Offset</span><span class="text-emerald-500">{{ editingFaction.avatarOffsetY?.toFixed(0) }}%</span></div>
+                                        <input type="range" v-model.number="editingFaction.avatarOffsetY" min="-50" max="50" step="1" class="w-full h-1.5 bg-[var(--border-dim)] rounded-lg appearance-none cursor-pointer accent-emerald-500">
+                                    </div>
+                                </div>
+                            </div>
+                            <div v-else-if="editingFaction.avatars[previewAvatarIndex]">
+                                <div class="flex gap-4">
+                                    <div class="flex-1">
+                                        <div class="flex justify-between text-[9px] text-[var(--text-dim)] mb-1 uppercase font-bold"><span>Zoom Scale</span><span class="text-pink-500">{{ editingFaction.avatars[previewAvatarIndex].scale?.toFixed(2) }}x</span></div>
+                                        <input type="range" v-model.number="editingFaction.avatars[previewAvatarIndex].scale" min="0.5" max="3.0" step="0.05" class="w-full h-1.5 bg-[var(--border-dim)] rounded-lg appearance-none cursor-pointer accent-pink-500">
+                                    </div>
+                                    <div class="flex-1">
+                                        <div class="flex justify-between text-[9px] text-[var(--text-dim)] mb-1 uppercase font-bold"><span>Vertical Offset</span><span class="text-pink-500">{{ editingFaction.avatars[previewAvatarIndex].offsetY?.toFixed(0) }}%</span></div>
+                                        <input type="range" v-model.number="editingFaction.avatars[previewAvatarIndex].offsetY" min="-50" max="50" step="1" class="w-full h-1.5 bg-[var(--border-dim)] rounded-lg appearance-none cursor-pointer accent-pink-500">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- C. 底部缩略图列表 (Selection Strip) -->
+                        <div class="flex gap-2 overflow-x-auto pb-2 custom-scrollbar items-center py-2 select-none">
+                            
+                            <!-- C1. 默认立绘卡片 -->
+                            <div @click="previewAvatarIndex = -1" 
+                                 class="w-16 h-16 shrink-0 theme-rounded-sm border-2 overflow-hidden cursor-pointer relative group transition-all"
+                                 :class="previewAvatarIndex === -1 ? 'border-emerald-500 ring-2 ring-emerald-500/30' : 'border-[var(--border-dim)] opacity-60 hover:opacity-100 hover:border-emerald-500/50'">
+                                <img v-if="isImage(editingFaction.avatar)" :src="editingFaction.avatar" class="w-full h-full object-cover">
+                                <div v-else class="w-full h-full bg-[var(--bg-deep)] flex items-center justify-center flex-col gap-1">
+                                    <i class="fa-solid fa-user text-[var(--text-dim)]"></i>
+                                    <span class="text-[8px] text-[var(--text-dim)]">NONE</span>
+                                </div>
+                                <div class="absolute top-0 right-0 bg-emerald-600 text-white text-[8px] px-1 font-bold rounded-bl-sm">DEF</div>
+                            </div>
+
+                            <!-- 分割线 -->
+                            <div class="w-px h-10 bg-[var(--border-dim)] mx-1 shrink-0"></div>
+
+                            <!-- C2. 差分列表卡片 -->
+                            <div v-for="(av, idx) in editingFaction.avatars" :key="av.id" 
+                                 @click="previewAvatarIndex = idx"
+                                 class="w-16 h-16 shrink-0 theme-rounded-sm border-2 overflow-hidden cursor-pointer relative group transition-all"
+                                 :class="previewAvatarIndex === idx ? 'border-pink-500 ring-2 ring-pink-500/30' : 'border-[var(--border-dim)] opacity-60 hover:opacity-100 hover:border-pink-500/50'">
+                                <img :src="av.url" class="w-full h-full object-cover">
+                                <div class="absolute bottom-0 w-full bg-black/70 text-[8px] text-white text-center font-bold truncate px-1 py-0.5 backdrop-blur-sm">{{ av.tag }}</div>
+                            </div>
+
+                            <!-- C3. 批量添加按钮 -->
+                            <label class="w-16 h-16 shrink-0 theme-rounded-sm border-2 border-dashed border-[var(--border-dim)] flex flex-col items-center justify-center cursor-pointer hover:border-indigo-500 hover:text-indigo-400 text-[var(--text-dim)] transition bg-[var(--bg-badge)] hover:bg-[var(--bg-panel)] group">
+                                <i class="fa-solid fa-plus text-xl mb-1 group-hover:scale-110 transition-transform"></i>
+                                <span class="text-[8px] font-bold uppercase">Add New</span>
+                                <input type="file" multiple @change="(e) => handleFactionImageUpload(e, 'add_variant')" class="hidden" accept="image/*">
+                            </label>
                         </div>
                     </div>
                     <div class="pt-4 border-t border-[var(--border-dim)]">
@@ -2707,9 +3103,9 @@
                              <!-- [新增] 实体类型选择器 -->
                              <div class="flex items-center gap-2">
                                  <span class="text-[10px] text-[var(--text-dim)] uppercase">{{ t('lbl_entity_type') }}</span>
-                                 <select v-model="editingFaction.schemaId" class="bg-[var(--bg-badge)] border border-[var(--border-dim)] text-[10px] theme-rounded-sm p-1 text-[var(--text-main)] outline-none">
-                                     <option v-for="rs in rule_sets" :key="rs.id" :value="rs.id">{{ rs.name }}</option>
-                                 </select>
+                                <select v-model="editingFaction.schemaId" @change="refreshFactionStats" class="bg-[var(--bg-badge)] border border-[var(--border-dim)] text-[10px] theme-rounded-sm p-1 text-[var(--text-main)] outline-none">
+                                    <option v-for="rs in rule_sets" :key="rs.id" :value="rs.id">{{ rs.name }}</option>
+                                </select>
                              </div>
                         </div>
                         
@@ -2808,6 +3204,31 @@
                                 </div>
                                 <p class="text-[9px] text-[var(--text-dim)] mt-1 opacity-70">{{ t('hint_controller') }}</p>
                             </div>
+
+                            <!-- ★★★ [新增] 地块属性编辑 (复用 Rule Sets) ★★★ -->
+                            <div class="p-3 bg-[var(--bg-badge)] theme-rounded-sm border border-[var(--border-dim)] relative z-10 mt-2">
+                                <div class="flex justify-between items-center mb-2">
+                                    <label class="text-[10px] font-bold text-[var(--text-dim)] uppercase">REGION STATS</label>
+                                    <!-- 选择规则集 -->
+                                <select v-model="pinForm.schemaId" @change="refreshPinFormStats" class="bg-transparent text-[10px] text-emerald-500 font-bold outline-none border-b border-emerald-500/30">
+                                    <option value="" disabled>Select Type</option>
+                                    <option v-for="rs in rule_sets" :key="rs.id" :value="rs.id">{{ rs.name }}</option>
+                                </select>
+                            </div>
+
+                                <!-- 动态渲染属性输入框 -->
+                                <div v-if="pinForm.schemaId" class="grid grid-cols-2 gap-2">
+                                    <div v-for="field in getFieldsBySchemaId(pinForm.schemaId)" :key="field.key">
+                                        <label class="block text-[9px] text-[var(--text-dim)] mb-0.5">{{ field.label }}</label>
+                                        <input v-model="pinForm.stats[field.key]" 
+                                            class="w-full bg-[var(--bg-input)] text-xs text-[var(--text-main)] px-2 py-1 theme-rounded-sm border border-[var(--border-dim)] outline-none focus:border-emerald-500">
+                                    </div>
+                                </div>
+                                <div v-else class="text-[9px] text-[var(--text-dim)] italic text-center py-2">
+                                    Please assign a Rule Set (e.g. Territory) to edit stats.
+                                </div>
+                            </div>
+
                         </div>
                     </div>
 
@@ -2955,6 +3376,7 @@
             </div>
         </div>
     </transition>
+    <audio ref="splashBgm" preload="auto" class="hidden"></audio>
 </div>
 
 <script>
@@ -2963,19 +3385,33 @@
     createApp({
         data() {
             return {
-                APP_VERSION: '1.14', 
+                APP_VERSION: '1.15', 
+                useGalgamePrompt: false, 
                 // ★★★ [新增/修改] 动态 BGM 变量 ★★★
                 currentBgmUrl: '',    // 实际播放地址
                 currentBgmName: 'Loading Audio...', // 右下角显示的歌名
                 isBgmPlaying: false,  // [新增] 主界面 BGM 播放状态
                 showSplash: true, // [新增] 控制启动页显示
                 hasInteracted: false, // 默认为 false，表示还在等待用户按键
+                vnIsTyping: false,      // [新增] 是否正在打字
+                vnFullText: "",         // [新增] 当前句子的完整文本
+                vnTypeTimer: null,      // [新增] 打字机定时器
+                // ★★★ [新增] VN 模式状态 ★★★
+                vnMode: false,          // 是否进入剧场模式
+                vnCurrentEvent: null,   // 当前正在播放的事件对象
+                vnScript: [],           // 解析后的剧本数组
+                vnLineIndex: 0,         // 当前播放到第几行
+                vnDisplayedText: "",    // 打字机效果当前显示的文字
+                vnTypingTimer: null,    // 打字机计时器
+                vnShowOptions: false,   // 是否显示选项层
+                dataVersion: 0, // [新增] 全局数据版本号，用于强制刷新地图
                 serverConnected: false, isThinking: false, currentSaveFile: 'savegame.json',
                 showSettings: false, showFactionModal: false, showSaveLoadModal: false, showScriptGenModal: false, showContextModal: false,
                 saveFiles: [], newSaveFilename: '', 
                 mapToolMode: 'view',
                 // [新增] 安科模式开关
                 generateOptions: false,
+                previewAvatarIndex: -1, 
                 // --- 输入相关 ---
                 scriptGenPrompt: '',
                 rawInput: '',
@@ -3016,8 +3452,11 @@
                 pinForm: {
                     x: 0, y: 0,
                     mode: 'entity', // entity | lore | custom
-                    selectedId: '', // 用于 entity id 或 lore keys
-                    customLabel: ''
+                    selectedId: '',
+                    customLabel: '',
+                    icon: '', color: '',
+                    schemaId: '',   // ★ 必须显式声明
+                    stats: {}       // ★ 必须显式声明
                 },
                 
                 // --- UI Settings ---
@@ -3031,6 +3470,36 @@
                     api: { provider: 'Gemini', baseUrl: '', model: 'gemini-2.5-flash', key: '' },
                     proxy: { enabled: true, port: '7890' }, 
                     prompts: {
+                        galgame: `你是一个 Galgame/Visual Novel 的剧本生成引擎。
+                        【任务】
+                        基于当前的“世界上下文”和“用户指令”，推演下一段剧情。
+                        请直接返回 JSON 格式的 TimelineEvent。
+
+                        【关键要求：Content 字段结构】
+                        "content" 字段**必须**是一个 JSON 字符串（即 Stringified JSON Array），以便前端解析。
+                        该数组描述了对话流。格式如下：
+                        [
+                        { "role": "faction_id_A", "tag": "angry", "text": "你竟敢背叛我！" },
+                        { "role": "faction_id_B", "tag": "smile", "text": "这叫战略调整，我的朋友。" },
+                        { "role": "narrator", "text": "随着一声枪响，谈判破裂了。" }
+                        ]
+                        - role: 对应 players 中的 id。如果是旁白，请用 "narrator"。
+                        - tag: (可选) 对应立绘的表情变体 (如 "smile", "angry", "sad")。
+                        - text: 对话内容或旁白描述。
+
+                        【完整 JSON 示例】
+                        {
+                        "factionId": "global",
+                        "timeStart": "1098年",
+                        "timeEnd": "1099年",
+                        "summary": "决裂时刻",
+                        "content": "[{\\"role\\":\\"p_001\\",\\"tag\\":\\"angry\\",\\"text\\":\\"住手！\\"},{\\"role\\":\\"narrator\\",\\"text\\":\\"一阵爆炸声传来。\\"}]",
+                        "impacts": [],
+                        "options": [
+                            { "label": "反击", "desc": "立即开火" },
+                            { "label": "逃跑", "desc": "保存实力" }
+                        ]
+                        }`,
                         // --- 1. 日常推演 (Daily Deduction) - v3 多层级/多规则版 ---
                         system: `你是一个辅助世界推演的 AI 引擎。
                         【任务】
@@ -3490,6 +3959,9 @@
                     tab_prompt_sys: { zh: "核心推演 (System)", en: "System (Deduction)", ja: "システム (演繹)" },
                     tab_prompt_script: { zh: "剧本生成 (Script)", en: "Script Gen", ja: "シナリオ生成" },
                     tab_prompt_god: { zh: "上帝模式 (God)", en: "God Mode", ja: "神モード" },
+                    // [新增] Galgame 模式翻译
+                    tab_prompt_galgame: { zh: "剧场模式 (VN)", en: "Galgame/VN", ja: "劇場モード" },
+                    desc_prompt_galgame: { zh: "用于“剧场模式”，指导AI生成标准化的 JSON 剧本格式 (Array)。", en: "For 'VN Mode', instructs AI to generate standardized JSON script arrays.", ja: "「劇場モード」用、標準化されたJSON脚本配列を生成するよう指示。" },
 
                     // --- JS Dynamic Strings (用于 JavaScript 逻辑的动态文本) ---
                     dice_crit_success: { zh: "大成功!", en: "CRITICAL SUCCESS!", ja: "大成功！" },
@@ -3529,6 +4001,7 @@
                     x: 0,          
                     y: 0,          
                     isDragging: false,
+                    isMouseDown: false, // ★ 新增：区分按下和拖拽
                     startX: 0,
                     startY: 0,
                     // ★ 新增：徽章大小控制 (默认 1.0)
@@ -3542,7 +4015,7 @@
                 showAllTimeline: false,
                 pendingTurnRange: "", pendingEvents: [],
                 // [修改] 增加 options 数组
-                editor: { factionId: '', timeStart: '', timeEnd: '', summary: '', content: '', impacts: [], options: [] },
+                editor: { factionId: '', factionIds: [], timeStart: '', timeEnd: '', summary: '', content: '', impacts: [], options: [] },
                 impactForm: { type: 'STAT_CHANGE', targetId: '', attrKey: '', newValue: '', targetName: '' },
                 editImpactForm: { type: 'STAT_CHANGE', targetId: '', attrKey: '', newValue: '', targetName: '' },
                 
@@ -3719,6 +4192,28 @@
             }, 6000);
         },
         computed: {
+            vnCurrentLine() {
+                if (!this.vnScript || this.vnScript.length === 0) return null;
+                return this.vnScript[this.vnLineIndex];
+            },
+            // [新增] 获取当前正在编辑的立绘对象 (可能是默认的，也可能是差分里的)
+            currentEditingAvatar() {
+                if (this.previewAvatarIndex === -1) {
+                    // 返回一个代理对象，读写直接映射到 editingFaction 的根属性
+                    return {
+                        url: this.editingFaction.avatar,
+                        scale: this.editingFaction.avatarScale,
+                        offsetY: this.editingFaction.avatarOffsetY,
+                        isDefault: true
+                    };
+                } else {
+                    const avatars = this.editingFaction.avatars;
+                    if (avatars && avatars[this.previewAvatarIndex]) {
+                        return avatars[this.previewAvatarIndex];
+                    }
+                    return null;
+                }
+            },
             // [优化] 仅渲染可见的时间轴回合，避免后期 DOM 爆炸
             visibleTimeline() {
                 if (this.showAllTimeline) return this.timeline;
@@ -3879,18 +4374,282 @@
             }
         },
         methods: {
-            getFactionAvatar(id) {
+
+            // [修复] 核心算法：计算国旗投影 (加入地图长宽比修正，防止拉伸)
+            getFlagTransform(reg, layer) {
+                const bounds = this.getFactionBounds(layer, reg.ownerId);
+                if (!bounds) return { x: 0, y: 0, w: 100, h: 100 };
+
+                // 1. 获取地图的实际物理长宽比 (修正拉伸的关键!)
+                // 尝试找到地图底图图片
+                let mapRatio = 1.77; // 默认 16:9 兜底
+                const mapImg = document.querySelector('#map-capture-target img');
+                if (mapImg && mapImg.naturalHeight > 0) {
+                    mapRatio = mapImg.naturalWidth / mapImg.naturalHeight;
+                }
+
+                // 2. 设定国旗的目标视觉比例 (3:2 = 1.5)
+                const flagRatio = 1.5; 
+                
+                // 3. 计算修正系数
+                // 我们在百分比坐标系下计算，必须抵消地图本身的拉伸
+                // 公式推导：(W% * MapWidth) / (H% * MapHeight) = FlagRatio
+                // => W%/H% * MapRatio = FlagRatio
+                // => W%/H% = FlagRatio / MapRatio
+                // 这个 ratioCorrection 就是 H% 应该相对于 W% 缩放多少
+                const ratioCorrection = mapRatio / flagRatio;
+
+                // 4. 计算疆域的“百分比比例”
+                const boundsPercentRatio = bounds.w / bounds.h;
+
+                // 5. 计算虚拟背景板 (单位: %)
+                let virtW, virtH;
+
+                // 比较时也要带上修正系数
+                if (boundsPercentRatio > (1 / ratioCorrection)) {
+                    // 疆域比国旗更扁 -> 宽度对齐
+                    virtW = bounds.w;
+                    virtH = bounds.w * ratioCorrection; 
+                } else {
+                    // 疆域比国旗更瘦 -> 高度对齐
+                    virtH = bounds.h;
+                    virtW = bounds.h / ratioCorrection;
+                }
+
+                // 6. 中心对齐
+                const boundsCenterX = bounds.x + bounds.w / 2;
+                const boundsCenterY = bounds.y + bounds.h / 2;
+                
+                const virtX = boundsCenterX - virtW / 2;
+                const virtY = boundsCenterY - virtH / 2;
+
+                // 7. 映射到局部坐标
+                return {
+                    x: (virtX - reg.x) / reg.w * 100,
+                    y: (virtY - reg.y) / reg.h * 100,
+                    w: virtW / reg.w * 100,
+                    h: virtH / reg.h * 100
+                };
+            },
+            getFactionBounds(layer, ownerId) {
+                // 如果是无主之地，只计算自己，防止无主地块连成一片
+                if (!ownerId) return null;
+
+                // 简单的缓存机制 (如果不加缓存，渲染每一帧都会遍历数组，性能会略有损耗，但几百个地块以内问题不大)
+                // 这里为了代码简洁，采用实时计算。
+                
+                let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+                let found = false;
+
+                // 遍历当前图层的所有地块
+                layer.data.forEach(r => {
+                    if (r.ownerId === ownerId) {
+                        if (r.x < minX) minX = r.x;
+                        if (r.y < minY) minY = r.y;
+                        // 注意：r.x 是左上角，右下角是 r.x + r.w
+                        if (r.x + r.w > maxX) maxX = r.x + r.w;
+                        if (r.y + r.h > maxY) maxY = r.y + r.h;
+                        found = true;
+                    }
+                });
+
+                if (!found) return null;
+
+                return {
+                    x: minX,
+                    y: minY,
+                    w: maxX - minX,
+                    h: maxY - minY
+                };
+            },
+            // --- [新增] 多行动方编辑器辅助方法 ---
+            addActorToEditor(e) {
+                const val = e.target.value;
+                if (!val) return;
+                if (!this.editor.factionIds) this.editor.factionIds = [];
+                
+                if (!this.editor.factionIds.includes(val)) {
+                    this.editor.factionIds.push(val);
+                    this.updateEditorPrimary(); // 更新主ID用于兼容
+                }
+                e.target.value = ""; // 重置选择器
+            },
+            updateEditorPrimary() {
+                // 始终让 factionId 等于数组的第一个，保持旧逻辑兼容（如边框颜色）
+                if (this.editor.factionIds && this.editor.factionIds.length > 0) {
+                    this.editor.factionId = this.editor.factionIds[0];
+                } else {
+                    this.editor.factionId = '';
+                }
+            },
+            // ★★★ [新增] 检测内容是否为 JSON 剧本格式 ★★★
+            isJsonScript(content) {
+                if (!content || typeof content !== 'string') return false;
+                // 简单判断：必须以 [ 开头，以 ] 结尾，且看起来像 JSON
+                const trimmed = content.trim();
+                if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+                    try {
+                        // 尝试解析前几个字符确认
+                        JSON.parse(trimmed); 
+                        return true;
+                    } catch (e) {
+                        return false; 
+                    }
+                }
+                return false;
+            },
+
+            // ★★★ [新增] 解析剧本 JSON ★★★
+            parseScript(content) {
+                try {
+                    return JSON.parse(content);
+                } catch (e) {
+                    // 兜底：如果解析失败，返回包含错误的单行
+                    return [{ role: 'narrator', text: content }];
+                }
+            },
+            // ★★★ [新增] 专门处理立绘替换 (修复默认立绘无法上传的问题) ★★★
+            handleAvatarReplace(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    const result = ev.target.result;
+                    
+                    // 判断是替换默认立绘还是差分立绘
+                    if (this.previewAvatarIndex === -1) {
+                        // 核心修复：强制更新 Vue 的响应式对象
+                        this.editingFaction.avatar = result;
+                    } else {
+                        // 确保对象存在再赋值
+                        if (this.editingFaction.avatars && this.editingFaction.avatars[this.previewAvatarIndex]) {
+                            this.editingFaction.avatars[this.previewAvatarIndex].url = result;
+                        }
+                    }
+                };
+                reader.readAsDataURL(file);
+                
+                // 清空 Input，允许重复选择同一文件
+                e.target.value = '';
+            },
+            // --- 修改 startVNMode ---
+            startVNMode(event) {
+                this.vnCurrentEvent = event;
+                
+                let script = [];
+                try {
+                    script = JSON.parse(event.content);
+                    if (!Array.isArray(script)) throw new Error("Not an array");
+                } catch (e) {
+                    // 兼容纯文本，自动切分
+                    const lines = event.content.split('\n').filter(l => l.trim());
+                    script = lines.map(l => ({ role: 'narrator', text: l }));
+                }
+                
+                this.vnScript = script;
+                this.vnLineIndex = 0;
+                this.vnShowOptions = false;
+                this.vnMode = true;
+                
+                // 开始播放第一句 (使用打字机)
+                this.playTypewriter(this.vnCurrentLine.text);
+            },
+
+            // --- 修改 vnNextLine ---
+            vnNextLine() {
+                // 1. 如果正在打字，立即显示全文本 (Skip typing)
+                if (this.vnIsTyping) {
+                    clearInterval(this.vnTypeTimer);
+                    this.vnDisplayedText = this.vnFullText;
+                    this.vnIsTyping = false;
+                    return;
+                }
+
+                // 2. 如果打字已完成，进入下一句
+                if (this.vnLineIndex < this.vnScript.length - 1) {
+                    this.vnLineIndex++;
+                    this.playTypewriter(this.vnCurrentLine.text);
+                } else {
+                    // 3. 剧本结束，显示选项
+                    this.vnShowOptions = true;
+                }
+            },
+
+            // --- [新增] 打字机核心逻辑 ---
+            playTypewriter(text) {
+                this.vnFullText = text;
+                this.vnDisplayedText = "";
+                this.vnIsTyping = true;
+                
+                if (this.vnTypeTimer) clearInterval(this.vnTypeTimer);
+                
+                let i = 0;
+                // [修改] 提高打字速度：从 30ms 改为 10ms，提升流畅感
+                this.vnTypeTimer = setInterval(() => {
+                    if (i < text.length) {
+                        this.vnDisplayedText += text.charAt(i);
+                        i++;
+                    } else {
+                        clearInterval(this.vnTypeTimer);
+                        this.vnIsTyping = false;
+                    }
+                }, 1);
+            },
+            // [新增] 获取立绘的动态样式 (缩放与位移)
+            getAvatarStyleObj(id, tag = null) {
+                const style = {
+                    transformOrigin: 'bottom center', // 关键：从底部中心缩放，符合立绘逻辑
+                    transition: 'all 0.3s ease-out'
+                };
+
+                if (!id || id === 'global') return style;
+                const p = this.players.find(x => x.id === id);
+                if (!p) return style;
+
+                let scale = 1.0;
+                let offsetY = 0.0;
+
+                // 1. 尝试查找 Tag 对应的差分配置
+                if (tag && p.avatars && p.avatars.length > 0) {
+                    const variant = p.avatars.find(a => a.tag.toLowerCase() === tag.toLowerCase());
+                    if (variant) {
+                        // 只有当 variant 真的有 url 时才应用它的配置，否则 fallback 到默认
+                        // 但这里假设只要 tag 匹配就用它的配置
+                        scale = variant.scale !== undefined ? variant.scale : 1.0;
+                        offsetY = variant.offsetY !== undefined ? variant.offsetY : 0.0;
+                        
+                        style.transform = `scale(${scale}) translateY(${offsetY}%)`;
+                        return style;
+                    }
+                }
+
+                // 2. 使用默认配置
+                scale = p.avatarScale !== undefined ? p.avatarScale : 1.0;
+                offsetY = p.avatarOffsetY !== undefined ? p.avatarOffsetY : 0.0;
+
+                style.transform = `scale(${scale}) translateY(${offsetY}%)`;
+                return style;
+            },
+            // [修改] 支持传入 tag 获取特定差分立绘
+            getFactionAvatar(id, tag = null) {
                 if (!id || id === 'global') return null;
                 const p = this.players.find(x => x.id === id);
                 if (!p) return null;
                 
-                // 1. 如果有专门的立绘 avatar，直接用
+                // 1. 优先尝试匹配 Tag (如果 Tag 存在)
+                if (tag && p.avatars && p.avatars.length > 0) {
+                    // 不区分大小写查找
+                    const variant = p.avatars.find(a => a.tag.toLowerCase() === tag.toLowerCase());
+                    if (variant && this.isImage(variant.url)) return variant.url;
+                }
+
+                // 2. 默认立绘 fallback
                 if (p.avatar && this.isImage(p.avatar)) return p.avatar;
                 
-                // 2. 如果没有 avatar，但 logo 是图片，勉强用 logo 代替
+                // 3. 如果没有 avatar，但 logo 是图片，勉强用 logo 代替
                 if (p.logo && this.isImage(p.logo)) return p.logo;
                 
-                // 3. 都没有，返回 null
                 return null;
             },
             getMapBackground() {
@@ -4446,7 +5205,8 @@
             },
             // [新增] 切换地图标记显示模式
             cycleMapDisplayMode() {
-                const modes = ['full', 'icon', 'dot'];
+                // 在数组中增加了 'flag' 模式
+                const modes = ['full', 'icon', 'dot', 'flag'];
                 const idx = modes.indexOf(this.mapView.displayMode);
                 this.mapView.displayMode = modes[(idx + 1) % modes.length];
             },
@@ -4602,24 +5362,52 @@
                 
                 this.mapView.scale = newScale;
             },
+            // [升级] 导出地图配置 (包含依赖的规则集)
             exportMapConfig() {
-                if (!this.map_data.image) return alert("No map data to export.");
+                // [修复] 检查图层数量而不是 image
+                if (!this.map_data.layers || this.map_data.layers.length === 0) return alert("No map layers to export.");
                 
-                // 将 map_data 对象转为 JSON 字符串
-                const dataStr = JSON.stringify(this.map_data, null, 2);
+                // 1. 扫描地图中用到的规则集 ID
+                const usedSchemaIds = new Set();
+                
+                // 遍历所有图层寻找引用
+                this.map_data.layers.forEach(layer => {
+                    if (layer.type === 'region' && Array.isArray(layer.data)) {
+                        layer.data.forEach(reg => {
+                            if (reg.schemaId) usedSchemaIds.add(reg.schemaId);
+                        });
+                    }
+                });
+
+                // 2. 提取对应的规则集对象
+                const dependencies = this.rule_sets.filter(rs => usedSchemaIds.has(rs.id));
+
+                // 3. 构造完整的数据包 (Package)
+                const exportPackage = {
+                    meta: {
+                        version: this.APP_VERSION,
+                        type: 'Levant_Map_Package',
+                        exportedAt: Date.now()
+                    },
+                    map_data: this.map_data,
+                    // ★★★ 关键：携带规则集 ★★★
+                    embedded_rules: dependencies
+                };
+                
+                // 4. 执行导出
+                const dataStr = JSON.stringify(exportPackage, null, 2);
                 const blob = new Blob([dataStr], { type: "application/json" });
                 const url = URL.createObjectURL(blob);
                 
-                // 创建临时链接下载
                 const link = document.createElement('a');
                 link.href = url;
-                link.download = `MapConfig_${Date.now()}.json`;
+                link.download = `MapPackage_${Date.now()}.json`;
                 link.click();
                 
-                // 清理
                 URL.revokeObjectURL(url);
             },
 
+// [终极版] 导入地图配置 (支持 V1/V2 格式兼容 + 规则集解包 + 属性字段自动补全)
             handleMapConfigImport(event) {
                 const file = event.target.files[0];
                 if (!file) return;
@@ -4627,63 +5415,130 @@
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     try {
-                        const importedData = JSON.parse(e.target.result);
+                        const jsonRaw = JSON.parse(e.target.result);
                         
-                        // --- ★★★ 修复：兼容性校验 ★★★ ---
-                        // 只要有 layers (新版) 或者有 image (旧版) 均视为有效
-                        const isNewFormat = importedData.layers && Array.isArray(importedData.layers);
-                        const isOldFormat = importedData.image || (importedData.pins && Array.isArray(importedData.pins));
+                        // --- 1. 格式识别与解包 ---
+                        let newMapData = null;
+                        let newRules = [];
+                        let isPackage = false;
 
-                        if (!isNewFormat && !isOldFormat) {
-                            throw new Error("无效的地图配置文件 (未找到 layers 或 image 数据)。");
+                        // Case A: 新版地图包 (包含规则集)
+                        if (jsonRaw.type === 'Levant_Map_Package' && jsonRaw.map_data) {
+                            newMapData = jsonRaw.map_data;
+                            newRules = jsonRaw.embedded_rules || [];
+                            isPackage = true;
+                        } 
+                        // Case B: 普通地图文件 (V1 或 V1.5)
+                        else {
+                            newMapData = jsonRaw;
                         }
 
-                        if (confirm("导入地图将覆盖当前地图数据，确定继续？")) {
-                            // 1. 覆盖数据
-                            this.map_data = importedData;
+                        // --- 2. 有效性预检查 ---
+                        const hasNewStructure = newMapData.layers && Array.isArray(newMapData.layers);
+                        const hasOldStructure = newMapData.image || (newMapData.regions && Array.isArray(newMapData.regions)) || (newMapData.pins && Array.isArray(newMapData.pins));
+
+                        if (!hasNewStructure && !hasOldStructure) {
+                            throw new Error("无法识别的地图文件格式 (缺少 layers 或 image 数据)。");
+                        }
+
+                        // --- 3. 用户确认 ---
+                        const confirmMsg = isPackage 
+                            ? "检测到完整地图包。\n导入将覆盖当前地图，并合并附带的属性规则集。\n确定继续？" 
+                            : "导入地图将覆盖当前地图数据。\n确定继续？";
+
+                        if (confirm(confirmMsg)) {
                             
-                            // 2. 数据补全
-                            if (!this.map_data.layers) this.map_data.layers = [];
-                            
-                            // 如果是新格式，确保有 activeLayerId
-                            if (isNewFormat) {
-                                if (!this.map_data.activeLayerId && this.map_data.layers.length > 0) {
-                                    this.map_data.activeLayerId = this.map_data.layers[0].id;
-                                }
-                            } 
-                            // 3. 如果是旧格式，执行自动迁移 (创建默认图层)
-                            else {
-                                console.log("Migrating imported legacy map...");
-                                const newLayers = [];
-                                if (this.map_data.image) {
-                                    newLayers.push({ id: 'l_base', type: 'image', name: 'Base Map', visible: true, opacity: 1, data: this.map_data.image });
-                                }
-                                if (this.map_data.regions && this.map_data.regions.length > 0) {
-                                    newLayers.push({ id: 'l_reg', type: 'region', name: 'Regions', visible: true, opacity: 1, data: this.map_data.regions });
-                                }
-                                if (this.map_data.pins && this.map_data.pins.length > 0) {
-                                    newLayers.push({ id: 'l_pin', type: 'marker', name: 'Markers', visible: true, opacity: 1, data: this.map_data.pins });
-                                }
-                                this.map_data.layers = newLayers;
-                                this.map_data.activeLayerId = newLayers.length > 0 ? newLayers[0].id : '';
+                            // --- 4. 规则集 (Rule Sets) 智能合并 ---
+                            let rulesAddedCount = 0;
+                            if (newRules.length > 0) {
+                                if (!this.rule_sets) this.rule_sets = [];
+                                newRules.forEach(rule => {
+                                    const exists = this.rule_sets.some(r => r.id === rule.id);
+                                    if (!exists) {
+                                        this.rule_sets.push(rule);
+                                        rulesAddedCount++;
+                                    } else {
+                                        console.log(`[Import] Rule Set '${rule.name}' (${rule.id}) already exists. Skipping.`);
+                                    }
+                                });
                             }
 
-                            // 4. 重置视图并保存
+                            // --- 5. 地图数据覆盖 ---
+                            this.map_data = { layers: [], activeLayerId: '', image: '', pins: [], regions: [] };
+                            const importedMap = JSON.parse(JSON.stringify(newMapData));
+
+                            // --- 6. 数据结构迁移 (Migration V1 -> V2) ---
+                            // ★★★ 核心修改：在迁移时注入 stats 和 schemaId ★★★
+                            if (!importedMap.layers || importedMap.layers.length === 0) {
+                                console.info("[Import] Detected Legacy Map V1. Migrating to Layer System...");
+                                const migratedLayers = [];
+                                const timestamp = Date.now();
+
+                                if (importedMap.image) {
+                                    migratedLayers.push({
+                                        id: 'layer_bg_' + timestamp, type: 'image', name: 'Base Map (Imported)',
+                                        visible: true, opacity: 1.0, data: importedMap.image
+                                    });
+                                }
+
+                                if (importedMap.regions && importedMap.regions.length > 0) {
+                                    // ★ 数据清洗：强制补全属性字段
+                                    const cleanRegions = importedMap.regions.map(r => ({
+                                        ...r,
+                                        schemaId: r.schemaId || '',
+                                        stats: r.stats || {}
+                                    }));
+                                    
+                                    migratedLayers.push({
+                                        id: 'layer_reg_' + timestamp, type: 'region', name: 'Territories (Imported)',
+                                        visible: true, opacity: 1.0, data: cleanRegions
+                                    });
+                                }
+
+                                if (importedMap.pins && importedMap.pins.length > 0) {
+                                    migratedLayers.push({
+                                        id: 'layer_pin_' + timestamp, type: 'marker', name: 'Markers (Imported)',
+                                        visible: true, opacity: 1.0, data: importedMap.pins
+                                    });
+                                }
+                                this.map_data.layers = migratedLayers;
+                            } else {
+                                // --- 7. 新版格式清洗 (Sanitization) ---
+                                // 即使是新版格式，也要防止 stats 字段丢失
+                                importedMap.layers.forEach(layer => {
+                                    if (layer.type === 'region' && Array.isArray(layer.data)) {
+                                        layer.data = layer.data.map(r => ({
+                                            ...r,
+                                            schemaId: r.schemaId || '',
+                                            stats: r.stats || {}
+                                        }));
+                                    }
+                                });
+                                this.map_data.layers = importedMap.layers;
+                            }
+
+                            // --- 8. 状态修正 ---
+                            if (this.map_data.layers.length > 0) {
+                                const isValidActive = importedMap.activeLayerId && this.map_data.layers.some(l => l.id === importedMap.activeLayerId);
+                                this.map_data.activeLayerId = isValidActive ? importedMap.activeLayerId : this.map_data.layers[0].id;
+                            } else {
+                                this.map_data.activeLayerId = '';
+                            }
+
+                            // --- 9. 收尾工作 ---
                             this.resetMapView();
-                            this.saveGame('autosave.json');
+                            this.saveGame('autosave.json'); // ★ 此时保存，旧地图数据已被自动更新为新结构
                             
-                            // 5. 重新初始化分析画布 (用于本体内的魔棒工具)
-                            this.$nextTick(() => {
-                                this.initMapCanvas();
-                            });
+                            this.$nextTick(() => { this.initMapCanvas(); });
                             
-                            alert("地图配置导入成功！");
+                            let msg = "地图导入成功！";
+                            if (rulesAddedCount > 0) msg += `\n已载入 ${rulesAddedCount} 个配套属性规则。`;
+                            alert(msg);
                         }
                     } catch (err) {
-                        console.error(err);
-                        alert("导入失败: " + err.message);
+                        console.error("[Import Error]", err);
+                        alert("地图导入失败: " + err.message);
                     }
-                    // 清空 input，允许重复导入同一个文件
                     event.target.value = '';
                 };
                 reader.readAsText(file);
@@ -4738,42 +5593,75 @@
                     document.body.style.cursor = oldCursor;
                 }
             },
-            // 4. 按下/触摸开始 (开始拖拽)
+            // 4. 按下/触摸开始
             onMapMouseDown(e) {
-                // 如果是鼠标事件且不是左键，忽略
                 if (e.type === 'mousedown' && e.button !== 0) return;
 
-                this.mapView.isDragging = true;
+                // ★ 仅标记鼠标已按下，暂不开启拖拽优化
+                this.mapView.isMouseDown = true;
+                this.mapView.isDragging = false; 
                 
-                // 使用辅助函数获取统一坐标
                 const pos = this.getClientPos(e);
 
+                // 记录初始点击位置 (用于计算位移)
+                this.dragOrigin = { x: pos.x, y: pos.y };
+                
+                // 记录地图当前的偏移基准
                 this.mapView.startX = pos.x - this.mapView.x;
                 this.mapView.startY = pos.y - this.mapView.y;
                 
-                this.dragOrigin = { x: pos.x, y: pos.y };
-                
-                if (e.type === 'mousedown') document.body.style.cursor = 'grabbing';
+                // 注意：这里先不要改 cursor 为 grabbing，等真的动了再改
             },
             // 5. 移动/拖拽中
             onMapMouseMove(e) {
-                if (!this.mapView.isDragging) return;
-                
-                // [关键] 阻止移动端的默认滚动行为，否则拖地图时页面会跟着动
-                if(e.cancelable) e.preventDefault(); 
+                // 如果没按下，直接退出
+                if (!this.mapView.isMouseDown) return;
                 
                 const pos = this.getClientPos(e);
-                this.mapView.x = pos.x - this.mapView.startX;
-                this.mapView.y = pos.y - this.mapView.startY;
+
+                // ★ 如果尚未进入拖拽模式，计算移动距离
+                if (!this.mapView.isDragging) {
+                    const dist = Math.sqrt(
+                        Math.pow(pos.x - this.dragOrigin.x, 2) + 
+                        Math.pow(pos.y - this.dragOrigin.y, 2)
+                    );
+                    
+                    // ★ 只有移动超过 5px 才视为拖拽，激活性能优化
+                    if (dist > 5) {
+                        this.mapView.isDragging = true;
+                        document.body.style.cursor = 'grabbing';
+                    } else {
+                        // 移动太小，视为手抖，不更新地图位置
+                        return;
+                    }
+                }
+
+                // 只要 isDragging 为 true，就执行位移并阻止默认行为
+                if (this.mapView.isDragging) {
+                    if(e.cancelable) e.preventDefault(); 
+                    this.mapView.x = pos.x - this.mapView.startX;
+                    this.mapView.y = pos.y - this.mapView.startY;
+                }
             },
 
-            // 6. 抬起/触摸结束 (结束拖拽 OR 触发点击)
+            // 6. 抬起/触摸结束
             onMapMouseUp(e) {
-                if (!this.mapView.isDragging) return;
-                this.mapView.isDragging = false;
-                document.body.style.cursor = 'default';
+                // 只要鼠标松开，就重置所有状态
+                this.mapView.isMouseDown = false;
+                
+                // 如果之前处于拖拽状态，说明是拖拽结束
+                if (this.mapView.isDragging) {
+                    this.mapView.isDragging = false;
+                    document.body.style.cursor = 'default';
+                    // 拖拽结束不需要触发 handleAddPinClick，因为那是点击背景添加点的逻辑
+                    return; 
+                }
 
-                // 获取松开时的坐标 (touchend 需要从 changedTouches 获取)
+                // ★ 如果 isDragging 为 false，说明移动距离极小 (<5px)
+                // 此时 CSS 的 pointer-events: none 没有生效，
+                // 如果用户点击的是地块 (Region)，地块自身的 @click.stop 会正常触发。
+                // 如果用户点击的是背景，下面的逻辑会触发背景点击（添加点）。
+
                 let endX, endY;
                 if (e.changedTouches && e.changedTouches.length > 0) {
                     endX = e.changedTouches[0].clientX;
@@ -4782,25 +5670,18 @@
                     endX = e.clientX;
                     endY = e.clientY;
                 }
-
-                // 计算移动距离
-                const dist = Math.sqrt(
-                    Math.pow(endX - this.dragOrigin.x, 2) + 
-                    Math.pow(endY - this.dragOrigin.y, 2)
-                );
-
-                // 如果移动距离小于 10px (手指容易抖动，给大一点容差)，则视为“点击”
-                if (dist < 10) {
-                    // [注意] 触摸事件需要传递正确的 clientX/Y 给 handleAddPinClick
-                    // 构造一个模拟的 event 对象传给 handleAddPinClick，因为它内部依赖 clientX/Y
-                    const mockEvent = {
-                        currentTarget: e.currentTarget,
-                        clientX: endX,
-                        clientY: endY,
-                        target: e.target
-                    };
-                    this.handleAddPinClick(mockEvent);
-                }
+                
+                // 调用背景点击逻辑 (handleAddPinClick 内部会判断是否点击了空白处)
+                const mockEvent = {
+                    currentTarget: e.currentTarget,
+                    clientX: endX,
+                    clientY: endY,
+                    target: e.target
+                };
+                
+                // 只有当点击的是背景容器本身时才触发添加点
+                // (注意：Region 的 click 有 .stop 修饰符，所以这里通常处理的是穿透的点击)
+                this.handleAddPinClick(mockEvent);
             },
 
             // 7. 处理添加点的逻辑 (也就是之前的 onMapBackgroundClick)
@@ -4832,12 +5713,39 @@
                     };
                     this.showPinModal = true;
                 } else if (this.mapToolMode === 'region') {
-                    // --- [重点修改] ---
-                    // 无论当前在哪个图层，只要模式是 region，就允许触发泛洪计算
-                    // 因为 saveMapPin 才是决定数据存哪里的地方
+                    // ★★★ [优化] 视觉精准判定 (Pixel Perfect Detection) ★★★
+                    // 抛弃方形包围盒计算，直接询问浏览器：鼠标当前悬停在哪个元素上？
+                    // 配合 HTML 中的 pointer-events 设置，这会自动忽略透明区域，只命中实际形状。
+                    
+                    const elements = document.elementsFromPoint(e.clientX, e.clientY);
+                    
+                    // 在光标下的所有元素中，寻找属于“当前激活图层”的地块
+                    const hitEl = elements.find(el => {
+                        // 向上查找包含 data-rid 的容器
+                        const target = el.closest('.region-hit-target');
+                        // 确保点击的是当前激活图层 (activeLayer) 中的元素
+                        return target && target.dataset.lid === activeLayer.id;
+                    });
+
+                    let hitIndex = -1;
+                    if (hitEl) {
+                        // 如果找到了，通过 DOM 上的 data-rid 反查数据索引
+                        const target = hitEl.closest('.region-hit-target');
+                        const rid = target.dataset.rid;
+                        hitIndex = activeLayer.data.findIndex(r => r.id === rid);
+                    }
+
+                    // --- 下面的逻辑完全保持不变 (这是你强调绝对不能丢弃的逻辑) ---
+                    if (hitIndex !== -1) {
+                        console.log("Clicked existing region (Visual Hit), switching to EDIT mode.");
+                        // 命中既有地块！直接复用点击逻辑进入“编辑模式”
+                        this.onRegionClick(activeLayer.data[hitIndex], hitIndex, activeLayer);
+                        return; // ★ 关键：阻止后续的泛洪生成代码执行
+                    }
+
+                    // --- 如果没点中任何旧地块，才执行泛洪生成新地块 ---
                     
                     const canvas = document.getElementById('map-analysis-canvas');
-                    
                     // 换算坐标
                     const rawX = Math.floor((clickX / rect.width) * canvas.width);
                     const rawY = Math.floor((clickY / rect.height) * canvas.height);
@@ -5000,20 +5908,70 @@
                 }
             },
 
-            // [新增] 点击已存在的地块
+// --- [修复] 点击地块 (解决 v-memo 导致的旧数据缓存问题) ---
             onRegionClick(reg, idx, layer) {
-                this.map_data.activeLayerId = layer.id; // 自动切换到该图层
+                this.map_data.activeLayerId = layer.id;
                 this.editingRegionIndex = idx;
                 this.editingPinIndex = -2; 
                 
-                // 回填表单
+                // ★★★ [这就是问题所在] ★★★
+                // 因为 v-memo 锁住了视图，传进来的 'reg' 是还没保存时的“旧快照”。
+                // 必须无视它，直接通过索引去 layer.data 里拿刚才保存进去的“最新数据”：
+                const freshReg = layer.data[idx]; 
+                
+                // 回填表单 (全部使用 freshReg)
                 this.pinForm = {
-                    ...reg, 
-                    customLabel: reg.name,   
-                    selectedId: reg.ownerId, 
-                    icon: reg.icon || 'fa-solid fa-mountain', 
-                    color: reg.color 
+                    ...freshReg, 
+                    customLabel: freshReg.name,   
+                    selectedId: freshReg.ownerId, 
+                    icon: freshReg.icon || 'fa-solid fa-mountain', 
+                    color: freshReg.color,
+                    
+                    // 现在这里能读到你刚保存的数据了
+                    schemaId: freshReg.schemaId || '', 
+                    stats: freshReg.stats ? JSON.parse(JSON.stringify(freshReg.stats)) : {}
                 };
+                
+                if (this.pinForm.schemaId) {
+                    this.refreshPinFormStats(); 
+                }
+                
+                this.showPinModal = true;
+            },
+
+            // --- [同步修复] 点击标记点 (同样存在缓存问题) ---
+            onPinClick(pin, idx, layer) {
+                this.map_data.activeLayerId = layer.id;
+                this.editingPinIndex = idx;
+                this.editingRegionIndex = -2; 
+                
+                // 同样，无视传进来的 pin，去拿最新的
+                const freshPin = layer.data[idx];
+
+                let mode = freshPin.type || 'custom';
+                if (!freshPin.type) {
+                     if (this.players.some(p => p.id === freshPin.linkId)) mode = 'entity';
+                     else if (freshPin.linkId) mode = 'lore';
+                     else mode = 'custom';
+                }
+
+                this.pinForm = {
+                    x: freshPin.x, y: freshPin.y,
+                    mode: mode,
+                    selectedId: freshPin.linkId || '',
+                    customLabel: freshPin.label || '',
+                    icon: freshPin.icon || this.getFinalPinIcon(freshPin),
+                    color: freshPin.color || this.getFinalPinColor(freshPin),
+                    // 补全属性读取
+                    schemaId: freshPin.schemaId || '', 
+                    stats: freshPin.stats ? JSON.parse(JSON.stringify(freshPin.stats)) : {}
+                };
+                
+                // 如果是 Pin，也尝试刷新一下输入框（如果有规则的话）
+                if (this.pinForm.schemaId) {
+                    this.refreshPinFormStats(); 
+                }
+
                 this.showPinModal = true;
             },
             onPinClick(pin, idx, layer) {
@@ -5038,7 +5996,18 @@
                 };
                 this.showPinModal = true;
             },
-            // 3. 保存 (新增或修改)
+            // [核心修复] 地图编辑：切换规则时，强制初始化属性对象
+            refreshPinFormStats() {
+                if (!this.pinForm.schemaId) return;
+                if (!this.pinForm.stats) this.pinForm.stats = {};
+                const fields = this.getFieldsBySchemaId(this.pinForm.schemaId);
+                fields.forEach(f => {
+                    if (this.pinForm.stats[f.key] === undefined) {
+                        this.pinForm.stats[f.key] = '-';
+                    }
+                });
+            },
+            // [核心修复] 保存地图标记/区域 (强制包含 schemaId 和 stats)
             saveMapPin() {
                 const activeLayer = this.getActiveLayer();
                 if (!activeLayer) return alert("Please select a layer in Layer Manager first!");
@@ -5061,33 +6030,24 @@
                 // --- 保存分支 ---
                 if (this.editingRegionIndex !== -2) {
                     // === Region (地块) 保存逻辑 ===
-                    
-                    // [修复开始] 智能图层定位：如果当前不在 Region 层，自动寻找或创建
                     let targetLayer = activeLayer;
                     
+                    // 智能图层定位
                     if (targetLayer.type !== 'region') {
-                        // 1. 尝试找一个现有的 region 层
                         targetLayer = this.map_data.layers.find(l => l.type === 'region');
-                        
-                        // 2. 找不到就新建
                         if (!targetLayer) {
-                            // 简单的提示
-                            if(confirm("Current layer is NOT a Region Layer. Create a new 'Territories' layer automatically?")) {
+                            if(confirm("Current layer is NOT a Region Layer. Create new?")) {
                                 this.addLayer('region');
-                                // addLayer 会 push 到最后，所以取最后一个
                                 targetLayer = this.map_data.layers[this.map_data.layers.length - 1];
                             } else {
-                                return; // 用户取消
+                                return;
                             }
                         }
-                        // 3. 自动切换当前激活图层 ID，保持 UI 同步，防止下次还要找
                         this.map_data.activeLayerId = targetLayer.id;
                     }
-                    // [修复结束]
 
                     const regionData = {
                         ...baseData,
-                        // 注意这里使用 targetLayer 而不是 activeLayer
                         id: this.editingRegionIndex === -1 ? 'reg_' + Date.now() : targetLayer.data[this.editingRegionIndex].id,
                         type: 'territory',
                         name: this.pinForm.customLabel || "Region", 
@@ -5097,17 +6057,20 @@
                         x: this.pinForm.x, y: this.pinForm.y,
                         w: this.pinForm.w, h: this.pinForm.h,
                         maskData: this.pinForm.maskData,
-                        centerX: this.pinForm.centerX, centerY: this.pinForm.centerY
+                        centerX: this.pinForm.centerX, centerY: this.pinForm.centerY,
+
+                        // ★★★★★ [关键修复] 必须显式保存这两个字段！ ★★★★★
+                        schemaId: this.pinForm.schemaId || '', 
+                        stats: JSON.parse(JSON.stringify(this.pinForm.stats || {})) 
                     };
 
-                    // 使用 targetLayer 保存数据
                     if (this.editingRegionIndex === -1) targetLayer.data.push(regionData);
                     else targetLayer.data[this.editingRegionIndex] = regionData;
                     
                     this.editingRegionIndex = -2; 
                 } else {
-                    // === Pin (标记点) 保存逻辑 (Pin 逻辑通常不需要跨层自动保存，保持原样即可，或者也可以应用类似逻辑) ===
-                    if (activeLayer.type !== 'marker') return alert("Current active layer is NOT a Marker Layer! Please select a Marker Layer.");
+                    // === Pin (标记点) 保存逻辑 ===
+                    if (activeLayer.type !== 'marker') return alert("Current layer is NOT a Marker Layer!");
 
                     const pinData = {
                         ...baseData,
@@ -5116,12 +6079,16 @@
                         label: nameOrLabel,
                         linkId: idRef,
                         x: this.pinForm.x,
-                        y: this.pinForm.y
+                        y: this.pinForm.y,
+
+                        // ★★★ [同步修复] 给 Pin 也加上保存逻辑，防止以后出同样问题 ★★★
+                        schemaId: this.pinForm.schemaId || '',
+                        stats: JSON.parse(JSON.stringify(this.pinForm.stats || {}))
                     };
                     if (this.editingPinIndex === -1) activeLayer.data.push(pinData);
                     else activeLayer.data[this.editingPinIndex] = pinData;
                 }
-
+                this.dataVersion++;
                 this.saveGame('autosave.json');
                 this.showPinModal = false;
             },
@@ -5362,28 +6329,59 @@
             },
             
             // [新增] 处理实体头像上传
-            // [修改] 支持传入 field 参数，以区分是上传 logo 还是 avatar
+            // [修改] 支持 field 为 'add_variant' 时推入数组
             handleFactionImageUpload(event, field) {
-                const file = event.target.files[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    // 动态设置字段
-                    this.editingFaction[field] = e.target.result;
-                };
-                reader.readAsDataURL(file);
+                const files = event.target.files;
+                if (!files || files.length === 0) return;
+
+                // 遍历所有选中的文件
+                for (let i = 0; i < files.length; i++) {
+                    const file = files[i];
+                    const reader = new FileReader();
+                    
+                    reader.onload = (e) => {
+                        if (field === 'add_variant') {
+                            if (!this.editingFaction.avatars) this.editingFaction.avatars = [];
+                            
+                            // [关键修复] 增加 Math.random() 防止 ID 冲突导致列表显示不全
+                            // 使用文件名作为默认 Tag，方便识别
+                            const safeName = file.name.split('.')[0].replace(/[^a-zA-Z0-9_\u4e00-\u9fa5]/g, '').substring(0, 10);
+                            
+                            this.editingFaction.avatars.push({
+                                id: 'av_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+                                tag: safeName || 'tag_' + (this.editingFaction.avatars.length + 1), 
+                                url: e.target.result,
+                                scale: 1.0,
+                                offsetY: 0.0
+                            });
+                            this.$nextTick(() => {
+                                this.previewAvatarIndex = this.editingFaction.avatars.length - 1;
+                            });
+                        } else {
+                            // 默认立绘 (只取第一个，或者覆盖)
+                            this.editingFaction[field] = e.target.result;
+                        }
+                    };
+                    reader.readAsDataURL(file);
+                }
+                
+                // 清空 input 允许重复选择相同文件
+                event.target.value = '';
             },
             formatTimeSpan(event) { if (!event.timeStart) return "Time ?"; if (!event.timeEnd || event.timeStart === event.timeEnd) return event.timeStart; return `${event.timeStart} - ${event.timeEnd}`; },
             getRegionColor(reg) {
-                // 1. 如果有 ownerId，优先使用 owner 的颜色
+                // 1. 最高优先级：如果有 ownerId，直接跟随势力的主题色
+                // 这样当你把地块划给某个势力时，它会自动变成那个势力的颜色
                 if (reg.ownerId) {
                     const p = this.players.find(x => x.id === reg.ownerId);
-                    if (p) return p.color;
+                    if (p && p.color) return p.color;
                 }
-                // 2. 如果地块自己定义了 override 颜色，使用之
+                
+                // 2. 次优先级：如果地块自己定义了 override 颜色，使用之
+                // (用于那些确实需要特殊标记的无主地块，比如污染区、特殊地形)
                 if (reg.color && reg.color !== '#ffffff') return reg.color;
                 
-                // 3. 默认无主颜色 (slate-500)
+                // 3. 兜底：默认无主颜色 (slate-500)
                 return '#64748b';
             },
 
@@ -5538,70 +6536,121 @@
                     this.openSaveLoadModal(); 
                 } catch (e) { alert("Delete failed: " + e.message); }
             },
+// [核心修复] 应用存档状态 (全方位兼容旧版数据，强制补全地块属性)
             applyState(data) {
-                const sanitizedData = JSON.parse(JSON.stringify(data));
+                // 深拷贝防止引用污染
+                const state = JSON.parse(JSON.stringify(data));
                 
-                // 1. [修改] 直接从后端加载已处理好的 rule_sets。后端已负责兼容旧存档。
-                this.rule_sets = sanitizedData.rule_sets || [];
-
-                // 2. [核心修复] 加载完 rule_sets 后，必须验证并重置 activeSchemaId
-                // 检查当前的 activeSchemaId 是否在新的 rule_sets 中还存在
-                const isActiveIdValid = this.rule_sets.some(rs => rs.id === this.activeSchemaId);
-
-                // 如果ID无效 (或从未设置过), 并且存在至少一个规则集，则自动选中第一个
-                if ((!isActiveIdValid || !this.activeSchemaId) && this.rule_sets.length > 0) {
-                    this.activeSchemaId = this.rule_sets[0].id;
-                } 
-                // 如果加载后一个规则集都没有，则清空 activeSchemaId
-                else if (this.rule_sets.length === 0) {
-                    this.activeSchemaId = '';
+                // --- 1. 规则集 (Rule Sets) 迁移 ---
+                if (state.rule_sets && Array.isArray(state.rule_sets)) {
+                    this.rule_sets = state.rule_sets;
+                } else {
+                    console.info("[Load] Migrating legacy schema to Rule Sets...");
+                    const legacySchema = state.stat_schema || state.schema || [];
+                    this.rule_sets = [{
+                        id: 'default', name: '通用规则 (Default)', fields: legacySchema
+                    }];
                 }
 
-                // 3. [保留] 加载其他数据
-                this.lorebook = sanitizedData.lorebook || [];
-                // [修改] 加载实体时，自动补全 avatar 字段以兼容旧存档
-                this.players = (sanitizedData.players || []).map(p => {
-                    // 如果旧存档没有 avatar 字段，补一个空字符串，防止 v-model 报错
-                    if (!p.avatar) p.avatar = "";
+                // --- 2. 激活规则集 ID 校验 ---
+                const hasRules = this.rule_sets.length > 0;
+                const isValidId = this.activeSchemaId && this.rule_sets.some(r => r.id === this.activeSchemaId);
+                if (!isValidId) {
+                    this.activeSchemaId = hasRules ? this.rule_sets[0].id : '';
+                }
+
+                // --- 3. 基础数据加载 ---
+                this.lorebook = state.lorebook || [];
+                this.global_vars = state.global_vars || [];
+                this.pendingEvents = state.currentTurnPending || [];
+
+                // --- 4. 实体 (Players) 数据清洗 ---
+                this.players = (state.players || []).map(p => {
+                    if (p.avatar === undefined) p.avatar = "";
+                    if (p.avatarScale === undefined) p.avatarScale = 1.0;
+                    if (p.avatarOffsetY === undefined) p.avatarOffsetY = 0.0;
+                    if (!p.schemaId) p.schemaId = hasRules ? this.rule_sets[0].id : 'default';
+                    if (!p.stats) p.stats = {};
                     return p;
                 });
-                this.timeline = sanitizedData.timeline || []; 
-                this.global_vars = sanitizedData.global_vars || [];
-                // --- [修改] 地图数据加载与自动迁移逻辑 ---
-                const loadedMap = sanitizedData.map_data || { layers: [] };
 
-                // 如果是旧格式 (没有 layers 只有 image/regions/pins)，执行迁移
-                if ((!loadedMap.layers || loadedMap.layers.length === 0) && (loadedMap.image || (loadedMap.regions && loadedMap.regions.length > 0))) {
-                    console.log("Migrating old map format to Layer System...");
+                // --- 5. 时间轴 (Timeline) 数据清洗 ---
+                this.timeline = (state.timeline || []).map(turn => {
+                    if(turn.events) {
+                        turn.events.forEach(e => {
+                            if (!e.factionIds) e.factionIds = e.factionId ? [e.factionId] : [];
+                            if (!e.factionId && e.factionIds.length > 0) e.factionId = e.factionIds[0];
+                        });
+                    }
+                    return turn;
+                });
+
+                // --- 6. 地图数据 (Map Data) 强力迁移与清洗 ---
+                const loadedMap = state.map_data || { layers: [] };
+                
+                // 判断是否为旧版散装格式
+                const isLegacyMap = (!loadedMap.layers || loadedMap.layers.length === 0) && 
+                                    (loadedMap.image || (loadedMap.regions && loadedMap.regions.length > 0));
+
+                if (isLegacyMap) {
+                    console.info("[Load] Migrating legacy Map Data to Layer System...");
                     const newLayers = [];
-                    
-                    // 1. 迁移底图
+                    const ts = Date.now();
+
                     if (loadedMap.image) {
-                        newLayers.push({ id: 'layer_bg_default', type: 'image', name: 'Base Map', visible: true, opacity: 1.0, data: loadedMap.image });
+                        newLayers.push({ 
+                            id: 'layer_bg_' + ts, type: 'image', name: 'Base Map', 
+                            visible: true, opacity: 1.0, data: loadedMap.image 
+                        });
                     }
-                    // 2. 迁移地块
                     if (loadedMap.regions && loadedMap.regions.length > 0) {
-                        newLayers.push({ id: 'layer_reg_default', type: 'region', name: 'Territories', visible: true, opacity: 1.0, data: loadedMap.regions });
+                        // ★ 数据清洗：旧存档中的地块也要补全 stats
+                        const cleanRegions = loadedMap.regions.map(r => ({
+                            ...r,
+                            schemaId: r.schemaId || '',
+                            stats: r.stats || {}
+                        }));
+
+                        newLayers.push({ 
+                            id: 'layer_reg_' + ts, type: 'region', name: 'Territories', 
+                            visible: true, opacity: 1.0, data: cleanRegions 
+                        });
                     }
-                    // 3. 迁移标记
                     if (loadedMap.pins && loadedMap.pins.length > 0) {
-                        newLayers.push({ id: 'layer_pin_default', type: 'marker', name: 'Markers', visible: true, opacity: 1.0, data: loadedMap.pins });
+                        newLayers.push({ 
+                            id: 'layer_pin_' + ts, type: 'marker', name: 'Markers', 
+                            visible: true, opacity: 1.0, data: loadedMap.pins 
+                        });
                     }
-                    
+
                     this.map_data = {
                         layers: newLayers,
-                        activeLayerId: newLayers.length > 0 ? newLayers[0].id : '' // 默认选中底层
+                        activeLayerId: newLayers.length > 0 ? newLayers[0].id : ''
                     };
                 } else {
-                    // 已经是新格式
+                    // 新版格式，同样进行二次清洗，确保万无一失
+                    if (!loadedMap.layers) loadedMap.layers = [];
+                    
+                    loadedMap.layers.forEach(layer => {
+                        if (layer.type === 'region' && Array.isArray(layer.data)) {
+                            layer.data = layer.data.map(r => ({
+                                ...r,
+                                schemaId: r.schemaId || '',
+                                stats: r.stats || {}
+                            }));
+                        }
+                    });
+
                     this.map_data = loadedMap;
-                    // 确保有 activeLayerId
+                    
                     if (!this.map_data.activeLayerId && this.map_data.layers.length > 0) {
                         this.map_data.activeLayerId = this.map_data.layers[0].id;
                     }
                 }
-                this.pendingEvents = sanitizedData.currentTurnPending || [];
+
+                // --- 7. 系统状态恢复 ---
                 this.serverConnected = true;
+                this.$nextTick(() => { this.initMapCanvas(); });
             },
             
             addGlobalVar() {
@@ -5618,7 +6667,13 @@
                 // 1. 基础校验
                 if (!rawInputText && !editorDraft) return alert("Please input command or summary! (请输入指令或摘要)");
 
-                this.tempSystemPrompt = this.settings.prompts.system;
+                // [修改] 根据模式动态加载系统提示词到临时编辑区
+                if (this.useGalgamePrompt) {
+                    this.tempSystemPrompt = this.settings.prompts.galgame;
+                } else {
+                    this.tempSystemPrompt = this.settings.prompts.system;
+                }
+                
                 const inputText = (rawInputText + " " + editorDraft).toLowerCase();
 
                 // 2. 准备资料库
@@ -5891,7 +6946,16 @@
                         if (activePlayers.length > 0) {
                             contextPayload += `=== [WORLD: ENTITIES] ===\n${activePlayers.map(p => {
                                 const realP = this.players.find(x => x.id === p.id);
-                                return `ID:${realP.id} | ${realP.name}\n  Desc: ${realP.desc}\n  Stats: ${JSON.stringify(realP.stats)}`;
+                                
+                                // [新增] ★ 如果开关开启，且有差分立绘，则注入 Tags
+                                let avatarTagsInfo = "";
+                                if (this.enableAvatarTags && realP.avatars && realP.avatars.length > 0) {
+                                    const tags = realP.avatars.map(a => a.tag).join(", ");
+                                    // 使用明确的标记告诉 AI 这是可视化的上下文
+                                    avatarTagsInfo = `\n  [VISUAL] Available Expressions: [${tags}]`;
+                                }
+
+                                return `ID:${realP.id} | ${realP.name}\n  Desc: ${realP.desc}\n  Stats: ${JSON.stringify(realP.stats)}${avatarTagsInfo}`;
                             }).join('\n\n')}\n\n`;
                         }
                     }
@@ -5986,14 +7050,18 @@
                         if (this.editor.impacts.length) {
                             contextPayload += `> PLANNED_IMPACTS: ${JSON.stringify(this.editor.impacts)}\n`;
                         }
-                        // 安科模式开关
+                        
+                        // 安科模式开关 (保持不变)
                         if (this.generateOptions) {
                             contextPayload += `> MODE: Generate "options" array for player decision.\n`;
                         }
                         contextPayload += `\n`;
                     }
                 });
-
+                let chosenSystemPrompt = this.settings.prompts.system; // 默认
+                if (this.useGalgamePrompt) { // 需要在 data 中定义这个变量
+                    chosenSystemPrompt = this.settings.prompts.galgame;
+                }
                 // --- 组装 API 请求 ---
                 const payload = { 
                     provider: this.settings.api.provider, 
@@ -6003,7 +7071,7 @@
                     useProxy: this.settings.proxy.enabled, 
                     proxyPort: this.settings.proxy.port,
                     
-                    systemPrompt: this.tempSystemPrompt, 
+                    systemPrompt: chosenSystemPrompt, 
                     
                     // 核心修改：所有信息都放在 context 里，history 留空以避免后端重复插入
                     context: contextPayload,    
@@ -6039,6 +7107,7 @@
                     this.editor.factionId = parsed.factionId || this.editor.factionId; 
                     this.editor.timeStart = parsed.timeStart || ""; 
                     this.editor.timeEnd = parsed.timeEnd || "";
+                    
                     // 处理选项
                     if (parsed.options && Array.isArray(parsed.options)) {
                         this.editor.options = parsed.options;
@@ -6120,20 +7189,33 @@
             // [修复] 移除重复的、不完整的 addToStaging 定义，只保留这一个
             addToStaging() { 
                 if (!this.editor.summary) return; 
+                
+                // 确保有数据
+                if (!this.editor.factionIds || this.editor.factionIds.length === 0) {
+                    // 如果用户没选，根据 factionId 回填，或者默认为 global
+                    if (this.editor.factionId) this.editor.factionIds = [this.editor.factionId];
+                    else this.editor.factionIds = ['global'];
+                }
+                this.updateEditorPrimary();
+
                 this.pendingEvents.push(JSON.parse(JSON.stringify({ 
                     ...this.editor, 
-                    factionId: this.editor.factionId || 'global', 
+                    // 显式保存数组
+                    factionIds: this.editor.factionIds,
+                    // 保持单数 ID 存在以兼容旧逻辑
+                    factionId: this.editor.factionId || this.editor.factionIds[0] || 'global', 
                     timeStart: this.editor.timeStart || '?', 
                     timeEnd: this.editor.timeEnd || '?', 
                     content: this.editor.content || this.editor.summary, 
                     isOpen: false 
                 }))); 
-                // 清空编辑器
+                // 清空编辑器 (完整重置)
                 this.editor.summary = ""; 
                 this.editor.content = ""; 
                 this.editor.impacts = []; 
-                this.editor.options = []; // 这个在被删除的版本里漏掉了
-                this.editor.factionId = ""; 
+                this.editor.options = []; 
+                this.editor.factionId = "";
+                this.editor.factionIds = []; // 清空数组
                 this.editor.timeStart = ""; 
                 this.editor.timeEnd = ""; 
                 this.tabs.right = 'staging'; 
@@ -6303,8 +7385,20 @@
             },
             copyToClipboard(t) { navigator.clipboard.writeText(t); },
             openFactionModal(p) { 
+                this.previewAvatarIndex = -1; // [新增] 重置预览索引
                 if(p) { 
                     this.editingFaction = JSON.parse(JSON.stringify(p)); 
+                    // [兼容性] 补全视觉参数
+                    if (this.editingFaction.avatarScale === undefined) this.editingFaction.avatarScale = 1.0;
+                    if (this.editingFaction.avatarOffsetY === undefined) this.editingFaction.avatarOffsetY = 0.0;
+                    // 补全差分列表中的参数
+                    if (this.editingFaction.avatars) {
+                        this.editingFaction.avatars.forEach(av => {
+                            if (av.scale === undefined) av.scale = 1.0;
+                            if (av.offsetY === undefined) av.offsetY = 0.0;
+                        });
+                    }
+
                     // 确保有 schemaId
                     if(!this.editingFaction.schemaId) this.editingFaction.schemaId = this.rule_sets[0]?.id || 'default';
                 } else { 
@@ -6312,22 +7406,41 @@
                     this.editingFaction = {
                         id:'', name:'', 
                         logo: 'fa-solid fa-users', 
-                        avatar: '', // [新增] 初始化 avatar 字段
+                        avatar: '', 
+                        avatarScale: 1.0,   // [新增]
+                        avatarOffsetY: 0.0, // [新增]
+                        avatars: [], 
                         color:'#ffffff', desc:'', 
                         parentId: '', 
                         schemaId: this.activeSchemaId || (this.rule_sets[0]?.id || 'default'), 
                         stats:{}
-                    }; 
+                    };
                     // 预填空值
                     this.getFieldsBySchemaId(this.editingFaction.schemaId).forEach(s => this.editingFaction.stats[s.key]='-'); 
                 } 
                 this.showFactionModal = true; 
             },
             closeFactionModal() { this.showFactionModal = false; },
-            saveFaction() { if(!this.editingFaction.name) return; if(this.editingFaction.id) { const i = this.players.findIndex(p => p.id === this.editingFaction.id); if(i !== -1) this.players[i] = JSON.parse(JSON.stringify(this.editingFaction)); } else { this.editingFaction.id = 'p'+Date.now(); this.players.push(JSON.parse(JSON.stringify(this.editingFaction))); } this.closeFactionModal(); this.saveGame('autosave.json'); },
+            saveFaction() { if(!this.editingFaction.name) return; if(this.editingFaction.id) { const i = this.players.findIndex(p => p.id === this.editingFaction.id); if(i !== -1) this.players[i] = JSON.parse(JSON.stringify(this.editingFaction)); } else { this.editingFaction.id = 'p'+Date.now(); this.players.push(JSON.parse(JSON.stringify(this.editingFaction))); } this.dataVersion++; this.closeFactionModal(); this.saveGame('autosave.json'); },
             deleteFaction() { const i = this.players.findIndex(p => p.id === this.editingFaction.id); if(i !== -1 && confirm("Destroy Entity?")) { this.players.splice(i,1); this.closeFactionModal(); this.saveGame('autosave.json'); } },
             openScriptGenModal() { this.scriptGenPrompt = ''; this.scriptAttachments = []; this.showScriptGenModal = true; },
-            
+            // [新增] 切换实体类型时，自动补全属性字段
+            refreshFactionStats() {
+                if (!this.editingFaction.schemaId) return;
+                
+                // 获取当前规则集的所有字段定义
+                const fields = this.getFieldsBySchemaId(this.editingFaction.schemaId);
+                
+                // 确保 stats 对象存在
+                if (!this.editingFaction.stats) this.editingFaction.stats = {};
+                
+                // 遍历字段，如果当前 stats 里没有这个 key，就初始化为 '-'
+                fields.forEach(f => {
+                    if (this.editingFaction.stats[f.key] === undefined) {
+                        this.editingFaction.stats[f.key] = '-';
+                    }
+                });
+            },
             // --- 查找并替换 methods 中的 generateScript ---
 
             async generateScript() {
