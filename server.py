@@ -76,12 +76,19 @@ app.add_middleware(
 class GlobalVar(BaseModel):
     key: str = "Unknown" 
     value: Any = ""      # 允许任意类型
+    # [新增] 属性增强：保存类型、可见性、公式
+    type: str = "string"        # "string" | "number"
+    visibility: str = "editable" # "editable" | "readonly" | "hidden"
+    formula: str = ""           # 自动计算公式
 
 class StatSchema(BaseModel):
     key: str = "unknown"
     label: str = "未知属性"
+    # [新增] 属性增强：保存类型、可见性、公式
+    type: str = "string"        # "string" | "number"
+    visibility: str = "editable" # "editable" | "readonly" | "hidden"
+    formula: str = ""           # 自动计算公式
 
-# [新增] 定义规则集的数据模型
 class RuleSet(BaseModel):
     id: str
     name: str
@@ -108,6 +115,7 @@ class Faction(BaseModel):
     parentId: str = ""
     name: str = "Unknown Faction"
     logo: str = "fa-solid fa-users"
+    isProtagonist: bool = False 
     
     # [兼容旧存档] 默认立绘
     avatar: str = "" 
@@ -153,9 +161,9 @@ class MapRegion(BaseModel):
     name: str = "New Region"
     ownerId: str = ""
     
-    # ★★★ [新增] 属性规则支持 ★★★
+    # ★★★ [新增] 属性规则支持，确保地块属性被保存 ★★★
     schemaId: str = ""          # 绑定的规则集 ID
-    stats: Dict[str, Any] = {}  # 具体的属性数值 (如: {"pop": "1000", "def": "S"})
+    stats: Dict[str, Any] = {}  # 具体的属性数值
     
     # 视觉
     icon: str = ""
@@ -211,10 +219,13 @@ class Turn(BaseModel):
 class GameState(BaseModel):
     global_vars: List[GlobalVar] = []
     
-    # 【核心修复】这里必须是 rule_sets！
-    # 如果这里写的是 stat_schema，前端发来的 rule_sets 会被扔进垃圾桶
+    # ★★★ 关键：确保这里叫 rule_sets 且类型为 List[RuleSet]
+    # 这样后端才能正确解析并保存前端发来的多套规则集
     rule_sets: List[RuleSet] = [] 
     
+    # 保留旧字段用于兼容读取（可选，但建议保留以免报错，只是保存时不会用它了）
+    stat_schema: List[StatSchema] = [] 
+
     lorebook: List[LoreEntry] = []
     players: List[Faction] = []
     map_data: MapData = MapData()

@@ -830,6 +830,15 @@
             font-size: 0.75rem; letter-spacing: 0.2em; opacity: 0.5;
             animation: blink 2s infinite;
         }
+        /* 主角模式：对话框变色，且名字靠右 (或是其他你喜欢的样式) */
+        .vn-text-box.protagonist-mode {
+            border-left: 4px solid #818cf8; /* Indigo */
+            background: linear-gradient(90deg, rgba(15, 23, 42, 0.9) 0%, rgba(49, 46, 129, 0.4) 100%);
+        }
+        .vn-text-box.protagonist-mode .vn-text-content {
+            font-style: normal;
+            color: #e0e7ff;
+        }
 
         @keyframes core-fade-in { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
         @keyframes core-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-20px); } }
@@ -1097,20 +1106,27 @@
                 
                 <!-- 2. 立绘层 -->
                 <div class="vn-tachie-stage">
-                    <!-- [修改] 移除了 transition 标签，使立绘切换变为即时刷新，不再有淡入淡出 -->
-                    <img v-if="vnCurrentLine && vnCurrentLine.role !== 'narrator' && getFactionAvatar(vnCurrentLine.role, vnCurrentLine.tag)"
-                         :key="vnCurrentLine.role + vnCurrentLine.tag"
-                         :src="getFactionAvatar(vnCurrentLine.role, vnCurrentLine.tag)"
-                         class="vn-tachie-img"
-                         :style="getAvatarStyleObj(vnCurrentLine.role, vnCurrentLine.tag)">
+                    <!-- [修改] 增加判定：如果角色是 isProtagonist，则不显示立绘 (POV视角) -->
+                    <img v-if="vnCurrentLine && vnCurrentLine.role !== 'narrator' && !isProtagonist(vnCurrentLine.role) && getFactionAvatar(vnCurrentLine.role, vnCurrentLine.tag)"
+                        :key="vnCurrentLine.role + vnCurrentLine.tag"
+                        :src="getFactionAvatar(vnCurrentLine.role, vnCurrentLine.tag)"
+                        class="vn-tachie-img"
+                        :style="getAvatarStyleObj(vnCurrentLine.role, vnCurrentLine.tag)">
                 </div>
 
                 <!-- 3. UI 层 (对话框) -->
-                <div class="vn-ui-layer" @click="vnNextLine">
+                <!-- 修改：移除 @click，增加 pointer-events-none 让外壳不阻挡，但由内部子元素接管交互 -->
+                <div class="vn-ui-layer pointer-events-none">
+                    
+                    <!-- ★★★ [新增] 专门的点击交互层 (作为背景板) ★★★ -->
+                    <!-- 这个层铺满整个区域，z-index 为 0，负责捕捉“点击空白处下一句” -->
+                    <!-- pointer-events-auto 恢复交互 -->
+                    <div class="absolute inset-0 z-0 pointer-events-auto" @click="vnNextLine"></div>
                     
                     <!-- 名字铭牌 (非旁白时显示) -->
                     <transition name="slide-up">
-                        <div class="vn-name-box" v-if="vnCurrentLine && vnCurrentLine.role !== 'narrator'"
+                        <!-- 修改：增加 relative z-10 pointer-events-auto -->
+                        <div class="vn-name-box relative z-10 pointer-events-auto" v-if="vnCurrentLine && vnCurrentLine.role !== 'narrator'"
                              :style="{ borderLeftColor: getFactionColor(vnCurrentLine.role) }">
                             <div class="vn-name-text" :style="{ color: getFactionColor(vnCurrentLine.role) }">
                                 {{ getFactionName(vnCurrentLine.role) }}
@@ -1121,7 +1137,11 @@
                     </transition>
                     
                     <!-- 文本框 -->
-                    <div class="vn-text-box" :class="{ 'narrator-mode': vnCurrentLine && vnCurrentLine.role === 'narrator' }">
+                    <div class="vn-text-box relative z-10 pointer-events-auto" @click="vnNextLine"
+                        :class="{ 
+                            'narrator-mode': vnCurrentLine && vnCurrentLine.role === 'narrator',
+                            'protagonist-mode': vnCurrentLine && isProtagonist(vnCurrentLine.role)
+                        }">
                         <div class="vn-text-content">
                             <!-- 使用 v-html 允许简单的格式，如换行 -->
                             <span v-html="vnDisplayedText"></span>
@@ -1133,6 +1153,28 @@
                         <div v-if="!vnIsTyping" class="vn-next-indicator">
                              <i class="fa-solid fa-play"></i>
                         </div>
+                    </div>
+                    <!-- vn-text-box 结束 -->
+
+                    <!-- ★★★ [新增] 实时互动输入栏 (Interactive Chat) ★★★ -->
+                    <!-- 仅在打字结束，且没有弹出选项时显示 -->
+                    <div v-if="!vnIsTyping && !vnShowOptions" class="mt-4 pointer-events-auto flex gap-2 animate-fade-in-up relative z-20" @click.stop>
+                        <!-- 修改点：添加了 @click.stop 和 @touchstart.stop -->
+                        <input v-model="vnUserInput" 
+                            @click.stop
+                            @touchstart.stop
+                            @keyup.enter="sendVNChat"
+                            placeholder="Say or do something..." 
+                            class="flex-1 bg-black/60 border border-white/20 theme-rounded-sm px-4 py-2 text-white outline-none focus:border-indigo-500 transition backdrop-blur-md font-bold shadow-lg"
+                        >
+                        <button @click="sendVNChat" :disabled="isThinking" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 theme-rounded-sm font-bold transition flex items-center gap-2">
+                            <i :class="isThinking ? 'fa-solid fa-circle-notch fa-spin' : 'fa-solid fa-paper-plane'"></i>
+                            <span class="hidden lg:inline">Send</span>
+                        </button>
+                        <!-- ★★★ [新增] 手动保存退出按钮 (放在发送按钮旁边) -->
+                        <button @click="saveAndExitVN" class="bg-red-900/80 hover:bg-red-700 text-white px-3 py-2 theme-rounded-sm font-bold transition flex items-center justify-center border border-red-500/30" title="Save & Quit">
+                            <i class="fa-solid fa-power-off"></i>
+                        </button>
                     </div>
                 </div>
 
@@ -1150,16 +1192,132 @@
                         </div>
                     </button>
                     <button v-if="!vnCurrentEvent.options || vnCurrentEvent.options.length === 0" 
-                            @click="vnMode = false"
+                            @click="saveAndExitVN"
                             class="vn-option-btn justify-center text-center opacity-70 hover:opacity-100">
-                        [ END SCENE ]
+                        <i class="fa-solid fa-floppy-disk mr-2"></i> [ END SCENE & SAVE ]
                     </button>
                 </div>
                 
-                <!-- 退出按钮 -->
-                <button @click="vnMode = false" class="absolute top-6 right-6 z-[300] text-white/30 hover:text-white bg-black/20 hover:bg-red-600/80 rounded-sm w-12 h-12 flex items-center justify-center transition border border-white/10 backdrop-blur-md">
-                    <i class="fa-solid fa-power-off"></i>
-                </button>
+                <!-- VN 顶部工具栏 (导演设置 + 退出) -->
+                <div class="absolute top-6 right-6 z-[300] flex gap-2">
+                    <!-- 1. 导演/设置按钮 -->
+                    <button @click="vnShowSettings = !vnShowSettings" 
+                            class="text-white/50 hover:text-white bg-black/40 hover:bg-indigo-600/80 theme-rounded-sm w-12 h-12 flex items-center justify-center transition border border-white/10 backdrop-blur-md"
+                            title="Director Panel">
+                        <i class="fa-solid fa-sliders"></i>
+                    </button>
+
+                    <!-- 2. 保存并退出按钮 -->
+                    <button @click="saveAndExitVN" 
+                            class="text-white/50 hover:text-red-500 bg-black/40 hover:bg-red-900/50 theme-rounded-sm w-12 h-12 flex items-center justify-center transition border border-white/10 backdrop-blur-md"
+                            title="Save & Exit">
+                        <i class="fa-solid fa-power-off"></i>
+                    </button>
+                </div>
+
+                <!-- ★★★ [新增] 导演面板 (Director Panel) ★★★ -->
+                <transition name="fade">
+                    <div v-if="vnShowSettings" class="absolute top-20 right-6 z-[290] w-80 bg-black/90 border border-indigo-500/30 theme-rounded-sm backdrop-blur-xl p-4 shadow-2xl text-white flex flex-col gap-4" @click.stop>
+                        
+                        <!-- 标题栏 -->
+                        <div class="flex justify-between items-center pb-2 border-b border-white/10">
+                            <h4 class="text-xs font-bold text-indigo-400 uppercase tracking-widest"><i class="fa-solid fa-clapperboard mr-2"></i>导演控制台</h4>
+                            <button @click="vnShowSettings = false" class="text-white/30 hover:text-white"><i class="fa-solid fa-times"></i></button>
+                        </div>
+
+                        <div class="space-y-4 max-h-[60vh] overflow-y-auto pr-1" style="scrollbar-width: thin; scrollbar-color: #4f46e5 #1e1b4b;">
+                            
+                            <!-- ★ [新增] 身份切换 (Identity Override) -->
+                            <div class="bg-indigo-900/30 p-2 theme-rounded-sm border border-indigo-500/30">
+                                <label class="block text-[10px] font-bold text-indigo-300 uppercase mb-1">当前扮演 (Current Identity)</label>
+                                <select v-model="vnPlayerRoleId" class="w-full bg-black/50 text-xs text-white border border-indigo-500/50 rounded px-2 py-1 outline-none focus:bg-indigo-900/50">
+                                    <option value="narrator">-- 旁白 / 上帝视角 (Narrator) --</option>
+                                    <optgroup label="Characters">
+                                        <option v-for="p in players" :key="p.id" :value="p.id">
+                                            {{ p.name }} {{ p.isProtagonist ? '(Main)' : '' }}
+                                        </option>
+                                    </optgroup>
+                                </select>
+                            </div>
+
+                            <!-- A. 演员调度 -->
+                            <div>
+                                <label class="block text-[10px] font-bold text-gray-400 uppercase mb-2">活跃演员 (Active Cast)</label>
+                                <div class="space-y-1">
+                                    <!-- 列表逻辑微调：显示所有非当前扮演的角色 -->
+                                    <!-- 这样如果你扮演了路人A，路人A就会从列表中消失(因为是你自己)，你可以勾选原本的主角作为对手戏 -->
+                                    <div v-for="p in players" :key="p.id" v-show="p.id !== vnPlayerRoleId" 
+                                         class="flex items-center gap-2 p-2 theme-rounded-sm border transition cursor-pointer select-none"
+                                         :class="vnActiveEntityIds.includes(p.id) ? 'bg-indigo-900/40 border-indigo-500/50' : 'bg-white/5 border-transparent hover:bg-white/10'"
+                                         @click="vnActiveEntityIds.includes(p.id) ? vnActiveEntityIds = vnActiveEntityIds.filter(x=>x!==p.id) : vnActiveEntityIds.push(p.id)">
+                                        
+                                        <div class="w-4 h-4 border theme-rounded-sm flex items-center justify-center transition-colors"
+                                             :class="vnActiveEntityIds.includes(p.id) ? 'bg-indigo-500 border-indigo-500' : 'border-gray-500 bg-transparent'">
+                                            <i v-if="vnActiveEntityIds.includes(p.id)" class="fa-solid fa-check text-[10px] text-white"></i>
+                                        </div>
+                                        
+                                        <div class="w-6 h-6 theme-rounded-sm overflow-hidden bg-black/30 flex items-center justify-center shrink-0">
+                                            <img v-if="isImage(p.logo)" :src="p.logo" class="w-full h-full object-contain">
+                                            <i v-else :class="p.logo || 'fa-solid fa-user'" class="text-[10px]"></i>
+                                        </div>
+                                        
+                                        <span class="text-xs font-bold truncate flex-1" :style="{color: p.color}">{{ p.name }}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- B. 上下文配置 -->
+                            <div class="pt-3 border-t border-white/10 space-y-2">
+                                <label class="block text-[10px] font-bold text-gray-400 uppercase">上下文开关</label>
+                                
+                                <!-- 开关组 -->
+                                <div class="grid grid-cols-2 gap-2">
+                                    <div class="flex items-center justify-between p-1 hover:bg-white/5 theme-rounded-sm">
+                                        <span class="text-[10px] text-gray-300">属性 (Stats)</span>
+                                        <input type="checkbox" v-model="vnContextConfig.includeStats" class="accent-indigo-500 w-3 h-3 cursor-pointer">
+                                    </div>
+                                    <div class="flex items-center justify-between p-1 hover:bg-white/5 theme-rounded-sm">
+                                        <span class="text-[10px] text-gray-300">表情 (Tags)</span>
+                                        <input type="checkbox" v-model="vnContextConfig.includeTags" class="accent-indigo-500 w-3 h-3 cursor-pointer">
+                                    </div>
+                                    <div class="flex items-center justify-between p-1 hover:bg-white/5 theme-rounded-sm">
+                                        <span class="text-[10px] text-gray-300">自定义 Prompt</span>
+                                        <input type="checkbox" v-model="vnContextConfig.includeCustom" class="accent-indigo-500 w-3 h-3 cursor-pointer">
+                                    </div>
+                                    <div class="flex items-center justify-between p-1 hover:bg-white/5 theme-rounded-sm">
+                                        <span class="text-[10px] text-gray-300">地图 (Map)</span>
+                                        <input type="checkbox" v-model="vnContextConfig.includeMap" class="accent-indigo-500 w-3 h-3 cursor-pointer">
+                                    </div>
+                                </div>
+
+                                <!-- ★ [新增] 独立历史记忆设置 -->
+                                <div class="bg-white/5 p-2 theme-rounded-sm border border-white/5 mt-2">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <span class="text-[10px] font-bold text-gray-300 uppercase">历史记忆 (History)</span>
+                                        <input type="checkbox" v-model="vnContextConfig.includeHistory" class="accent-indigo-500 w-3 h-3 cursor-pointer">
+                                    </div>
+                                    
+                                    <div v-if="vnContextConfig.includeHistory" class="space-y-2">
+                                        <div>
+                                            <div class="flex justify-between text-[9px] text-gray-400 mb-1">
+                                                <span>深层 (Deep/Detail)</span>
+                                                <span class="text-indigo-400">{{ vnContextConfig.historyDeepDepth }} Turns</span>
+                                            </div>
+                                            <input type="range" v-model.number="vnContextConfig.historyDeepDepth" min="0" max="5" class="w-full h-1 bg-gray-700 theme-rounded-sm appearance-none cursor-pointer accent-indigo-500">
+                                        </div>
+                                        <div>
+                                            <div class="flex justify-between text-[9px] text-gray-400 mb-1">
+                                                <span>浅层 (Shallow/Summary)</span>
+                                                <span class="text-indigo-400">{{ vnContextConfig.historyShallowDepth }} Turns</span>
+                                            </div>
+                                            <input type="range" v-model.number="vnContextConfig.historyShallowDepth" min="0" max="20" class="w-full h-1 bg-gray-700 theme-rounded-sm appearance-none cursor-pointer accent-indigo-500">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </transition>
             </div>
         </transition>
         
@@ -1181,8 +1339,33 @@
                 <div v-for="(gVar, idx) in global_vars" :key="idx" class="bg-[var(--bg-panel)] p-3 theme-rounded-sm border border-[var(--border-dim)] flex flex-col gap-2 group">
                     <div class="flex gap-2">
                         <input v-model="gVar.key" @change="debouncedSave('autosave.json')" class="w-1/3 bg-[var(--bg-badge)] text-sm text-indigo-400 p-2 theme-rounded-sm border border-[var(--border-dim)] outline-none font-bold font-mono-tech" :placeholder="t('ph_var_key')">
-                        <input v-model="gVar.value" @change="debouncedSave('autosave.json')" class="flex-1 bg-[var(--bg-badge)] text-sm text-[var(--text-main)] p-2 theme-rounded-sm border border-[var(--border-dim)] outline-none" :placeholder="t('ph_var_val')">
+                        
+                        <!-- 根据类型显示输入框或只读显示 -->
+                        <input v-if="gVar.visibility !== 'readonly'" v-model="gVar.value" @change="debouncedSave('autosave.json')" :type="gVar.type === 'number' ? 'number' : 'text'" class="flex-1 bg-[var(--bg-badge)] text-sm text-[var(--text-main)] p-2 theme-rounded-sm border border-[var(--border-dim)] outline-none" :placeholder="t('ph_var_val')">
+                        <div v-else class="flex-1 bg-[var(--bg-input)] text-sm text-pink-400 font-mono font-bold p-2 theme-rounded-sm border border-dashed border-pink-500/30 flex items-center">
+                            <i class="fa-solid fa-calculator mr-2 text-[10px]"></i> {{ gVar.value }}
+                        </div>
+
                         <button @click="global_vars.splice(idx,1); saveGame('autosave.json')" class="text-[var(--text-dim)] hover:text-red-400 px-2 opacity-0 group-hover:opacity-100 transition"><i class="fa-solid fa-trash"></i></button>
+                    </div>
+                    
+                    <!-- 配置行 -->
+                    <div class="flex gap-1 items-center border-t border-[var(--border-dim)] pt-2 mt-1">
+                        <select v-model="gVar.type" class="bg-transparent text-[9px] text-[var(--text-dim)] outline-none uppercase font-bold w-16">
+                            <option value="string">STR</option>
+                            <option value="number">NUM</option>
+                        </select>
+                        <div class="w-px h-3 bg-[var(--border-dim)]"></div>
+                        <select v-model="gVar.visibility" class="bg-transparent text-[9px] outline-none uppercase font-bold w-20" :class="gVar.visibility==='editable'?'text-emerald-500':(gVar.visibility==='readonly'?'text-amber-500':'text-gray-500')">
+                            <option value="editable">Edit</option>
+                            <option value="readonly">Auto</option>
+                            <option value="hidden">Hide</option>
+                        </select>
+                        
+                        <input v-if="gVar.type === 'number' && gVar.visibility === 'readonly'" 
+                            v-model="gVar.formula" 
+                            placeholder="e.g. turn * 10 + utils.sumRegionStat('p_1', 'gold')" 
+                            class="flex-1 bg-transparent text-[9px] text-pink-400 font-mono outline-none text-right placeholder-gray-700">
                     </div>
                 </div>
                 <button @click="addGlobalVar" class="w-full py-3 bg-[var(--bg-panel)] text-[var(--text-dim)] theme-rounded-sm border border-[var(--border-dim)] font-bold text-sm hover:bg-[var(--bg-header)] transition hover:text-[var(--text-main)]"><i class="fa-solid fa-plus mr-2"></i> {{ t('btn_add_global') }}</button>
@@ -1272,13 +1455,48 @@
                         {{ t('msg_no_fields') }}
                     </div>
                     <div v-for="(field, idx) in getActiveSchemaFields()" :key="idx" class="bg-[var(--bg-panel)] p-3 theme-rounded-sm border border-[var(--border-dim)] flex gap-3 items-center group">
-                        <div class="flex-1">
-                            <div class="text-[9px] text-[var(--text-dim)] uppercase mb-0.5">{{ t('lbl_field_label') }}</div>
-                            <input v-model="field.label" @change="debouncedSave('autosave.json')" class="w-full bg-[var(--bg-badge)] text-sm text-[var(--text-main)] p-1 theme-rounded-sm outline-none border border-transparent focus:border-[var(--border-dim)]">
-                        </div>
-                        <div class="w-20">
-                            <div class="text-[9px] text-[var(--text-dim)] uppercase mb-0.5">{{ t('lbl_field_key') }}</div>
-                            <input v-model="field.key" @change="debouncedSave('autosave.json')" class="w-full bg-[var(--bg-badge)] text-sm text-amber-500 font-mono p-1 theme-rounded-sm outline-none text-center border border-transparent focus:border-[var(--border-dim)]">
+                        <div class="flex flex-col gap-2 w-full">
+                            <!-- 第一行：Label 和 Key -->
+                            <div class="flex gap-2">
+                                <div class="flex-1">
+                                    <div class="text-[9px] text-[var(--text-dim)] uppercase mb-0.5">{{ t('lbl_field_label') }}</div>
+                                    <input v-model="field.label" @change="debouncedSave('autosave.json')" class="w-full bg-[var(--bg-badge)] text-sm text-[var(--text-main)] p-1 theme-rounded-sm outline-none border border-transparent focus:border-[var(--border-dim)]">
+                                </div>
+                                <div class="w-24">
+                                    <div class="text-[9px] text-[var(--text-dim)] uppercase mb-0.5">{{ t('lbl_field_key') }}</div>
+                                    <input v-model="field.key" @change="debouncedSave('autosave.json')" class="w-full bg-[var(--bg-badge)] text-sm text-amber-500 font-mono p-1 theme-rounded-sm outline-none text-center border border-transparent focus:border-[var(--border-dim)]">
+                                </div>
+                            </div>
+                            
+                            <!-- 第二行：类型、可见性、公式 -->
+                            <div class="flex gap-1 items-center">
+                                <!-- 类型选择 -->
+                                <select v-model="field.type" @change="debouncedSave('autosave.json')" class="bg-[var(--bg-input)] text-[10px] text-[var(--text-dim)] p-1 theme-rounded-sm outline-none border border-[var(--border-dim)] w-16">
+                                    <option value="string">String</option>
+                                    <option value="number">Number</option>
+                                </select>
+
+                                <!-- 可见性选择 -->
+                                <select v-model="field.visibility" @change="debouncedSave('autosave.json')" class="bg-[var(--bg-input)] text-[10px] p-1 theme-rounded-sm outline-none border border-[var(--border-dim)] flex-1"
+                                    :class="{'text-emerald-500': field.visibility==='editable', 'text-amber-500': field.visibility==='readonly', 'text-[var(--text-dim)]': field.visibility==='hidden'}">
+                                    <option value="editable">Editable (AI)</option>
+                                    <option value="readonly">Read-Only (AI)</option>
+                                    <option value="hidden">Hidden (Secret)</option>
+                                </select>
+
+                                <!-- 公式输入 (仅当 Number + ReadOnly 时显示) -->
+                                <!-- 修改后：只读框 + 编辑按钮 -->
+                                <div v-if="field.type === 'number' && field.visibility === 'readonly'" class="flex gap-1 flex-[2]">
+                                    <!-- 只读展示，稍微美化一下，让它看起来不像代码 -->
+                                    <div class="flex-1 bg-[var(--bg-input)] text-[9px] text-pink-400 font-mono p-1 theme-rounded-sm border border-[var(--border-dim)] truncate cursor-not-allowed opacity-80" :title="field.formula">
+                                        {{ field.formula || '(Empty Formula)' }}
+                                    </div>
+                                    <!-- 唤起构建器的按钮 -->
+                                    <button @click="openFormulaModal(field)" class="px-2 bg-[var(--bg-panel)] border border-[var(--border-dim)] text-pink-500 hover:text-white hover:bg-pink-600 theme-rounded-sm transition text-xs font-bold">
+                                        <i class="fa-solid fa-function"></i> ƒ
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                         <button @click="getActiveSchemaFields().splice(idx,1); saveGame('autosave.json')" class="text-[var(--text-dim)] hover:text-red-400 px-1 opacity-0 group-hover:opacity-100 transition"><i class="fa-solid fa-times"></i></button>
                     </div>
@@ -2290,8 +2508,10 @@
                         
                             <!-- Impact 列表显示区 -->
                             <div class="flex flex-wrap gap-3 mb-4">
-                                <div v-for="(imp, idx) in editor.impacts" :key="idx" class="impact-badge pr-0 overflow-hidden relative" 
-                                    :style="{ borderColor: getImpactColor(imp) }">
+                                <div v-for="(imp, idx) in editor.impacts" :key="idx" 
+                                    class="impact-badge pr-0 overflow-hidden relative" 
+                                    :style="{ borderColor: validateImpact(imp).valid ? getImpactColor(imp) : '#ef4444' }"
+                                    :title="validateImpact(imp).valid ? '' : validateImpact(imp).msg"> <!-- 鼠标悬停显示错误信息 -->
                                     
                                     <!-- 1. 属性变更 Badge -->
                                     <template v-if="imp.type === 'STAT_CHANGE'">
@@ -2318,26 +2538,26 @@
                                         </template>
                                     </template>
                                 
-                                <!-- 其他类型 (略，保持不变) -->
-                                <template v-else-if="imp.type === 'REGION_TRANSFER'">
-                                    <i class="fa-solid fa-map-location-dot mr-1 text-indigo-400"></i>
-                                    <span class="text-[var(--text-dim)] text-xs">{{ imp.targetName }}</span>
-                                    <i class="fa-solid fa-arrow-right text-[10px] mx-1 opacity-50"></i>
-                                    <span class="font-bold text-xs" :style="{color: getFactionColor(imp.newValue)}">{{ getFactionName(imp.newValue) }}</span>
-                                </template>
-                                <template v-else-if="imp.type === 'ENTITY_CREATE'">
-                                    <i class="fa-solid fa-user-plus mr-1 text-emerald-400"></i>
-                                    <span class="font-bold text-xs text-emerald-400 ml-1">{{ imp.data?.name }}</span>
-                                </template>
-                                <template v-else-if="imp.type === 'ENTITY_REMOVE'">
-                                    <i class="fa-solid fa-user-minus mr-1 text-red-400"></i>
-                                    <span class="font-bold text-xs text-red-400 ml-1">{{ getFactionName(imp.targetId) }}</span>
-                                </template>
-                                <template v-else-if="imp.type === 'PIN_MOVE'">
-                                    <i class="fa-solid fa-arrows-up-down-left-right mr-1 text-pink-400"></i>
-                                    <span class="font-bold text-xs text-pink-400">{{ imp.targetName }}</span>
-                                    <span class="font-mono text-[10px] ml-1 opacity-70">to [{{ imp.newValue }}]</span>
-                                </template>
+                                    <!-- 其他类型 (略，保持不变) -->
+                                    <template v-else-if="imp.type === 'REGION_TRANSFER'">
+                                        <i class="fa-solid fa-map-location-dot mr-1 text-indigo-400"></i>
+                                        <span class="text-[var(--text-dim)] text-xs">{{ imp.targetName }}</span>
+                                        <i class="fa-solid fa-arrow-right text-[10px] mx-1 opacity-50"></i>
+                                        <span class="font-bold text-xs" :style="{color: getFactionColor(imp.newValue)}">{{ getFactionName(imp.newValue) }}</span>
+                                    </template>
+                                    <template v-else-if="imp.type === 'ENTITY_CREATE'">
+                                        <i class="fa-solid fa-user-plus mr-1 text-emerald-400"></i>
+                                        <span class="font-bold text-xs text-emerald-400 ml-1">{{ imp.data?.name }}</span>
+                                    </template>
+                                    <template v-else-if="imp.type === 'ENTITY_REMOVE'">
+                                        <i class="fa-solid fa-user-minus mr-1 text-red-400"></i>
+                                        <span class="font-bold text-xs text-red-400 ml-1">{{ getFactionName(imp.targetId) }}</span>
+                                    </template>
+                                    <template v-else-if="imp.type === 'PIN_MOVE'">
+                                        <i class="fa-solid fa-arrows-up-down-left-right mr-1 text-pink-400"></i>
+                                        <span class="font-bold text-xs text-pink-400">{{ imp.targetName }}</span>
+                                        <span class="font-mono text-[10px] ml-1 opacity-70">to [{{ imp.newValue }}]</span>
+                                    </template>
 
                                 <button @click="removeImpact(idx)" class="ml-2 w-8 self-stretch flex items-center justify-center bg-black/10 hover:bg-red-500/20 text-[var(--text-dim)] hover:text-red-400"><i class="fa-solid fa-times"></i></button>
                             </div>
@@ -2571,6 +2791,22 @@
                         <!-- 模块列表 (拖拽排序) -->
                         <div class="space-y-4">
                             <div v-for="type in contextConfig.order" :key="type">
+                                <!-- [新增] Custom Prompt 模块 -->
+                                <div v-if="type === 'custom'" class="border border-pink-500/30 theme-rounded-sm bg-pink-900/10">
+                                    <div class="p-2 bg-pink-900/20 border-b border-pink-500/20 flex justify-between items-center">
+                                        <div class="flex items-center gap-2">
+                                            <input type="checkbox" v-model="contextConfig.includeCustom" class="accent-pink-500">
+                                            <span class="text-xs font-bold text-pink-400 uppercase">★ {{ t('ctx_custom') }}</span>
+                                        </div>
+                                        <div class="flex gap-2 text-[var(--text-dim)] text-[10px] items-center">
+                                            <button @click="moveContextItem('custom', -1)" class="w-8 h-8 flex items-center justify-center bg-black/10 hover:bg-black/30 theme-rounded-sm transition"><i class="fa-solid fa-arrow-up"></i></button>
+                                            <button @click="moveContextItem('custom', 1)" class="w-8 h-8 flex items-center justify-center bg-black/10 hover:bg-black/30 theme-rounded-sm transition"><i class="fa-solid fa-arrow-down"></i></button>
+                                        </div>
+                                    </div>
+                                    <div v-if="contextConfig.includeCustom" class="p-2 text-[10px] text-[var(--text-dim)] font-mono truncate">
+                                        {{ settings.prompts.custom || '(Empty)' }}
+                                    </div>
+                                </div>
                                 <!-- 🔴 当前指令 -->
                                 <div v-if="type === 'current'" class="border border-red-500/30 theme-rounded-sm bg-red-900/10">
                                     <div class="p-2 bg-red-900/20 border-b border-red-500/20 flex justify-between items-center">
@@ -2745,7 +2981,17 @@
 
                 <!-- Footer -->
                 <div class="p-5 border-t border-[var(--border-dim)] bg-[var(--bg-header)] flex justify-between items-center shrink-0">
-                    <div class="text-xs text-[var(--text-dim)]">{{ t('ctx_preview_hint') }}</div>
+                    <!-- 左侧：提示语 + 图例 -->
+                    <div class="flex flex-col">
+                        <div class="text-xs text-[var(--text-dim)] mb-1">{{ t('ctx_preview_hint') }}</div>
+                        <div class="flex gap-3 text-[10px] font-mono font-bold">
+                            <span class="text-emerald-500"><i class="fa-solid fa-eye"></i> Normal</span>
+                            <span class="text-amber-500"><i class="fa-solid fa-lock"></i> [LOCK] = Read-Only</span>
+                            <span class="text-[var(--text-dim)] decoration-line-through"><i class="fa-solid fa-eye-slash"></i> Hidden (Removed)</span>
+                        </div>
+                    </div>
+                    
+                    <!-- 右侧：按钮 -->
                     <button @click="runAiInference" :disabled="isThinking" class="px-8 py-3 theme-rounded-sm bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-lg transition flex items-center gap-2">
                         <i v-if="isThinking" class="fa-solid fa-circle-notch fa-spin"></i>
                         <i v-else class="fa-solid fa-bolt"></i>
@@ -2870,6 +3116,12 @@
                                      class="px-3 py-1 text-[10px] font-bold theme-rounded-sm transition">
                                  {{ t('tab_prompt_galgame') }}
                              </button>
+                             <!-- [新增] Custom 按钮 -->
+                             <button @click="settingsPromptTab = 'custom'" 
+                                     :class="settingsPromptTab === 'custom' ? 'bg-pink-600 text-white' : 'bg-[var(--bg-badge)] text-[var(--text-dim)] hover:text-[var(--text-main)]'"
+                                     class="px-3 py-1 text-[10px] font-bold theme-rounded-sm transition">
+                                 {{ t('tab_prompt_custom') }}
+                             </button>
                          </div>
 
                          <!-- 1. System Prompt 编辑框 -->
@@ -2894,6 +3146,11 @@
                          <div v-if="settingsPromptTab === 'galgame'">
                              <div class="text-[10px] text-[var(--text-dim)] mb-1">{{ t('desc_prompt_galgame') }}</div>
                              <textarea v-model="settings.prompts.galgame" class="w-full h-64 input-tech theme-rounded-sm p-3 text-xs font-mono resize-none outline-none text-[var(--text-dim)]"></textarea>
+                         </div>
+                         <!-- [新增] 5. Custom Prompt 编辑框 -->
+                         <div v-if="settingsPromptTab === 'custom'">
+                             <div class="text-[10px] text-[var(--text-dim)] mb-1">{{ t('desc_prompt_custom') }}</div>
+                             <textarea v-model="settings.prompts.custom" class="w-full h-64 input-tech theme-rounded-sm p-3 text-xs font-mono resize-none outline-none text-[var(--text-dim)]" placeholder="Enter your custom global instructions here..."></textarea>
                          </div>
                     </section>
                 </div>
@@ -2962,6 +3219,14 @@
                         </div>
                     </div>
                     <div><label class="block text-xs font-bold text-[var(--text-dim)] uppercase mb-2">{{ t('label_desc') }}</label><textarea v-model="editingFaction.desc" class="w-full h-24 input-tech p-3 theme-rounded-sm text-sm resize-none outline-none"></textarea></div>
+
+                    <!-- [新增] 主角标记开关 -->
+                    <div class="flex items-center gap-2 mt-4 p-2 bg-indigo-900/20 border border-indigo-500/30 theme-rounded-sm">
+                        <input type="checkbox" v-model="editingFaction.isProtagonist" id="chkProtagonist" class="accent-indigo-500 w-4 h-4">
+                        <label for="chkProtagonist" class="text-xs font-bold text-indigo-300 cursor-pointer select-none">
+                            <i class="fa-solid fa-user-astronaut mr-1"></i> 设为玩家化身 (Protagonist / POV)
+                        </label>
+                    </div>
                     <!-- [终极版] 立绘设置区域 (16:9大屏预览 + 缩略图列表) -->
                     <div class="mt-4 pt-4 border-t border-[var(--border-dim)]">
                         <div class="flex justify-between items-center mb-2">
@@ -3112,11 +3377,23 @@
                         <!-- [修改] 遍历当前实体所选规则集的字段 -->
                         <div class="grid grid-cols-2 gap-4 p-4 bg-[var(--bg-badge)] theme-rounded-sm border border-[var(--border-dim)]">
                             <div v-for="field in getFieldsBySchemaId(editingFaction.schemaId)" :key="field.key">
-                                <label class="block text-[10px] text-[var(--text-dim)] font-bold mb-1">{{ field.label }} <span class="opacity-30 font-mono">({{ field.key }})</span></label>
-                                <input v-model="editingFaction.stats[field.key]" class="w-full input-tech p-2 theme-rounded-sm text-emerald-400 font-mono-tech font-bold text-sm outline-none border-b-2 border-transparent focus:border-amber-500 transition">
-                            </div>
-                            <div v-if="getFieldsBySchemaId(editingFaction.schemaId).length === 0" class="col-span-2 text-center text-[var(--text-dim)] text-xs py-2">
-                                No attributes defined for this type.
+                                <label class="block text-[10px] text-[var(--text-dim)] font-bold mb-1 flex justify-between">
+                                    <span>{{ field.label }} <span class="opacity-30 font-mono">({{ field.key }})</span></span>
+                                    <!-- 类型图标提示 -->
+                                    <span class="text-[8px] uppercase px-1 rounded" :class="{'bg-blue-900 text-blue-300': field.type==='number', 'bg-gray-700 text-gray-400': field.type!=='number'}">{{ field.type||'STR' }}</span>
+                                </label>
+                                
+                                <!-- 如果是数值型，使用 type="number" -->
+                                <!-- 如果是只读型，背景变灰提示 -->
+                                <input v-model="editingFaction.stats[field.key]" 
+                                    :type="field.type === 'number' ? 'number' : 'text'"
+                                    :placeholder="field.visibility === 'readonly' ? 'Auto-Calc (Override allowed)' : ''"
+                                    class="w-full input-tech p-2 theme-rounded-sm text-emerald-400 font-mono-tech font-bold text-sm outline-none border-b-2 border-transparent focus:border-amber-500 transition"
+                                    :class="{'opacity-70 bg-black/20': field.visibility === 'readonly'}">
+                                    
+                                <div v-if="field.visibility === 'readonly'" class="text-[8px] text-pink-500 mt-0.5 text-right font-mono">
+                                    <i class="fa-solid fa-lock"></i> Calculated: {{ field.formula }}
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -3154,6 +3431,187 @@
         </div>
     </transition>
 
+    <!-- Modal: Formula Builder -->
+    <transition name="fade">
+        <div v-if="showFormulaModal" class="modal-mask">
+            <div class="glass-panel theme-rounded w-[700px] flex flex-col overflow-hidden text-[var(--text-main)]" @click.stop>
+                <div class="p-4 border-b border-[var(--border-dim)] bg-[var(--bg-header)] flex justify-between items-center">
+                    <h3 class="text-lg font-bold"><i class="fa-solid fa-calculator mr-2 text-pink-500"></i>公式构建器 (Formula Builder)</h3>
+                    <button @click="closeFormulaModal" class="w-8 h-8 flex items-center justify-center hover:text-white"><i class="fa-solid fa-times"></i></button>
+                </div>
+                
+                <div class="p-6 bg-[var(--bg-panel)] flex-1 overflow-y-auto">
+                    
+                    <!-- 1. 可视化预览区 -->
+                    <div class="bg-[var(--bg-deep)] p-4 theme-rounded-sm border border-[var(--border-dim)] mb-4 min-h-[60px] flex flex-wrap items-center gap-2">
+                        <span v-if="formulaTokens.length === 0" class="text-[var(--text-dim)] text-xs italic">点击下方按钮添加逻辑...</span>
+                        
+                        <div v-for="(token, idx) in formulaTokens" :key="idx" 
+                             @click="removeToken(idx)"
+                             class="px-2 py-1 rounded text-xs font-bold font-mono border cursor-pointer transition-all duration-200 hover:scale-105 hover:line-through hover:bg-red-900/50 hover:border-red-500 select-none shadow-sm"
+                             :class="getTokenClass(token.type)"
+                             :title="'Value: ' + token.value">
+                            {{ token.label }}
+                        </div>
+                    </div>
+
+                    <!-- 2. 操作面板 -->
+                    <div class="bg-[var(--bg-badge)] theme-rounded-sm border border-[var(--border-dim)] overflow-hidden">
+                        <!-- Tabs -->
+                        <div class="flex border-b border-[var(--border-dim)] bg-[var(--bg-sidebar)]">
+                            <button v-for="tab in formulaTabs" :key="tab" @click="activeFormulaTab = tab"
+                                class="flex-1 py-2 text-xs font-bold transition"
+                                :class="activeFormulaTab === tab ? 'bg-[var(--bg-panel)] text-pink-400 border-b-2 border-pink-500' : 'text-[var(--text-dim)] hover:text-[var(--text-main)]'">
+                                {{ tab }}
+                            </button>
+                        </div>
+
+                        <div class="p-4 h-64 overflow-y-auto">
+                            <!-- Tab: 基础运算 -->
+                            <div v-if="activeFormulaTab === '基础'" class="grid grid-cols-4 gap-2">
+                                <button v-for="op in ['+', '-', '*', '/', '(', ')']" @click="addToken('op', op, op)" class="p-3 bg-[var(--bg-deep)] border border-[var(--border-dim)] theme-rounded-sm hover:border-pink-500 font-black text-lg">{{ op }}</button>
+                                <div class="col-span-2 flex gap-1">
+                                    <input v-model="tempNumber" type="number" placeholder="输入数字" class="w-full input-tech px-2 theme-rounded-sm outline-none text-center">
+                                    <button @click="addToken('num', tempNumber, tempNumber)" class="px-3 bg-pink-600 text-white theme-rounded-sm font-bold">Add</button>
+                                </div>
+                            </div>
+                            <!-- Tab: 逻辑运算 (新增) -->
+                            <div v-if="activeFormulaTab === '逻辑'" class="space-y-4">
+                                <div>
+                                    <div class="text-[10px] text-[var(--text-dim)] mb-1">比较运算符：</div>
+                                    <div class="grid grid-cols-4 gap-2">
+                                        <button v-for="op in ['>', '<', '>=', '<=', '==', '!=']" @click="addToken('op', op, op)" class="p-2 bg-[var(--bg-deep)] border border-[var(--border-dim)] theme-rounded-sm font-mono font-bold text-amber-500 hover:border-amber-500">{{ op }}</button>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="text-[10px] text-[var(--text-dim)] mb-1">逻辑连接：</div>
+                                    <div class="flex gap-2">
+                                        <button @click="addToken('op', '并且 (&&)', '&&')" class="flex-1 p-2 bg-[var(--bg-deep)] border border-[var(--border-dim)] theme-rounded-sm text-xs font-bold text-indigo-400">AND (&&)</button>
+                                        <button @click="addToken('op', '或者 (||)', '||')" class="flex-1 p-2 bg-[var(--bg-deep)] border border-[var(--border-dim)] theme-rounded-sm text-xs font-bold text-indigo-400">OR (||)</button>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="text-[10px] text-[var(--text-dim)] mb-1">三元表达式 (If-Else)：</div>
+                                    <div class="flex gap-2">
+                                        <button @click="addToken('op', '?', '?')" class="w-12 p-2 bg-purple-900/30 border border-purple-500/30 theme-rounded-sm text-purple-400 font-bold">?</button>
+                                        <button @click="addToken('op', ':', ':')" class="w-12 p-2 bg-purple-900/30 border border-purple-500/30 theme-rounded-sm text-purple-400 font-bold">:</button>
+                                        <div class="text-[10px] text-[var(--text-dim)] self-center ml-2">用法: 条件 ? 真值 : 假值</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Tab: 数学函数 (新增) -->
+                            <div v-if="activeFormulaTab === '函数'" class="space-y-3">
+                                <div class="grid grid-cols-2 gap-2">
+                                    <button @click="addToken('func', '最大值(Max)', 'Math.max(')" class="p-2 bg-blue-900/20 border border-blue-500/30 text-blue-400 theme-rounded-sm text-xs font-bold">Math.max(</button>
+                                    <button @click="addToken('func', '最小值(Min)', 'Math.min(')" class="p-2 bg-blue-900/20 border border-blue-500/30 text-blue-400 theme-rounded-sm text-xs font-bold">Math.min(</button>
+                                    <button @click="addToken('func', '向下取整(Floor)', 'Math.floor(')" class="p-2 bg-blue-900/20 border border-blue-500/30 text-blue-400 theme-rounded-sm text-xs font-bold">Math.floor(</button>
+                                    <button @click="addToken('func', '四舍五入(Round)', 'Math.round(')" class="p-2 bg-blue-900/20 border border-blue-500/30 text-blue-400 theme-rounded-sm text-xs font-bold">Math.round(</button>
+                                    <button @click="addToken('func', '随机数(0-1)', 'Math.random()')" class="p-2 bg-blue-900/20 border border-blue-500/30 text-blue-400 theme-rounded-sm text-xs font-bold">Random()</button>
+                                    <button @click="addToken('func', '绝对值(Abs)', 'Math.abs(')" class="p-2 bg-blue-900/20 border border-blue-500/30 text-blue-400 theme-rounded-sm text-xs font-bold">Math.abs(</button>
+                                </div>
+                                <div class="text-[10px] text-[var(--text-dim)] bg-black/20 p-2 rounded">
+                                    <i class="fa-solid fa-circle-info mr-1"></i> 提示：函数以 '(' 结尾，请在添加数值后记得添加 ')' 闭合括号。
+                                </div>
+                            </div>
+
+                            <!-- Tab: 自身属性 -->
+                            <div v-if="activeFormulaTab === '自身'" class="space-y-2">
+                                <div class="text-[10px] text-[var(--text-dim)] mb-2">引用当前实体的其他属性：</div>
+                                <div class="flex flex-wrap gap-2">
+                                    <button v-for="f in getAvailableFields()" :key="f.key" 
+                                        @click="addToken('var', f.label, `self.stats['${f.key}']`)"
+                                        class="px-3 py-1.5 bg-indigo-900/30 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-600 hover:text-white theme-rounded-sm text-xs font-bold transition">
+                                        {{ f.label }}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Tab: 环境全局 -->
+                            <div v-if="activeFormulaTab === '环境'" class="space-y-4">
+                                <div>
+                                    <div class="text-[10px] text-[var(--text-dim)] mb-1">系统变量：</div>
+                                    <button @click="addToken('env', '当前回合', 'turn')" class="px-3 py-1.5 bg-amber-900/30 border border-amber-500/30 text-amber-400 theme-rounded-sm text-xs font-bold mr-2">当前回合数</button>
+                                </div>
+                                <div>
+                                    <div class="text-[10px] text-[var(--text-dim)] mb-1">全局变量 (Global)：</div>
+                                    <div class="flex flex-wrap gap-2">
+                                        <button v-for="g in global_vars" :key="g.key" 
+                                            @click="addToken('env', g.key, `ctx.globals['${g.key}']`)"
+                                            class="px-3 py-1.5 bg-emerald-900/30 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-600 hover:text-white theme-rounded-sm text-xs font-bold transition">
+                                            {{ g.key }}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Tab: 高级聚合 (解决正则问题) -->
+                            <div v-if="activeFormulaTab === '高级'" class="space-y-4">
+                                <!-- 1. 引用特定实体 -->
+                                <div class="bg-[var(--bg-deep)] p-2 theme-rounded-sm border border-[var(--border-dim)]">
+                                    <div class="text-[10px] text-[var(--text-dim)] uppercase mb-1">引用特定实体的属性</div>
+                                    <div class="flex gap-2">
+                                        <select v-model="formulaBuilder.targetEntityId" class="flex-1 input-tech p-1 text-xs">
+                                            <option value="" disabled>选择实体...</option>
+                                            <option v-for="p in players" :value="p.id">{{ p.name }}</option>
+                                        </select>
+                                        <select v-model="formulaBuilder.targetStatKey" class="flex-1 input-tech p-1 text-xs">
+                                            <option value="" disabled>选择属性...</option>
+                                            <option v-for="f in getAllUniqueFields()" :value="f.key">{{ f.label }}</option>
+                                        </select>
+                                        <button @click="addSpecificEntityToken" class="px-3 bg-blue-600 text-white theme-rounded-sm text-xs">添加</button>
+                                    </div>
+                                </div>
+
+                                <!-- 2. 区域求和 (傻瓜化) -->
+                                <div class="bg-[var(--bg-deep)] p-2 theme-rounded-sm border border-[var(--border-dim)]">
+                                    <div class="text-[10px] text-[var(--text-dim)] uppercase mb-1">地块属性求和 (Sum Regions)</div>
+                                    <div class="flex gap-2 items-center">
+                                        <span class="text-xs">计算</span>
+                                        <select v-model="formulaBuilder.aggOwner" class="input-tech p-1 text-xs w-24">
+                                            <option value="self">我拥有的</option>
+                                            <option value="all">世界所有的</option>
+                                        </select>
+                                        <span class="text-xs">地块的</span>
+                                        <select v-model="formulaBuilder.aggStat" class="flex-1 input-tech p-1 text-xs">
+                                            <option value="" disabled>属性...</option>
+                                            <option v-for="f in getAllUniqueFields()" :value="f.key">{{ f.label }}</option>
+                                        </select>
+                                        <span class="text-xs">总和</span>
+                                        <button @click="addAggToken" class="px-3 bg-purple-600 text-white theme-rounded-sm text-xs">添加</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 实时预览 & 校验 -->
+                    <div class="mt-4 flex flex-col gap-1 bg-black/20 p-2 rounded theme-rounded-sm border"
+                         :class="validateFormulaResult.valid ? 'border-emerald-500/30' : 'border-red-500/50'">
+                        <div class="flex justify-between items-center text-xs font-mono">
+                            <span class="text-[var(--text-dim)]">Code:</span>
+                            <span class="truncate ml-2 max-w-[400px]" :class="validateFormulaResult.valid ? 'text-emerald-400' : 'text-red-400'">
+                                {{ generateCodeFromTokens() }}
+                            </span>
+                        </div>
+                        <div v-if="!validateFormulaResult.valid" class="text-[10px] text-red-500 font-bold text-right">
+                            <i class="fa-solid fa-triangle-exclamation mr-1"></i> {{ validateFormulaResult.msg }}
+                        </div>
+                    </div>
+
+                </div>
+                
+                <div class="p-4 border-t border-[var(--border-dim)] bg-[var(--bg-header)] flex justify-end gap-2">
+                    <button @click="formulaTokens = []" class="px-4 py-2 text-[var(--text-dim)] hover:text-red-400 text-xs font-bold">清空</button>
+                    <button @click="saveFormula" 
+                            :disabled="!validateFormulaResult.valid"
+                            class="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white theme-rounded-sm text-xs font-bold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
+                            保存公式
+                    </button>
+                </div>
+            </div>
+        </div>
+    </transition>
     <!-- Modals (Script Gen) -->
 <!-- Modals (Map Pin Editor) -->
     <transition name="fade">
@@ -3367,7 +3825,11 @@
                             </div>
                         </div>
                     </div>
-
+                    <!-- [新增] 自定义 Prompt 开关 -->
+                    <div class="flex items-center gap-2 px-1">
+                        <input type="checkbox" v-model="scriptGenUseCustom" id="chkScriptCustom" class="accent-pink-500 w-4 h-4">
+                        <label for="chkScriptCustom" class="text-xs font-bold text-pink-400 cursor-pointer select-none">{{ t('lbl_use_custom') }}</label>
+                    </div>
                     <textarea v-model="scriptGenPrompt" class="w-full h-32 input-tech p-4 theme-rounded-sm text-base resize-none outline-none" placeholder="t('placeholder_prompt')"></textarea>
                 </div>
                 <div class="p-6 border-t border-[var(--border-dim)] bg-[var(--bg-header)] flex justify-end">
@@ -3396,6 +3858,38 @@
                 vnIsTyping: false,      // [新增] 是否正在打字
                 vnFullText: "",         // [新增] 当前句子的完整文本
                 vnTypeTimer: null,      // [新增] 打字机定时器
+                vnUserInput: "", // [新增] VN模式下的用户输入
+
+                // ★★★ [新增] VN 导演/上下文配置 ★★★
+                vnShowSettings: false, // 是否显示导演面板
+                vnActiveEntityIds: [], 
+                vnPlayerRoleId: '', // [新增] 当前玩家扮演的角色ID (默认为主角，可切换)
+                vnContextConfig: {
+                    includeCustom: true,   
+                    includeStats: true,    
+                    includeTags: true,     
+                    includeMap: false,
+                    // [修改] 独立的历史记忆设置，替代单一的 historyDepth
+                    includeHistory: true,
+                    historyDeepDepth: 1,   // VN模式专用的深层记忆
+                    historyShallowDepth: 5 // VN模式专用的浅层记忆
+                },
+                
+                showFormulaModal: false,
+                activeFormulaTab: '基础',
+                validateFormulaResult: { valid: true, msg: '' },
+                // 新增 '逻辑' 和 '函数'
+                formulaTabs: ['基础', '逻辑', '函数', '自身', '环境', '高级'],
+                currentEditingField: null, // 当前正在编辑哪个字段对象
+                formulaTokens: [], // 存储公式片段: { type: 'var'|'op'|'num'|'func', label: '我的力量', value: "self.stats['str']" }
+                tempNumber: 1,
+                formulaBuilder: {
+                    targetEntityId: '',
+                    targetStatKey: '',
+                    aggOwner: 'self',
+                    aggStat: ''
+                },
+                
                 // ★★★ [新增] VN 模式状态 ★★★
                 vnMode: false,          // 是否进入剧场模式
                 vnCurrentEvent: null,   // 当前正在播放的事件对象
@@ -3464,12 +3958,16 @@
                 
                 // [新增] 用于设置面板切换 Prompt 标签页
                 settingsPromptTab: 'system', 
-                isLayerManagerOpen: true, // [新增] 控制图层管理器展开/折叠
+                isLayerManagerOpen: true, 
+                // [新增] 剧本生成时的自定义Prompt开关
+                scriptGenUseCustom: true, 
 
                 settings: {
                     api: { provider: 'Gemini', baseUrl: '', model: 'gemini-2.5-flash', key: '' },
                     proxy: { enabled: true, port: '7890' }, 
                     prompts: {
+                        // [新增] 自定义 Prompt 初始化
+                        custom: "", 
                         galgame: `你是一个 Galgame/Visual Novel 的剧本生成引擎。
                         【任务】
                         基于当前的“世界上下文”和“用户指令”，推演下一段剧情。
@@ -3487,6 +3985,10 @@
                         - tag: (可选) 对应立绘的表情变体 (如 "smile", "angry", "sad")。
                         - text: 对话内容或旁白描述。
 
+                        【类型与逻辑注意事项】
+                        1. **上下文理解**：上下文中标记为 <Type:Number> 的属性是数值，标记为 <ReadOnly> 的属性不可直接修改。
+                        2. **数值变更**：如果你在 'impacts' 中修改好感度或金钱，请确保 newValue 输出为**纯数字**（如 100），严禁加引号。
+
                         【完整 JSON 示例】
                         {
                         "factionId": "global",
@@ -3494,7 +3996,10 @@
                         "timeEnd": "1099年",
                         "summary": "决裂时刻",
                         "content": "[{\\"role\\":\\"p_001\\",\\"tag\\":\\"angry\\",\\"text\\":\\"住手！\\"},{\\"role\\":\\"narrator\\",\\"text\\":\\"一阵爆炸声传来。\\"}]",
-                        "impacts": [],
+                        "impacts": [
+                            // 示例：数值型属性变更
+                            { "type": "STAT_CHANGE", "targetId": "p_001", "attrKey": "mood", "newValue": 0 }
+                        ],
                         "options": [
                             { "label": "反击", "desc": "立即开火" },
                             { "label": "逃跑", "desc": "保存实力" }
@@ -3505,14 +4010,20 @@
                         【任务】
                         根据“世界上下文”和“用户指令”，推演下一阶段事件并以 JSON 格式输出。
 
-                        【核心原则】
-                        1. **层级联动**：子实体(Child)的变动会波及父实体(Parent)；父实体的决策会限制子实体。
-                        2. **规则一致性**：修改属性(attrKey)时，必须符合该实体 schemaId 对应的规则集定义。
-                        3. **JSON 完整性**：**必须确保 JSON 格式极其严谨，所有大括号 {} 和中括号 [] 必须成对闭合，严禁截断！**
+                        【关键：数据类型与权限】
+                        输入的上下文格式为：Key: Value <Metadata>
+                        1. **类型严格 (Type Strictness)**：
+                        - 如果属性标记为 <Type:Number>，你在输出 JSON 时**必须**输出为数字类型（例如 100，而不是 "100"）。
+                        - 如果属性标记为 <Type:String>，输出为字符串。
+                        2. **只读保护 (ReadOnly)**：
+                        - 标记为 <ReadOnly> 或 <Auto-Calc> 的属性是世界法则自动计算的（自变量）。
+                        - 你**严禁**在 'impacts' 中直接修改这些只读属性。你只能通过修改其他非只读属性来间接影响它们。
+                        3. **数据清洗**：
+                        - 输出的 JSON 中，Value **绝对不能**包含 <...> 这样的元数据标记。只输出纯净的值。
 
-                        【输出格式规范】
-                        1. **纯 JSON**：直接输出 JSON 字符串，不要包含 \`\`\`json 标记。
-                        2. **文本要求**：中文描述。content > 100字。stats 属性值优先使用描述性文本(如"动荡"而非"30")。
+                        【核心原则】
+                        1. **层级联动**：子实体(Child)的变动会波及父实体(Parent)。
+                        2. **JSON 完整性**：确保 JSON 格式极其严谨，括号成对闭合。
                         3. **数据一致性**：oldValue 必须等于当前值。
 
                         【特殊 Impact 事件类型】
@@ -3560,112 +4071,116 @@
                         ]
                         }`,
 
-                        // --- 2. 剧本生成 (Script Generator) - v5 树状结构版 ---
+                        // --- 2. 剧本生成 (Script Generator) - v6 类型增强版 (基于 v5) ---
                         script_generator: `你是一个世界设定生成器，严格按照指定的 JSON 结构输出。
 
-                    【任务目标】
-                    构建一个具有**深度层级结构**和**多样化实体类型**的世界。
+                        【任务目标】
+                        构建一个具有**深度层级结构**和**多样化实体类型**的世界。
 
-                    【关键指令】
-                    1. **多重规则集 (Rule Sets)**：不要只使用一套通用属性。请定义 2-3 套不同的规则集（rule_sets）。例如：
-                       - "国家规则" (包含: 稳定度, 经济, 外交立场)
-                       - "城市/行省规则" (包含: 治安, 人口, 归属感)
-                       - "关键角色规则" (包含: 影响力, 忠诚, 个人战力)
-                    2. **层级结构 (Hierarchy)**：利用 "parentId" 字段构建树状关系。不要只生成一堆顶级势力。
-                       - 例如：创建一个“帝国”作为顶级节点，然后创建几个“行省”或“军团”作为其子节点（parentId 指向帝国）。
-                    3. **关联性**：确保每个 player 的 "schemaId" 对应正确的 rule_sets id。
+                        【关键指令】
+                        1. **多重规则集 (Rule Sets)**：不要只使用一套通用属性。请定义 2-3 套不同的规则集（rule_sets）。例如：
+                        - "国家规则" (包含: 稳定度, 经济, 外交立场)
+                        - "城市/行省规则" (包含: 治安, 人口, 归属感)
+                        - "关键角色规则" (包含: 影响力, 忠诚, 个人战力)
+                        - **★ 新增要求**：每个字段定义必须包含 "type" ('string'|'number') 和 "visibility" ('editable'|'readonly')。
+                        2. **层级结构 (Hierarchy)**：利用 "parentId" 字段构建树状关系。不要只生成一堆顶级势力。
+                        - 例如：创建一个“帝国”作为顶级节点，然后创建几个“行省”或“军团”作为其子节点（parentId 指向帝国）。
+                        3. **关联性**：确保每个 player 的 "schemaId" 对应正确的 rule_sets id。
+                        4. **数据类型严格**：如果字段定义 type="number"，在生成 stats 时**必须**输出纯数字（如 100），严禁使用字符串（如 "100"）。
 
-                    【输出规则】
-                    1. **只输出纯 JSON**：单一、合法的 JSON 对象，无Markdown。
-                    2. **严格遵守结构**：参照下方的【JSON 结构范例】。
-                    3. **语言与篇幅**：中文描述。Timeline 中的 event content 约 50 字。
-                    4. **属性值**：使用 8 字以内的描述性文本（如“动荡(D)”、“繁荣”）而非纯数字。
+                        【输出规则】
+                        1. **只输出纯 JSON**：单一、合法的 JSON 对象，无Markdown。
+                        2. **严格遵守结构**：参照下方的【JSON 结构范例】。
+                        3. **语言与篇幅**：中文描述。Timeline 中的 event content 约 50 字。
+                        4. **属性值**：对于 String 类型的属性，优先使用描述性文本（如“动荡(D)”）；对于 Number 类型，必须是数字。
 
-                    【JSON 结构与范例】
-                    {
-                    "rule_sets": [
+                        【JSON 结构与范例】
                         {
-                            "id": "rs_nation",
-                            "name": "国家政体",
-                            "fields": [
-                                { "key": "gov_type", "label": "政体" },
-                                { "key": "stability", "label": "稳定度" }
-                            ]
-                        },
-                        {
-                            "id": "rs_hero",
-                            "name": "英雄单位",
-                            "fields": [
-                                { "key": "class", "label": "职阶" },
-                                { "key": "loyalty", "label": "忠诚" }
-                            ]
-                        }
-                    ],
-                    "global_vars": [
-                        { "key": "当前纪元", "value": "第四纪元" }
-                    ],
-                    "lorebook": [
-                        {
-                        "keys": "源石,Originium", 
-                        "content": "一种黑色的结晶矿物...",
-                        "mode": "auto"
-                        }
-                    ],
-                    "players": [
-                        {
-                        "id": "p_empire",
-                        "name": "乌萨斯帝国",
-                        "logo": "fa-solid fa-crown",
-                        "color": "#881c1c",
-                        "desc": "以军事立国的庞大帝国。",
-                        "parentId": "", 
-                        "schemaId": "rs_nation",
-                        "stats": {
-                            "gov_type": "君主专制",
-                            "stability": "高压统治"
-                        }
-                        },
-                        {
-                        "id": "p_patriot",
-                        "name": "爱国者",
-                        "logo": "fa-solid fa-shield-halved",
-                        "color": "#555555",
-                        "desc": "帝国的传奇将领。",
-                        "parentId": "p_empire",
-                        "schemaId": "rs_hero",
-                        "stats": {
-                            "class": "重装盾卫",
-                            "loyalty": "死忠"
-                        }
-                        }
-                    ],
-                    "timeline": [
-                        {
-                        "id": 1,
-                        "timeRange": "1096年 冬",
-                        "events": [
+                        "rule_sets": [
                             {
-                            "factionId": "p_empire",
-                            "timeStart": "冬初",
-                            "timeEnd": "冬末",
-                            "summary": "大叛乱的前兆",
-                            "content": "（此处生成 50 字左右的详细描述，描述帝国与其下属将领之间的互动...）",
-                            "impacts": [
+                                "id": "rs_nation",
+                                "name": "国家政体",
+                                "fields": [
+                                    { "key": "gov_type", "label": "政体", "type": "string", "visibility": "editable" },
+                                    { "key": "stability", "label": "稳定度", "type": "number", "visibility": "editable" }
+                                ]
+                            },
+                            {
+                                "id": "rs_hero",
+                                "name": "英雄单位",
+                                "fields": [
+                                    { "key": "class", "label": "职阶", "type": "string", "visibility": "editable" },
+                                    { "key": "loyalty", "label": "忠诚", "type": "string", "visibility": "editable" },
+                                    { "key": "power", "label": "战力", "type": "number", "visibility": "editable" }
+                                ]
+                            }
+                        ],
+                        "global_vars": [
+                            { "key": "当前纪元", "value": "第四纪元", "type": "string", "visibility": "editable" }
+                        ],
+                        "lorebook": [
+                            {
+                            "keys": "源石,Originium", 
+                            "content": "一种黑色的结晶矿物...",
+                            "mode": "auto"
+                            }
+                        ],
+                        "players": [
+                            {
+                            "id": "p_empire",
+                            "name": "乌萨斯帝国",
+                            "logo": "fa-solid fa-crown",
+                            "color": "#881c1c",
+                            "desc": "以军事立国的庞大帝国。",
+                            "parentId": "", 
+                            "schemaId": "rs_nation",
+                            "stats": {
+                                "gov_type": "君主专制",
+                                "stability": 80 // Number
+                            }
+                            },
+                            {
+                            "id": "p_patriot",
+                            "name": "爱国者",
+                            "logo": "fa-solid fa-shield-halved",
+                            "color": "#555555",
+                            "desc": "帝国的传奇将领。",
+                            "parentId": "p_empire",
+                            "schemaId": "rs_hero",
+                            "stats": {
+                                "class": "重装盾卫",
+                                "loyalty": "死忠",
+                                "power": 9000 // Number
+                            }
+                            }
+                        ],
+                        "timeline": [
+                            {
+                            "id": 1,
+                            "timeRange": "1096年 冬",
+                            "events": [
                                 {
-                                "targetId": "p_patriot",
-                                "targetName": "爱国者",
-                                "attrKey": "loyalty",
-                                "attrLabel": "忠诚",
-                                "newValue": "动摇"
+                                "factionId": "p_empire",
+                                "timeStart": "冬初",
+                                "timeEnd": "冬末",
+                                "summary": "大叛乱的前兆",
+                                "content": "（此处生成 50 字左右的详细描述...）",
+                                "impacts": [
+                                    {
+                                    "targetId": "p_patriot",
+                                    "targetName": "爱国者",
+                                    "attrKey": "loyalty",
+                                    "attrLabel": "忠诚",
+                                    "newValue": "动摇"
+                                    }
+                                ]
                                 }
                             ]
                             }
                         ]
-                        }
-                    ]
-                    }`,
+                        }`,
 
-                        // --- 3. 上帝模式 (God Mode) - v3 兼容多规则版 ---
+                        // --- 3. 上帝模式 (God Mode) - v4 类型增强版 (基于 v3) ---
                         god_mode: `你是一个智能数据库管理员，能够理解并执行对 JSON 数据的关联修改。
 
                         【核心指令】
@@ -3674,9 +4189,11 @@
                         【关键规则：多规则集与层级】
                         1. **修改规则集 (Rule Sets)**：
                            - 用户可能会说“给所有国家增加人口属性”。你需要找到 \`rule_sets\` 中代表“国家”的那个对象，在它的 \`fields\` 中添加新字段。
+                           - **★ 新增要求**：当添加新字段时，必须补全 "type" ('string'|'number') 和 "visibility" ('editable'|'readonly')。默认 type='string'。
                            - 如果用户要求创建一种新类型的实体（如“创造一个神器类型”），你需要向 \`rule_sets\` 数组添加一个新对象。
                         2. **数据一致性**：
                            - 当你在规则集中添加了新属性（如 "mana"），请尝试智能地更新所有使用该规则集 ("schemaId") 的实体的 \`stats\`，给它们一个默认值。
+                           - **★ 新增要求**：如果 type="number"，默认值必须是纯数字（如 0），严禁加引号。
 
                         【严重警告：数组完整性】
                         当你修改任何数组（如 \`players\`, \`rule_sets\`）时，**必须返回该数组的完整内容**（包括未修改的项），否则数据会丢失。
@@ -3686,19 +4203,19 @@
                         2. 仅返回被修改的顶层字段。
 
                         【示例】
-                        用户指令: "给所有属于'英雄'规则的实体增加'魔法值(mp)'，默认为0"
+                        用户指令: "给所有属于'英雄'规则的实体增加'魔法值(mp)'(数值型)，默认为0"
                         正确输出:
                         {
                         "rule_sets": [
                             { 
-                                "id": "rs_nation", ... 
+                                "id": "rs_nation", "name": "国家", "fields": [...] 
                             }, 
                             { 
                                 "id": "rs_hero", 
                                 "name": "英雄", 
                                 "fields": [
-                                    { "key": "hp", "label": "生命" },
-                                    { "key": "mp", "label": "魔法值" } // ★ 新增字段
+                                    { "key": "hp", "label": "生命", "type": "number", "visibility": "editable" },
+                                    { "key": "mp", "label": "魔法值", "type": "number", "visibility": "editable" } // ★ 新增字段，带类型
                                 ]
                             }
                         ],
@@ -3707,8 +4224,8 @@
                             "id": "p_arthur", 
                             "schemaId": "rs_hero", // 匹配到了规则集
                             "stats": { 
-                                "hp": "100", 
-                                "mp": "0" // ★ 自动填充默认值
+                                "hp": 100, 
+                                "mp": 0 // ★ 自动填充默认值，纯数字
                             } 
                             },
                             { 
@@ -3717,7 +4234,7 @@
                             "stats": { ... } // 未受影响
                             }
                         ]
-                        }`
+                        }`,
                     }
                 },
                 
@@ -3979,7 +4496,13 @@
                     dec_new: { zh: "新决策", en: "New Decision", ja: "新規決定" },
                     dec_desc_ph: { zh: "潜在后果...", en: "Potential consequences...", ja: "潜在的な結果..." },
 
-                    splash_init: { zh: "[ 按任意键或点击初始化系统 ]", en: "[ PRESS ANY KEY TO INITIALIZE ]", ja: "[ 任意のキーを押して初期化 ]" }
+                    splash_init: { zh: "[ 按任意键或点击初始化系统 ]", en: "[ PRESS ANY KEY TO INITIALIZE ]", ja: "[ 任意のキーを押して初期化 ]" },
+
+                    // [新增] Custom Prompt 相关的翻译
+                    tab_prompt_custom: { zh: "自定义 (Custom)", en: "Custom Prompt", ja: "カスタム" },
+                    desc_prompt_custom: { zh: "全局自定义指令。在推演和剧本生成时，这部分内容会根据您的设置插入到上下文中。", en: "Global custom instructions injected into context.", ja: "グローバルカスタム命令。" },
+                    ctx_custom: { zh: "自定义指令 (Custom Prompt)", en: "Custom Prompt", ja: "カスタムプロンプト" },
+                    lbl_use_custom: { zh: "启用自定义指令", en: "Enable Custom Prompt", ja: "カスタムプロンプトを有効化" }
                 },
 
                 // [修改] stat_schema 升级为 rule_sets (允许多套规则)
@@ -4025,21 +4548,28 @@
                 
                 tempSystemPrompt: "",
                 contextConfig: {
-                    includeGlobal: true, includeRules: true, includeHistory: true, includeCurrent: true,
-                    includeMap: true, // [恢复] 地图总开关
+                    // [新增] 自定义 Prompt 开关
+                    includeCustom: true,
                     
-                    // [恢复] 核心记忆变量
-                    historyDeepDepth: 1,    // 深层记忆 (近 - 含详情)
-                    historyShallowDepth: 3, // 浅层记忆 (远 - 仅摘要)
+                    // 原有的开关
+                    includeGlobal: true, 
+                    includeRules: true, 
+                    includeHistory: true, 
+                    includeCurrent: true,
+                    includeMap: true,
                     
-                    loreList: [], playerList: [],
+                    // [核心记忆变量]
+                    historyDeepDepth: 1,
+                    historyShallowDepth: 3,
                     
-                    // [恢复] 地图筛选列表
+                    // ★★★ [关键修复] 必须把这些空数组加回来！否则报 length undefined 错误 ★★★
+                    loreList: [], 
+                    playerList: [],
                     mapRegionList: [], 
                     mapPinList: [],
 
-                    // [恢复] 正确的装配顺序，Map 在 Players 之后
-                    order: ['global', 'rules', 'lore', 'players', 'map', 'history', 'current']
+                    // [修改] order 数组，将 'custom' 放在最前面
+                    order: ['custom', 'global', 'rules', 'lore', 'players', 'map', 'history', 'current']
                 }
             }
         },
@@ -4260,71 +4790,166 @@
                 const p = this.players.find(x => x.id === this.impactForm.targetId);
                 return p ? (p.stats[this.impactForm.attrKey] || 'N/A') : '???';
             },
-            // index.html 约 1300 行左右
+
             finalContextPreview() {
                 let preview = "";
                 
+                // --- 辅助函数：处理属性可见性与格式 ---
+                // 改用 methods 中的统一格式化函数，确保预览和实际发送一致
+                const formatAttr = (val, visibility, type) => {
+                    return this.formatContextAttr(val, visibility, type);
+                };
+
                 this.contextConfig.order.forEach(type => {
-                    // 全局变量
-                    if (type === 'global' && this.contextConfig.includeGlobal) {
-                        preview += `=== [WORLD: GLOBAL VARS] ===\n${this.global_vars.map(g => `${g.key}: ${g.value}`).join('\n')}\n\n`;
+                    
+                    // [新增] 处理 Custom Prompt
+                    if (type === 'custom' && this.contextConfig.includeCustom && this.settings.prompts.custom) {
+                        preview += `=== [CUSTOM INSTRUCTION] ===\n${this.settings.prompts.custom}\n\n`;
                     }
-                    // 规则
+
+                    // 1. 全局变量 (原代码)
+                    if (type === 'global' && this.contextConfig.includeGlobal) {
+                        // 过滤掉 hidden 的变量
+                        const visibleGlobals = this.global_vars.filter(g => g.visibility !== 'hidden');
+                        
+                        if (visibleGlobals.length > 0) {
+                            preview += `=== [WORLD: GLOBAL VARS] ===\n`;
+                            preview += visibleGlobals.map(g => {
+                                // 兼容旧存档：默认 visibility 为 editable
+                                const vis = g.visibility || 'editable'; 
+                                const valStr = formatAttr(g.value, vis, g.type);
+                                // formatAttr 返回 null 说明是 hidden，虽然上面 filter 过了，双重保险
+                                return valStr !== null ? `${g.key}: ${valStr}` : null;
+                            }).filter(x => x !== null).join('\n');
+                            preview += `\n\n`;
+                        }
+                    }
+
+                    // --- 2. 规则定义 (Rules) ---
                     if (type === 'rules' && this.contextConfig.includeRules) {
-                        preview += `=== [WORLD: RULES] ===\n`;
+                        preview += `=== [WORLD: RULES DEFINITIONS] ===\n`;
                         this.rule_sets.forEach(rs => {
-                            preview += `> ${rs.name}: ${rs.fields.map(f => f.key).join(', ')}\n`;
+                            // 构造字段定义字符串
+                            const fieldsStr = rs.fields.map(f => {
+                                const vis = f.visibility || 'editable';
+                                // 如果字段定义本身是 hidden，也不告诉 AI 这个字段的存在
+                                if (vis === 'hidden') return null;
+                                
+                                const visMark = vis === 'readonly' ? '(Auto-Calc)' : '';
+                                return `${f.key}=${f.label}${visMark}`;
+                            }).filter(x => x).join(', '); // 过滤 null
+                            
+                            if (fieldsStr) {
+                                preview += `TYPE [${rs.name}]: ${fieldsStr}\n`;
+                            }
                         });
                         preview += `\n`;
                     }
-                    // 资料
+
+                    // --- 3. 资料设定 (Lore) ---
                     if (type === 'lore') {
                         const activeLore = this.contextConfig.loreList.filter(l => l.active);
-                        if (activeLore.length) preview += `=== [WORLD: LORE] ===\n${activeLore.map(l => `> [${l.keys}]: ${l.content}`).join('\n')}\n\n`;
+                        if (activeLore.length > 0) {
+                            preview += `=== [WORLD: LORE] ===\n${activeLore.map(l => `> [${l.keys}]: ${l.content}`).join('\n')}\n\n`;
+                        }
                     }
-                    // 实体
+
+                    // --- 4. 参与实体 (Entities) [核心修改区域] ---
                     if (type === 'players') {
-                        const activeP = this.contextConfig.playerList.filter(p => p.active);
-                        if (activeP.length) preview += `=== [WORLD: ENTITIES] ===\n${activeP.map(p => { const r=this.players.find(x=>x.id===p.id); return `ID:${r.id}|${r.name}\nDesc:${r.desc}\nStats:${JSON.stringify(r.stats)}`; }).join('\n\n')}\n\n`;
+                        const activePlayers = this.contextConfig.playerList.filter(p => p.active);
+                        if (activePlayers.length > 0) {
+                            preview += `=== [WORLD: ENTITIES] ===\n`;
+                            
+                            preview += activePlayers.map(pItem => {
+                                // 回查原始数据
+                                const realP = this.players.find(x => x.id === pItem.id);
+                                if (!realP) return "";
+
+                                // A. 查找该实体的规则集
+                                const schema = this.rule_sets.find(rs => rs.id === realP.schemaId);
+                                const visibleStats = {};
+
+                                // B. 根据规则集过滤属性
+                                if (schema) {
+                                    schema.fields.forEach(f => {
+                                        const rawVal = realP.stats[f.key] !== undefined ? realP.stats[f.key] : '-';
+                                        const formatted = formatAttr(rawVal, f.visibility || 'editable', f.type);
+                                        
+                                        // 只有非 hidden 才加入输出对象
+                                        if (formatted !== null) {
+                                            visibleStats[f.key] = formatted;
+                                        }
+                                    });
+                                } else {
+                                    // 旧存档无规则集，全显
+                                    Object.assign(visibleStats, realP.stats);
+                                }
+
+                                // C. 立绘表情 Tag 信息
+                                let avatarTagsInfo = "";
+                                if (this.enableAvatarTags && realP.avatars && realP.avatars.length > 0) {
+                                    const tags = realP.avatars.map(a => a.tag).join(", ");
+                                    avatarTagsInfo = `\n  [VISUAL] Available Expressions: [${tags}]`;
+                                }
+
+                                return `ID:${realP.id} | ${realP.name}\n  Desc: ${realP.desc}\n  Stats: ${JSON.stringify(visibleStats)}${avatarTagsInfo}`;
+                            }).join('\n\n');
+                            
+                            preview += `\n\n`;
+                        }
                     }
 
-                    // --- [关键修复点 B]：地图预览安全读取 ---
+                    // --- 5. 地图数据 (Map) ---
                     if (type === 'map' && this.contextConfig.includeMap) {
-                        preview += `=== [TACTICAL MAP DATA] ===\n`;
-                        
-                        // 1. 处理区域 (Regions)
                         const activeRegions = this.contextConfig.mapRegionList.filter(r => r.active);
-                        if (activeRegions.length > 0) {
-                            preview += "Regions (Control):\n";
-                            activeRegions.forEach(reg => {
-                                const owner = reg.ownerId ? this.getFactionName(reg.ownerId) : "NEUTRAL";
-                                preview += `- Region "${reg.name}" (Owner: ${owner})\n`;
-                            });
-                        }
-
-                        // 2. 处理标记 (Pins)
                         const activePins = this.contextConfig.mapPinList.filter(p => p.active);
-                        if (activePins.length > 0) {
-                            preview += "\nPoints of Interest:\n";
-                            activePins.forEach(pin => {
-                                const label = pin.label || this.getPinName(pin.linkId);
-                                preview += `- Pin "${label}" at [${pin.x.toFixed(1)}%, ${pin.y.toFixed(1)}%]\n`;
-                            });
-                        }
                         
-                        // 3. 处理空状态
-                        if (activeRegions.length === 0 && activePins.length === 0) {
-                            preview += "(No map items selected)\n";
+                        if (activeRegions.length > 0 || activePins.length > 0) {
+                            preview += `=== [TACTICAL MAP DATA] ===\n`;
+                            
+                            if (activeRegions.length > 0) {
+                                preview += "Regions (Control):\n";
+                                activeRegions.forEach(reg => {
+                                    const realReg = this.map_data.regions.find(r => r.id === reg.id) || reg;
+                                    const owner = realReg.ownerId ? this.getFactionName(realReg.ownerId) : "NEUTRAL";
+                                    
+                                    // 地块属性也应用过滤逻辑
+                                    let regStatsStr = "";
+                                    if(realReg.schemaId && realReg.stats) {
+                                        const rSchema = this.rule_sets.find(rs => rs.id === realReg.schemaId);
+                                        if(rSchema) {
+                                            const safeRegStats = {};
+                                            rSchema.fields.forEach(f => {
+                                                const val = formatAttr(realReg.stats[f.key], f.visibility||'editable');
+                                                if(val !== null) safeRegStats[f.key] = val;
+                                            });
+                                            regStatsStr = " " + JSON.stringify(safeRegStats);
+                                        }
+                                    }
+                                    
+                                    preview += `- Region "${realReg.name}" (Owner: ${owner})${regStatsStr}\n`;
+                                });
+                            }
+                            
+                            if (activePins.length > 0) {
+                                preview += "\nPoints of Interest:\n";
+                                activePins.forEach(pin => {
+                                    const realPin = this.map_data.pins.find(p => p.id === pin.id) || pin;
+                                    const label = realPin.label || this.getPinName(realPin.linkId);
+                                    preview += `- Pin "${label}" at [${realPin.x.toFixed(0)},${realPin.y.toFixed(0)}]\n`;
+                                });
+                            }
+                            preview += "\n";
                         }
-                        preview += "\n";
                     }
 
-                    // 历史
+                    // --- 6. 历史回溯 (History) ---
                     if (type === 'history' && this.contextConfig.includeHistory) {
-                        preview += `=== [HISTORY MEMORY] ===\n`;
                         const totalLen = this.timeline.length;
-                        const deepLen = this.contextConfig.historyDeepDepth || 0;
-                        const shallowLen = this.contextConfig.historyShallowDepth || 0;
+                        const deepLen = this.contextConfig.historyDeepDepth;       // 近期 (详情)
+                        const shallowLen = this.contextConfig.historyShallowDepth; // 远期 (摘要)
+
+                        // 计算切片索引 (正序: 远 -> 近)
                         const deepStart = Math.max(0, totalLen - deepLen);
                         const shallowEnd = deepStart;
                         const shallowStart = Math.max(0, shallowEnd - shallowLen);
@@ -4332,41 +4957,56 @@
                         const shallowTurns = this.timeline.slice(shallowStart, shallowEnd);
                         const deepTurns = this.timeline.slice(deepStart);
 
-                        if (shallowTurns.length > 0) {
-                            preview += `--- Shallow Memory (Summary Only) ---\n`;
-                            shallowTurns.forEach(turn => {
-                                preview += `[Turn ${turn.id}] ${turn.timeRange}\n`;
-                                turn.events.forEach(e => {
-                                    preview += ` • ${e.summary} (Actor: ${e.factionId})\n`;
+                        if (shallowTurns.length > 0 || deepTurns.length > 0) {
+                            preview += `=== [HISTORY MEMORY] ===\n`;
+                            
+                            // A. 浅层记忆 (仅摘要)
+                            if (shallowTurns.length > 0) {
+                                preview += `--- Shallow Memory (Far Context / Summary Only) ---\n`;
+                                shallowTurns.forEach(turn => {
+                                    preview += `[Turn ${turn.id}] ${turn.timeRange}\n`;
+                                    turn.events.forEach(e => {
+                                        preview += ` • ${e.summary} (Actor: ${e.factionId})\n`;
+                                    });
+                                    preview += `\n`;
                                 });
-                                preview += `\n`;
-                            });
-                        }
-                        if (deepTurns.length > 0) {
-                            preview += `--- Deep Memory (Full Details) ---\n`;
-                            deepTurns.forEach(turn => {
-                                preview += `[Turn ${turn.id}] ${turn.timeRange}\n`;
-                                turn.events.forEach(e => {
-                                    preview += ` • ${e.summary} (Actor: ${e.factionId})\n`;
-                                    if (e.content) preview += `   Details: ${e.content.substring(0, 150)}...\n`;
-                                    if (e.impacts && e.impacts.length) {
-                                         preview += `   Impacts: ${e.impacts.map(i => `${i.targetName}.${i.attrLabel}: ${i.change || (i.oldValue+'->'+i.newValue)}`).join('; ')}\n`;
-                                    }
+                            }
+
+                            // B. 深层记忆 (含完整 Content 和 Impacts)
+                            if (deepTurns.length > 0) {
+                                preview += `--- Deep Memory (Recent Events / Full Detail) ---\n`;
+                                deepTurns.forEach(turn => {
+                                    preview += `[Turn ${turn.id}] ${turn.timeRange}\n`;
+                                    turn.events.forEach(e => {
+                                        preview += ` • ${e.summary} (Actor: ${e.factionId})\n`;
+                                        // 注入完整内容
+                                        if (e.content) preview += `   Details: ${e.content}\n`;
+                                        if (e.impacts && e.impacts.length) {
+                                             preview += `   Impacts: ${e.impacts.map(i => `${i.targetName}.${i.attrLabel}: ${i.change || (i.oldValue+'->'+i.newValue)}`).join('; ')}\n`;
+                                        }
+                                    });
+                                    preview += `\n`;
                                 });
-                                preview += `\n`;
-                            });
-                        }
-                        if (shallowTurns.length === 0 && deepTurns.length === 0) {
-                            preview += "(No history available in current range)\n\n";
+                            }
+                            preview += "\n";
                         }
                     }
 
-                    // 当前指令
+                    // --- 7. 当前指令 (Current) ---
                     if (type === 'current' && this.contextConfig.includeCurrent) {
                         preview += `=== [CURRENT INSTRUCTION] ===\n`;
-                        if (this.rawInput) preview += `> CMD: ${this.rawInput}\n`;
-                        if (this.editor.factionId) preview += `> ActorID: ${this.editor.factionId}\n`;
-                        if (this.editor.summary) preview += `> Draft: ${this.editor.summary}\n`;
+                        if (this.rawInput) preview += `> COMMAND: ${this.rawInput}\n`;
+                        if (this.editor.factionId) preview += `> ACTOR_ID: ${this.editor.factionId}\n`;
+                        if (this.editor.timeStart) preview += `> TIME: ${this.editor.timeStart} - ${this.editor.timeEnd}\n`;
+                        if (this.editor.summary) preview += `> DRAFT_TITLE: ${this.editor.summary}\n`;
+                        if (this.editor.content) preview += `> DRAFT_CONTENT: ${this.editor.content}\n`;
+                        if (this.editor.impacts.length) {
+                            preview += `> PLANNED_IMPACTS: ${JSON.stringify(this.editor.impacts)}\n`;
+                        }
+                        
+                        if (this.generateOptions) {
+                            preview += `> MODE: Generate "options" array for player decision.\n`;
+                        }
                         preview += `\n`;
                     }
                 });
@@ -4374,6 +5014,551 @@
             }
         },
         methods: {
+            saveAndExitVN() {
+                if (this.vnCurrentEvent) {
+                    // ★ 将当前演出的完整脚本（包含你的插话和AI的新回应）保存回事件数据
+                    // 这样回到时间轴视图，或者生成海报时，内容就是你们互动后的新版本了
+                    this.vnCurrentEvent.content = JSON.stringify(this.vnScript);
+                    
+                    // 自动更新摘要（可选）：标记一下这个事件已经被改写了
+                    if (!this.vnCurrentEvent.summary.includes("(Interactive)")) {
+                        this.vnCurrentEvent.summary += " (Interactive)";
+                    }
+                }
+                
+                this.vnMode = false;
+                this.saveGame('autosave.json'); // 物理存盘
+            },
+            // --- 修改后的 sendVNChat 方法 ---
+            async sendVNChat() {
+                if (!this.vnUserInput.trim()) return;
+                if (this.isThinking) return;
+
+                const text = this.vnUserInput.trim();
+                this.vnUserInput = ""; 
+
+                // 1. 查找主角ID
+                const roleId = this.vnPlayerRoleId || 'narrator';
+
+                const newLine = { role: roleId, text: text, tag: 'default' };
+
+                // ★★★ 核心修改点开始 ★★★
+                
+                // 如果当前不是剧本的最后一行，说明用户是在“中途插话”
+                if (this.vnLineIndex < this.vnScript.length - 1) {
+                    this.vnScript.splice(this.vnLineIndex + 1);
+                }
+
+                // ★★★ [新增] 既然剧情变了，原本的选项(options)就不再适用了，清空它以免误导
+                if (this.vnCurrentEvent) {
+                    this.vnCurrentEvent.options = [];
+                    this.vnShowOptions = false; // 确保选项层不遮挡
+                }
+
+                // 将用户的话加入剧本末尾
+                this.vnScript.push(newLine);
+                
+                // ★★★ 核心修改点结束 ★★★
+
+                // 移动索引到最新一行（即用户刚才说的话）并播放
+                this.vnLineIndex = this.vnScript.length - 1;
+                
+                // 立即显示用户的话（不用打字机效果，直接显示更爽快）
+                this.vnDisplayedText = text; 
+                this.vnIsTyping = false; // 停止打字状态
+
+                // 3. 调用 AI 生成回应 (续写新的未来)
+                await this.generateVNResponse();
+            },
+
+            async generateVNResponse() {
+                this.isThinking = true;
+
+                // 1. 构建系统指令 (System Prompt)
+                let systemPrompt = `你正处于一个“互动式视觉小说”场景中。
+            【当前场景】：${this.vnCurrentEvent.summary}
+            【任务】：根据用户的最新发言和上下文，扮演场景中的其他角色进行回应。
+            【要求】：
+            1. 输出 JSON 数组：[{"role":"id","tag":"expression","text":"..."}]
+            2. 生成 1-3 句对话，保持剧情紧凑。`;
+
+                // 注入自定义 Prompt
+                if (this.vnContextConfig.includeCustom && this.settings.prompts.custom) {
+                    systemPrompt += `\n\n=== 全局设定 ===\n${this.settings.prompts.custom}`;
+                }
+
+                // 2. 构建上下文 Payload (Context)
+                let contextStr = "";
+
+                // A. 演员表与设定 (The Cast)
+                // 获取所有活跃演员 + 主角
+                const activeIds = [...new Set([...this.vnActiveEntityIds, ...this.players.filter(p=>p.isProtagonist).map(p=>p.id)])];
+                
+                contextStr += `=== 🎭 登场角色 (ACTIVE CAST) ===\n`;
+                activeIds.forEach(id => {
+                    const p = this.players.find(x => x.id === id);
+                    if (!p) return;
+                    
+                    // 基础信息
+                    contextStr += `[ID: ${p.id}] ${p.name} (${p.desc})\n`;
+                    
+                    // 属性 (Stats)
+                    if (this.vnContextConfig.includeStats) {
+                        contextStr += `  Stats: ${JSON.stringify(p.stats)}\n`;
+                    }
+
+                    // ★★★ 关键：立绘差分列表 (Avatar Tags) ★★★
+                    // 告诉 LLM 有哪些表情可用，以便它自然切换
+                    if (this.vnContextConfig.includeTags && p.avatars && p.avatars.length > 0) {
+                        const tags = p.avatars.map(a => a.tag).join(", ");
+                        contextStr += `  [Visual Tags Available]: ${tags}\n`;
+                    }
+                    contextStr += `\n`;
+                });
+
+                // B. 前情提要 (History) - [修改] 支持深浅分离的独立设置
+                if (this.vnContextConfig.includeHistory) {
+                    const totalLen = this.timeline.length;
+                    const deepLen = this.vnContextConfig.historyDeepDepth;
+                    const shallowLen = this.vnContextConfig.historyShallowDepth;
+
+                    // 计算切片
+                    const deepStart = Math.max(0, totalLen - deepLen);
+                    const shallowEnd = deepStart;
+                    const shallowStart = Math.max(0, shallowEnd - shallowLen);
+
+                    const shallowTurns = this.timeline.slice(shallowStart, shallowEnd);
+                    const deepTurns = this.timeline.slice(deepStart);
+
+                    if (shallowTurns.length > 0 || deepTurns.length > 0) {
+                        contextStr += `=== 📜 历史记忆 (MEMORY) ===\n`;
+                        
+                        // 浅层：只带摘要
+                        if (shallowTurns.length > 0) {
+                            contextStr += `[远期概要]:\n`;
+                            shallowTurns.forEach(t => {
+                                t.events.forEach(e => contextStr += `- ${e.summary}\n`);
+                            });
+                        }
+                        // 深层：带详细内容
+                        if (deepTurns.length > 0) {
+                            contextStr += `[近期详情]:\n`;
+                            deepTurns.forEach(t => {
+                                t.events.forEach(e => {
+                                    contextStr += `- ${e.summary}\n`;
+                                    if(e.content) contextStr += `  Details: ${e.content.substring(0, 300)}...\n`; // 限制长度防止爆Token
+                                });
+                            });
+                        }
+                        contextStr += `\n`;
+                    }
+                }
+
+                // C. 地图/环境 (Map) - 如果需要
+                if (this.vnContextConfig.includeMap) {
+                    contextStr += this.buildMapString() + "\n\n";
+                }
+
+                // D. 当前剧本流 (Script Flow)
+                // 截取最近 N 条，保持短期记忆连贯
+                const recentLines = this.vnScript.slice(-20); 
+                contextStr += `=== 🎬 当前剧本流 (CURRENT SCRIPT) ===\n${JSON.stringify(recentLines, null, 2)}`;
+
+                // 3. 发送请求
+                const payload = {
+                    provider: this.settings.api.provider,
+                    apiKey: this.settings.api.key,
+                    baseUrl: this.settings.api.baseUrl,
+                    model: this.settings.api.model,
+                    useProxy: this.settings.proxy.enabled,
+                    proxyPort: this.settings.proxy.port,
+                    
+                    systemPrompt: systemPrompt,
+                    context: contextStr, 
+                    // 显式提示 AI 刚刚发生了什么 (例如加入了新角色)
+                    userPrompt: "Based on the script above (especially the last user action), generate the next character reactions."
+                };
+
+                try {
+                    const data = await window.LevantAPI.generateAI(payload);
+                    const match = data.result.match(/\[[\s\S]*\]/);
+                    if (match) {
+                        const newLines = JSON.parse(match[0]);
+                        if (Array.isArray(newLines)) {
+                            this.vnScript.push(...newLines);
+                            // 此时无需自动播放，等待用户操作
+                        }
+                    }
+                } catch (e) {
+                    console.error("VN Gen Error:", e);
+                } finally {
+                    this.isThinking = false;
+                }
+            },
+            isProtagonist(roleId) {
+                if (roleId === 'narrator') return false;
+                const p = this.players.find(x => x.id === roleId);
+                return p && p.isProtagonist;
+            },
+            openFormulaModal(field) {
+                this.currentEditingField = field;
+                this.formulaTokens = [];
+                this.activeFormulaTab = '基础';
+                this.showFormulaModal = true;
+                
+                // TODO: 这里可以做一个简单的反向解析器，把现有的 code 转回 tokens
+                // 如果无法解析，暂时先清空，或者保留在“原始代码模式”
+                // 为了简单起见，这里假设每次打开都是重新构建，或者我们可以只解析简单的
+                if (field.formula) {
+                    // 简易提示：如果已有公式，提醒用户会覆盖
+                    console.log("Editing existing formula:", field.formula);
+                }
+            },
+
+            closeFormulaModal() {
+                this.showFormulaModal = false;
+            },
+
+            // 2. 添加积木块
+            addToken(type, label, value) {
+                this.formulaTokens.push({ type, label, value });
+            },
+
+            removeToken(idx) {
+                this.formulaTokens.splice(idx, 1);
+            },
+
+            // 3. 获取所有可用的字段定义（用于下拉框）
+            getAllUniqueFields() {
+                const map = new Map();
+                this.rule_sets.forEach(rs => {
+                    rs.fields.forEach(f => {
+                        if (f.type === 'number') map.set(f.key, f);
+                    });
+                });
+                return Array.from(map.values());
+            },
+
+            // 4. 获取当前上下文可用的自身字段
+            getAvailableFields() {
+                // 假设我们正在编辑的是一个 RuleSet 里的字段
+                // 这里简单返回所有 number 类型的字段定义
+                // 如果能知道当前 editingField 属于哪个 RuleSet 更好，但全局搜索也行
+                return this.getAllUniqueFields();
+            },
+
+            // 5. 添加特定实体引用
+            addSpecificEntityToken() {
+                const p = this.players.find(x => x.id === this.formulaBuilder.targetEntityId);
+                const fKey = this.formulaBuilder.targetStatKey;
+                if (!p || !fKey) return;
+                
+                // 生成代码： parseFloat(ctx.players.find(p=>p.id=='xxx').stats['yyy']) || 0
+                // 注意：我们需要在后端 recalculateState 把 players 放入 ctx
+                const code = `(parseFloat(ctx.players.find(p=>p.id==='${p.id}')?.stats['${fKey}']) || 0)`;
+                const label = `${p.name}的${fKey}`;
+                
+                this.addToken('func', label, code);
+            },
+
+            // 6. 添加聚合函数 (傻瓜化正则)
+            addAggToken() {
+                const stat = this.formulaBuilder.aggStat;
+                const owner = this.formulaBuilder.aggOwner;
+                if (!stat) return;
+                
+                let code = "";
+                let label = "";
+                
+                if (owner === 'self') {
+                    // 利用我们在 recalculateState 里定义的 utils
+                    code = `ctx.utils.sumRegionStat(self.id, '${stat}')`;
+                    label = `我的地块[${stat}]总和`;
+                } else {
+                    // 世界所有
+                    code = `ctx.map.regions.reduce((sum,r) => sum + (parseFloat(r.stats['${stat}'])||0), 0)`;
+                    label = `世界地块[${stat}]总和`;
+                }
+                
+                this.addToken('func', label, code);
+            },
+
+            // 7. 生成代码字符串 (含校验状态)
+            generateCodeFromTokens() {
+                const code = this.formulaTokens.map(t => t.value).join(' ');
+                this.validateFormulaResult = this.checkFormulaSyntax(code); // 触发校验
+                return code;
+            },
+
+            // [新增] 语法校验函数
+            checkFormulaSyntax(code) {
+                if (!code.trim()) return { valid: true, msg: '' };
+                try {
+                    // 创建一个虚拟环境进行测试
+                    // 模拟 self 和 ctx 对象，防止 undefined 报错
+                    const mockSelf = { stats: {}, id: 'test' };
+                    // 填充一些虚拟数据以通过运算
+                    this.getAllUniqueFields().forEach(f => mockSelf.stats[f.key] = 1);
+                    
+                    const mockCtx = { 
+                        globals: {}, 
+                        players: [],
+                        map: { regions: [] },
+                        utils: { sumRegionStat: () => 1, getOwnedRegions: () => [] },
+                        turn: 1 
+                    };
+                    this.global_vars.forEach(g => mockCtx.globals[g.key] = 1);
+
+                    const func = new Function('self', 'ctx', 'Math', `
+                        with(ctx) { return ${code}; }
+                    `);
+                    func(mockSelf, mockCtx, Math);
+                    return { valid: true, msg: 'Syntax Valid' };
+                } catch (e) {
+                    return { valid: false, msg: e.message };
+                }
+            },
+
+            // 8. 保存
+            saveFormula() {
+                if (this.currentEditingField) {
+                    this.currentEditingField.formula = this.generateCodeFromTokens();
+                    this.saveGame('autosave.json');
+                }
+                this.closeFormulaModal();
+            },
+
+            // 9. 样式辅助
+            getTokenClass(type) {
+                if (type === 'op') return 'border-gray-500 text-gray-300 bg-gray-800'; // 基础运算符
+                if (type === 'num') return 'border-pink-500 text-pink-400 bg-pink-900/20'; // 数字
+                if (type === 'var') return 'border-indigo-500 text-indigo-400 bg-indigo-900/20'; // 变量
+                if (type === 'env') return 'border-amber-500 text-amber-400 bg-amber-900/20'; // 环境变量
+                if (type === 'func') return 'border-blue-500 text-blue-400 bg-blue-900/20'; // 数学函数
+                return 'border-gray-600 text-gray-400';
+            },
+            // --- [新增] 上下文属性格式化 (Type/Tag Generator) ---
+            formatContextAttr(val, visibility, type) {
+                // 1. Hidden 属性直接不可见
+                if (visibility === 'hidden') return null;
+
+                // 2. 构建元数据标签
+                let metaParts = [];
+                
+                // 类型标记
+                if (type === 'number') metaParts.push('Type:Number');
+                else metaParts.push('Type:String'); // 默认为 String
+
+                // 权限标记
+                if (visibility === 'readonly') metaParts.push('ReadOnly/Auto-Calc');
+
+                const metaTag = metaParts.length > 0 ? ` <${metaParts.join(', ')}>` : '';
+
+                // 3. 返回格式化字符串: "100 <Type:Number, ReadOnly/Auto-Calc>"
+                return `${val}${metaTag}`;
+            },
+
+            // --- [新增] 数据合规性校验 ---
+            validateImpact(imp) {
+                // 1. 仅校验 STAT_CHANGE 类型，其他类型暂不校验
+                if (imp.type !== 'STAT_CHANGE') return { valid: true };
+
+                // 2. 查找目标定义
+                let schemaField = null;
+                let targetLabel = "";
+
+                if (imp.targetId === 'global') {
+                    const gVar = this.global_vars.find(g => g.key === imp.attrKey);
+                    if (gVar) {
+                        schemaField = gVar; // 全局变量结构类似字段定义
+                        targetLabel = "Global Var";
+                    }
+                } else {
+                    const p = this.players.find(x => x.id === imp.targetId);
+                    if (p) {
+                        const schema = this.rule_sets.find(rs => rs.id === p.schemaId);
+                        if (schema) {
+                            schemaField = schema.fields.find(f => f.key === imp.attrKey);
+                            targetLabel = p.name;
+                        }
+                    }
+                }
+
+                if (!schemaField) {
+                    // 如果找不到定义（可能是旧数据或动态字段），默认放行，但给个警告
+                    console.warn(`Validation warning: Field definition not found for ${imp.attrKey}`);
+                    return { valid: true }; 
+                }
+
+                // 3. 校验可见性/只读权限
+                // 如果是 readonly，AI 不允许修改 (用户手动操作除外，但这里我们也拦截 AI 生成的结果)
+                // 注意：如果是 hidden，AI 根本看不到，理论上不会改，如果改了也是瞎改，必须拦截
+                const visibility = schemaField.visibility || 'editable';
+                if (visibility !== 'editable') {
+                    return { 
+                        valid: false, 
+                        msg: `[Permission Denied] Property '${imp.attrLabel}' is ${visibility.toUpperCase()}. Modification blocked.` 
+                    };
+                }
+
+                // 4. 校验数据类型
+                const type = schemaField.type || 'string';
+                if (type === 'number') {
+                    // 尝试解析为数字
+                    const val = parseFloat(imp.newValue);
+                    if (isNaN(val)) {
+                        return { 
+                            valid: false, 
+                            msg: `[Type Mismatch] Property '${imp.attrLabel}' requires NUMBER, but got "${imp.newValue}".` 
+                        };
+                    }
+                    // 可选：强制转换回数字格式，防止 "100元" 这种混合字符串
+                    // imp.newValue = val; 
+                }
+
+                return { valid: true };
+            },
+            // --- 修改后 (增强版) ---
+            recalculateState() {
+                const turnVal = this.timeline.length > 0 ? this.timeline[this.timeline.length-1].id : 0;
+                
+                // 1. 构建全知上下文 (World Context)
+                // 这里的 context 将被注入到所有公式中
+                const context = {
+                    globals: {}, // 稍后填充
+                    players: this.players,
+                    map: this.map_data, // ★ 新增：允许访问地图数据
+                    turn: turnVal,
+                    
+                    // ★ 新增：工具函数，方便用户写公式
+                    // 用法示例: utils.sumChildStats('p_empire', 'gold_income')
+                    utils: {
+                        // 获取某实体控制的所有地块
+                        getOwnedRegions: (ownerId) => {
+                            if(!this.map_data.regions) return [];
+                            return this.map_data.regions.filter(r => r.ownerId === ownerId);
+                        },
+                        // 计算某实体控制的所有地块的某个属性之和
+                        sumRegionStat: (ownerId, statKey) => {
+                            const regs = this.map_data.regions.filter(r => r.ownerId === ownerId);
+                            return regs.reduce((sum, r) => {
+                                const val = parseFloat(r.stats?.[statKey]) || 0;
+                                return sum + val;
+                            }, 0);
+                        }
+                    }
+                };
+
+                // 填充 globals 字典 (方便引用，如 context.globals['污染度'])
+                this.global_vars.forEach(g => {
+                    let val = g.value;
+                    if (g.type === 'number') val = parseFloat(val) || 0;
+                    context.globals[g.key] = val;
+                });
+
+                // --- A. 计算全局变量 (Global Vars) ---
+                this.global_vars.forEach(g => {
+                    if (g.type === 'number' && g.visibility === 'readonly' && g.formula) {
+                        try {
+                            // 将 context 解构进去，允许用户直接写 globals.xxx 或 map.regions
+                            const func = new Function('ctx', 'Math', `
+                                with(ctx) { 
+                                    try { return ${g.formula}; } catch(e) { return 0; } 
+                                }
+                            `);
+                            
+                            let res = func(context, Math);
+                            if(isNaN(res)) res = 0;
+                            // 保留2位小数
+                            g.value = Math.round(res * 100) / 100;
+                            
+                            // ★ 关键：立即更新 context 中的 globals，以便后续变量可以依赖此变量
+                            context.globals[g.key] = g.value; 
+                        } catch (e) {
+                            console.warn(`Global formula error [${g.key}]:`, e);
+                        }
+                    }
+                });
+
+                // --- B. 计算实体属性 (Entity Stats) ---
+                this.players.forEach(player => {
+                    const schema = this.rule_sets.find(rs => rs.id === player.schemaId);
+                    if (!schema) return;
+
+                    schema.fields.forEach(field => {
+                        if (field.type === 'number' && field.visibility === 'readonly' && field.formula) {
+                            try {
+                                // 准备 self.stats
+                                const selfStats = {};
+                                schema.fields.forEach(f => {
+                                    let val = player.stats[f.key];
+                                    if (f.type === 'number') val = parseFloat(val) || 0;
+                                    selfStats[f.key] = val;
+                                });
+
+                                // 构造 self 对象
+                                const selfObj = { stats: selfStats, id: player.id, name: player.name, ...player };
+
+                                const func = new Function('self', 'ctx', 'Math', `
+                                    with(ctx) {
+                                        try { return ${field.formula}; } catch(e) { return 0; }
+                                    }
+                                `);
+                                
+                                let res = func(selfObj, context, Math);
+                                
+                                if (typeof res === 'number') {
+                                    res = Math.round(res * 100) / 100;
+                                } else {
+                                    res = 0;
+                                }
+                                
+                                player.stats[field.key] = res;
+                            } catch (e) {
+                                console.warn(`Stat formula error [${player.name}.${field.key}]:`, e);
+                            }
+                        }
+                    });
+                });
+            // --- C. ★ 新增：计算地块属性 (Region Stats) ---
+            if (this.map_data.regions) {
+                this.map_data.regions.forEach(reg => {
+                    if (!reg.schemaId) return;
+                    const schema = this.rule_sets.find(rs => rs.id === reg.schemaId);
+                    if (!schema) return;
+
+                    schema.fields.forEach(field => {
+                        if (field.type === 'number' && field.visibility === 'readonly' && field.formula) {
+                            try {
+                                const selfStats = {};
+                                schema.fields.forEach(f => {
+                                    let val = reg.stats[f.key];
+                                    if (f.type === 'number') val = parseFloat(val) || 0;
+                                    selfStats[f.key] = val;
+                                });
+
+                                // Region 的 self 对象，包含 ownerId 等有用信息
+                                const selfObj = { stats: selfStats, id: reg.id, name: reg.name, ownerId: reg.ownerId, ...reg };
+
+                                const func = new Function('self', 'ctx', 'Math', `
+                                    with(ctx) {
+                                        try { return ${field.formula}; } catch(e) { return 0; }
+                                    }
+                                `);
+                                
+                                let res = func(selfObj, context, Math);
+                                if (typeof res === 'number') res = Math.round(res * 100) / 100;
+                                else res = 0;
+
+                                reg.stats[field.key] = res;
+                            } catch (e) {
+                                console.warn(`Region formula error [${reg.name}.${field.key}]:`, e);
+                            }
+                        }
+                    });
+                });
+            }
+            },
 
             // [修复] 核心算法：计算国旗投影 (加入地图长宽比修正，防止拉伸)
             getFlagTransform(reg, layer) {
@@ -4552,12 +5737,31 @@
                 this.vnShowOptions = false;
                 this.vnMode = true;
                 
-                // 开始播放第一句 (使用打字机)
+                // ★★★ [新增] 初始化活跃演员表 ★★★
+                // 默认包含事件中涉及的所有 factionIds
+                // 并过滤掉主角（主角默认总是存在的）和 'global'
+                this.vnActiveEntityIds = (event.factionIds || [event.factionId])
+                    .filter(id => id !== 'global' && !this.isProtagonist(id));
+
+                // [新增] 初始化玩家身份：优先选定 marked as Protagonist 的角色，否则选 narrator
+                const protagonist = this.players.find(p => p.isProtagonist);
+                this.vnPlayerRoleId = protagonist ? protagonist.id : 'narrator';
+
+                // 开始播放
                 this.playTypewriter(this.vnCurrentLine.text);
             },
 
             // --- 修改 vnNextLine ---
-            vnNextLine() {
+            vnNextLine(e) {
+                // ★★★ [新增] 核心修复：如果点击的目标是输入框、按钮或其内部元素，直接终止，不切换下一句
+                if (e && e.target) {
+                    const tag = e.target.tagName;
+                    // 如果点击的是 INPUT, BUTTON, TEXTAREA，或者点击了输入框内部
+                    if (['INPUT', 'BUTTON', 'TEXTAREA'].includes(tag) || e.target.closest('input') || e.target.closest('button')) {
+                        return; 
+                    }
+                }
+
                 // 1. 如果正在打字，立即显示全文本 (Skip typing)
                 if (this.vnIsTyping) {
                     clearInterval(this.vnTypeTimer);
@@ -4566,13 +5770,22 @@
                     return;
                 }
 
-                // 2. 如果打字已完成，进入下一句
+                // 2. 如果还有下一句，播放下一句
                 if (this.vnLineIndex < this.vnScript.length - 1) {
                     this.vnLineIndex++;
                     this.playTypewriter(this.vnCurrentLine.text);
                 } else {
-                    // 3. 剧本结束，显示选项
-                    this.vnShowOptions = true;
+                    // ★★★ [修改] 剧本播放完毕后的逻辑 ★★★
+                    
+                    // 只有当事件确实包含预设选项时，才弹出选项层结束对话
+                    if (this.vnCurrentEvent.options && this.vnCurrentEvent.options.length > 0) {
+                        this.vnShowOptions = true;
+                    } else {
+                        // 如果没有选项，说明是“开放式对话”
+                        // 此时什么都不做，停留在最后一句画面上
+                        // 输入框依然在，用户可以继续输入 sendVNChat 来“续命”
+                        console.log("Script ended, waiting for user input...");
+                    }
                 }
             },
 
@@ -6569,6 +7782,10 @@
                     if (p.avatar === undefined) p.avatar = "";
                     if (p.avatarScale === undefined) p.avatarScale = 1.0;
                     if (p.avatarOffsetY === undefined) p.avatarOffsetY = 0.0;
+                    
+                    // ★★★ [新增] 补全主角标记 ★★★
+                    if (p.isProtagonist === undefined) p.isProtagonist = false;
+
                     if (!p.schemaId) p.schemaId = hasRules ? this.rule_sets[0].id : 'default';
                     if (!p.stats) p.stats = {};
                     return p;
@@ -6650,6 +7867,8 @@
 
                 // --- 7. 系统状态恢复 ---
                 this.serverConnected = true;
+                // [新增] 修复旧存档数据结构 & 执行计算
+                this.recalculateState(); 
                 this.$nextTick(() => { this.initMapCanvas(); });
             },
             
@@ -6916,10 +8135,18 @@
                 let contextPayload = "";
                 
                 this.contextConfig.order.forEach(type => {
-                    
+                    // [新增] 处理 Custom Prompt
+                    if (type === 'custom' && this.contextConfig.includeCustom && this.settings.prompts.custom) {
+                        contextPayload += `=== [CUSTOM INSTRUCTION] ===\n${this.settings.prompts.custom}\n\n`;
+                    }
                     // 1. 全局变量
                     if (type === 'global' && this.contextConfig.includeGlobal) {
-                        contextPayload += `=== [WORLD: GLOBAL VARS] ===\n${this.global_vars.map(g => `${g.key}: ${g.value}`).join('\n')}\n\n`;
+                        const visibleGlobals = this.global_vars.filter(g => g.visibility !== 'hidden');
+                        contextPayload += `=== [WORLD: GLOBAL VARS] ===\n${visibleGlobals.map(g => {
+                            // 调用 formatContextAttr，确保全局变量也有类型提示
+                            const fmt = this.formatContextAttr(g.value, g.visibility, g.type);
+                            return fmt ? `${g.key}: ${fmt}` : null;
+                        }).filter(x=>x).join('\n')}\n\n`;
                     }
                     
                     if (type === 'rules' && this.contextConfig.includeRules) {
@@ -6946,16 +8173,36 @@
                         if (activePlayers.length > 0) {
                             contextPayload += `=== [WORLD: ENTITIES] ===\n${activePlayers.map(p => {
                                 const realP = this.players.find(x => x.id === p.id);
+                                const schema = this.rule_sets.find(rs => rs.id === realP.schemaId);
+                                
+                                const visibleStats = {};
+                                if (schema) {
+                                    schema.fields.forEach(f => {
+                                        // ★ 核心修改：调用 formatContextAttr 注入类型和权限标签
+                                        // 注意：这里我们传入 f.type 和 f.visibility
+                                        const valStr = this.formatContextAttr(realP.stats[f.key], f.visibility||'editable', f.type||'string');
+                                        
+                                        if (valStr !== null) {
+                                            visibleStats[f.key] = valStr; // 存入带标签的字符串，让 AI 可见
+                                        }
+                                    });
+                                } else {
+                                    // 兼容旧模式 (无规则集时默认全部可见，视为 String)
+                                    for(let k in realP.stats) {
+                                        visibleStats[k] = this.formatContextAttr(realP.stats[k], 'editable', 'string');
+                                    }
+                                }
                                 
                                 // [新增] ★ 如果开关开启，且有差分立绘，则注入 Tags
                                 let avatarTagsInfo = "";
                                 if (this.enableAvatarTags && realP.avatars && realP.avatars.length > 0) {
                                     const tags = realP.avatars.map(a => a.tag).join(", ");
-                                    // 使用明确的标记告诉 AI 这是可视化的上下文
                                     avatarTagsInfo = `\n  [VISUAL] Available Expressions: [${tags}]`;
                                 }
 
-                                return `ID:${realP.id} | ${realP.name}\n  Desc: ${realP.desc}\n  Stats: ${JSON.stringify(realP.stats)}${avatarTagsInfo}`;
+                                // 注意：JSON.stringify 会把带标签的字符串转义，这正是我们想要的
+                                // 例如: "gold": "5000 <Type:Number>"
+                                return `ID:${realP.id} | ${realP.name}\n  Desc: ${realP.desc}\n  Stats: ${JSON.stringify(visibleStats, null, 2)}${avatarTagsInfo}`;
                             }).join('\n\n')}\n\n`;
                         }
                     }
@@ -7186,36 +8433,53 @@
             },
             removeImpact(idx) { this.editor.impacts.splice(idx, 1); },
             
-            // [修复] 移除重复的、不完整的 addToStaging 定义，只保留这一个
+            // --- 修改后的 addToStaging ---
             addToStaging() { 
-                if (!this.editor.summary) return; 
+                if (!this.editor.summary) return alert("Summary is required!"); 
                 
-                // 确保有数据
+                // 1. 确保有行动方数据
                 if (!this.editor.factionIds || this.editor.factionIds.length === 0) {
-                    // 如果用户没选，根据 factionId 回填，或者默认为 global
                     if (this.editor.factionId) this.editor.factionIds = [this.editor.factionId];
                     else this.editor.factionIds = ['global'];
                 }
                 this.updateEditorPrimary();
 
+                // --- [新增] 2. 执行合规性校验 ---
+                const validationErrors = [];
+                
+                if (this.editor.impacts && this.editor.impacts.length > 0) {
+                    this.editor.impacts.forEach((imp, idx) => {
+                        const result = this.validateImpact(imp);
+                        if (!result.valid) {
+                            validationErrors.push(`#${idx + 1} (${imp.attrLabel}): ${result.msg}`);
+                        }
+                    });
+                }
+
+                // --- [新增] 3. 如果有错误，拦截并提示 ---
+                if (validationErrors.length > 0) {
+                    alert(`Cannot add to Pending Queue due to validation errors:\n\n${validationErrors.join('\n')}\n\nPlease manually correct the values in the editor below.`);
+                    return; // ★ 拦截！
+                }
+
+                // 4. 校验通过，正常加入
                 this.pendingEvents.push(JSON.parse(JSON.stringify({ 
                     ...this.editor, 
-                    // 显式保存数组
                     factionIds: this.editor.factionIds,
-                    // 保持单数 ID 存在以兼容旧逻辑
                     factionId: this.editor.factionId || this.editor.factionIds[0] || 'global', 
                     timeStart: this.editor.timeStart || '?', 
                     timeEnd: this.editor.timeEnd || '?', 
                     content: this.editor.content || this.editor.summary, 
                     isOpen: false 
                 }))); 
-                // 清空编辑器 (完整重置)
+                
+                // 清空编辑器
                 this.editor.summary = ""; 
                 this.editor.content = ""; 
                 this.editor.impacts = []; 
                 this.editor.options = []; 
                 this.editor.factionId = "";
-                this.editor.factionIds = []; // 清空数组
+                this.editor.factionIds = []; 
                 this.editor.timeStart = ""; 
                 this.editor.timeEnd = ""; 
                 this.tabs.right = 'staging'; 
@@ -7385,9 +8649,14 @@
             },
             copyToClipboard(t) { navigator.clipboard.writeText(t); },
             openFactionModal(p) { 
-                this.previewAvatarIndex = -1; // [新增] 重置预览索引
+                this.previewAvatarIndex = -1; 
                 if(p) { 
                     this.editingFaction = JSON.parse(JSON.stringify(p)); 
+                    
+                    // ★★★ [新增] 编辑已有角色时，确保字段存在 ★★★
+                    if (this.editingFaction.isProtagonist === undefined) {
+                        this.editingFaction.isProtagonist = false;
+                    }
                     // [兼容性] 补全视觉参数
                     if (this.editingFaction.avatarScale === undefined) this.editingFaction.avatarScale = 1.0;
                     if (this.editingFaction.avatarOffsetY === undefined) this.editingFaction.avatarOffsetY = 0.0;
@@ -7406,6 +8675,7 @@
                     this.editingFaction = {
                         id:'', name:'', 
                         logo: 'fa-solid fa-users', 
+                        isProtagonist: false,
                         avatar: '', 
                         avatarScale: 1.0,   // [新增]
                         avatarOffsetY: 0.0, // [新增]
@@ -7447,7 +8717,11 @@
                 if (!this.settings.api.key) return alert("API Key missing");
                 if (!confirm("确定覆盖当前进度？")) return;
                 this.isThinking = true;
-                
+                // [新增] 动态构建 System Prompt
+                let finalSystemPrompt = this.settings.prompts.script_generator;
+                if (this.scriptGenUseCustom && this.settings.prompts.custom) {
+                    finalSystemPrompt = this.settings.prompts.custom + "\n\n" + finalSystemPrompt;
+                }
                 const payload = { 
                     provider: this.settings.api.provider, 
                     apiKey: this.settings.api.key, 
@@ -7455,7 +8729,7 @@
                     model: this.settings.api.model, 
                     useProxy: this.settings.proxy.enabled, 
                     proxyPort: this.settings.proxy.port, 
-                    systemPrompt: this.settings.prompts.script_generator, 
+                    systemPrompt: finalSystemPrompt, // 使用组合后的 Prompt
                     context: `Req: "${this.scriptGenPrompt}"`, 
                     userPrompt: "Generate JSON.",
                     attachments: this.scriptAttachments 
@@ -7629,25 +8903,18 @@
                 
                 // --- 处理地点 ---
                 let locStr = "未知/无特定地点";
-                let locOwnerId = "";
                 if (this.combatForm.locationId) {
-                    // 尝试在 Regions 中找
                     const reg = this.map_data.regions.find(r => r.name === this.combatForm.locationId);
                     if (reg) {
                         const owner = this.getFactionName(reg.ownerId);
-                        locOwnerId = reg.ownerId;
                         locStr = `[领土] ${reg.name} (控制方: ${owner}, ID: ${reg.ownerId})`;
                     } else {
-                        // 尝试在 Pins 中找
                         const pin = this.map_data.pins.find(p => (p.label === this.combatForm.locationId || p.id === this.combatForm.locationId));
                         if (pin) locStr = `[标记点/设施] ${pin.label || "未命名点"}`;
                     }
                 }
 
-                // --- 处理骰子序列 (转为清晰的文本描述) ---
-                // 格式示例: 
-                // 1. [命中判定]: 18/20 (Success)
-                // 2. [伤害判定]: 1/6 (Critical Failure)
+                // --- 处理骰子序列 ---
                 let diceAnalysis = this.combatForm.dicePool.map((d, i) => {
                     const max = parseInt(d.type.substring(1));
                     const desc = this.getDiceText(d.val, d.type);
@@ -7655,46 +8922,65 @@
                     return `${i+1}. ${label}: 结果 ${d.val} (骰子 ${d.type}, 满分 ${max}) -> 判定: ${desc}`;
                 }).join('\n   ');
 
-                // --- 3. 组装终极 Prompt ---
+                // --- ★ 新增：格式化攻守双方 Stats (带类型标签) ---
+                const formatEntityStats = (entity) => {
+                    const schema = this.rule_sets.find(rs => rs.id === entity.schemaId);
+                    const visibleStats = {};
+                    if (schema) {
+                        schema.fields.forEach(f => {
+                            // 调用通用的格式化函数
+                            const valStr = this.formatContextAttr(entity.stats[f.key], f.visibility||'editable', f.type||'string');
+                            if (valStr !== null) visibleStats[f.key] = valStr;
+                        });
+                    } else {
+                        for(let k in entity.stats) visibleStats[k] = entity.stats[k];
+                    }
+                    return JSON.stringify(visibleStats, null, 2);
+                };
+
+                const attackerStatsStr = formatEntityStats(attacker);
+                const defenderStatsStr = formatEntityStats(defender);
+
+                // --- 3. 组装终极 Prompt (v2 类型增强版) ---
                 const systemPrompt = `你是一个严谨的 TRPG 战斗裁判与世界模拟引擎。你的任务是根据输入数据推演战斗结果。
 
             【核心裁决逻辑】
             1. **属性对抗**：对比攻守双方 Stats。强者通常胜出，但需结合骰子修正。
+               - 注意 Stats 中的 <Type:Number> 标签，这些是可量化的数值。
+               - 标记为 <ReadOnly> 的属性不可直接修改。
             2. **地点环境 (Location)**：
-            - 当前地点为: ${locStr}。
-            - 如果地点控制者 (Owner) 与某一方一致，该方享有“主场优势（补给/地形/情报）”。
-            - 如果是险恶地形，双方可能都会受损。
+               - 当前地点为: ${locStr}。
+               - 如果地点控制者与某一方一致，该方享有主场优势。
             3. **骰子序列叙事 (Dice Sequence)**：
-            - 用户提供了一组骰子，代表**连续的**或**多维度的**判定。
-            - 你必须按顺序解释这些骰子。例如：骰子1(命中)大成功，但骰子2(伤害)大失败 -> 描述为“精准击中了敌人的盔甲缝隙，但武器却在关键时刻卡壳/断裂，仅造成轻微皮肉伤”。
-            - **骰子结果是绝对客观事实，不可忽略。**
-            4. **层级波及 (Hierarchy)**：
-            - 如果一方是“子实体”（如：某军团），受损严重时，必须考虑对其“父实体”（如：所属国家）造成连带影响（如：国家威望下降、国家兵力减少）。
+               - 用户提供了一组骰子结果，这是**绝对客观事实**，必须在战报中体现。
+            4. **层级波及**：
+               - 如果一方是子实体，受损严重时，须考虑对其父实体造成连带影响。
 
             【非常重要：JSON 输出格式】
-            必须只返回一个 JSON 对象，严格遵守 TimelineEvent 结构。**Impacts 数组必须扁平化**。
+            必须只返回一个 JSON 对象，严格遵守 TimelineEvent 结构。
+            **数值修改规则**：impacts 中的 newValue 必须根据上下文中的 <Type> 标签输出正确类型（Number 输出纯数字，String 输出字符串）。
 
             {
             "summary": "简短且具有冲击力的标题",
-            "content": "详细的战报（>150字）。请结合“地点环境”进行景物描写，并根据“骰子序列”的每一步编写战斗转折...",
+            "content": "详细的战报（>150字）。请结合地点环境和骰子结果编写...",
             "impacts": [
                 {
                 "type": "STAT_CHANGE",
                 "targetId": "${attacker.id}",
                 "attrKey": "manpower",  
                 "oldValue": "...",
-                "newValue": "..."
+                "newValue": 9500 // ★ 纯数字 (如果原属性是 Number)
                 },
                 {
                 "type": "STAT_CHANGE",
                 "targetId": "${defender.id}",
                 "attrKey": "stability",
                 "oldValue": "...",
-                "newValue": "..."
+                "newValue": 60 // ★ 纯数字
                 },
                 {
                 "type": "REGION_TRANSFER",  // 仅在战斗意图是“攻占”且攻击方大胜时生成
-                "targetName": "${this.combatForm.locationId}", // 必须使用输入的地点名
+                "targetName": "${this.combatForm.locationId}", 
                 "newValue": "${attacker.id}"
                 }
             ]
@@ -7707,12 +8993,12 @@
             [攻击方]: ${attacker.name} (ID: ${attacker.id})
             - Parent: ${attacker.parentId || "None"}
             - Desc: ${attacker.desc}
-            - Stats: ${JSON.stringify(attacker.stats)}
+            - Stats: ${attackerStatsStr}
 
             [防御方]: ${defender.name} (ID: ${defender.id})
             - Parent: ${defender.parentId || "None"}
             - Desc: ${defender.desc}
-            - Stats: ${JSON.stringify(defender.stats)}
+            - Stats: ${defenderStatsStr}
 
             [命运骰子序列]:
             ${diceAnalysis}`;
@@ -7728,12 +9014,12 @@
                     proxyPort: this.settings.proxy.port,
                     systemPrompt: systemPrompt,
                     context: "Combat Simulation",
-                        userPrompt: "Generate the JSON result based on the dice sequence and environment."
-                    };
+                    userPrompt: "Generate the JSON result based on the dice sequence and environment."
+                };
 
-                    try {
-                        const data = await window.LevantAPI.generateAI(payload);
-                        const match = data.result.match(/\{[\s\S]*\}/);
+                try {
+                    const data = await window.LevantAPI.generateAI(payload);
+                    const match = data.result.match(/\{[\s\S]*\}/);
                     if (!match) throw new Error("Invalid JSON returned by AI");
                     
                     const combatEvent = JSON.parse(match[0]);
@@ -7757,12 +9043,11 @@
                             
                             // 自动修复 Label
                             if (imp.type === 'STAT_CHANGE') {
-                                // 直接复用现有的兼容方法
                                 imp.attrLabel = this.getSchemaLabel(imp.attrKey);
                                 imp.targetName = this.getFactionName(imp.targetId);
                             } else if (imp.type === 'REGION_TRANSFER') {
                                 imp.targetName = imp.targetName || "Region";
-                                imp.attrLabel = "Control"; // 占位
+                                imp.attrLabel = "Control"; 
                             }
                             
                             this.editor.impacts.push(imp);
