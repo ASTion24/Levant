@@ -45,12 +45,12 @@ logger = logging.getLogger("Levant")
 app = FastAPI(title="LevantD Engine Backend")
 
 # --- ★★★ [新增] 挂载静态音频目录 ★★★ ---
-# 这一步告诉后端：如果有人访问 /sounds/xxx，就去项目根目录下的 sounds 文件夹找
-if not os.path.exists("sounds"):
-    os.makedirs("sounds") # 如果没有文件夹，自动创建一个
+# 这一步告诉后端：如果有人访问 /sounds/xxx，就去 www/sounds 文件夹找
+if not os.path.exists("www/sounds"):
+    os.makedirs("www/sounds") # 如果没有文件夹，自动创建一个
 
-# 将 /sounds 路径映射到本地 sounds 文件夹
-app.mount("/sounds", StaticFiles(directory="sounds"), name="sounds")
+# 将 /sounds 路径映射到 www/sounds 文件夹
+app.mount("/sounds", StaticFiles(directory="www/sounds"), name="sounds")
 
 
 # --- 全局异常捕获中间件 (记录所有未捕获的错误) ---
@@ -346,14 +346,14 @@ def delete_save(filename: str):
 # ★★★ [新增] 获取背景音乐列表接口 ★★★
 @app.get("/api/music-list")
 def get_music_list():
-    folder = "sounds"
+    folder = "www/sounds"  # <--- 修正指向 www
     if not os.path.exists(folder):
         print(f"!!! [Backend] Folder '{folder}' not found!")
         return {"files": []}
     
     # 扫描文件
     music_files = [
-        f for f in os.listdir(folder) 
+        f for f in os.listdir(folder)
         if f.lower().endswith(('.mp3', '.wav', '.ogg', '.flac'))
     ]
     
@@ -641,9 +641,11 @@ def ai_generate(req: AIRequest):
 # --- 托管网页 ---
 @app.get("/")
 async def read_index():
-    if not os.path.exists("index.html"): return JSONResponse(status_code=404, content={"error": "index.html not found"})
+    if not os.path.exists("www/index.html"): # 指向 www
+        return JSONResponse(status_code=404, content={"error": "www/index.html not found"})
     try:
-        with open("index.html", "r", encoding="utf-8") as f: html_content = f.read()
+        with open("www/index.html", "r", encoding="utf-8") as f: # 指向 www
+            html_content = f.read()
         return Response(content=html_content, media_type="text/html", headers={"Cache-Control": "no-cache"})
     except Exception as e:
         logger.error(f"Index load error: {e}")
@@ -651,24 +653,23 @@ async def read_index():
 
 @app.get("/logo.png")
 async def get_logo():
-    if os.path.exists("logo.png"): return FileResponse("logo.png")
+    if os.path.exists("www/logo.png"): return FileResponse("www/logo.png")
     return {"error": "Logo not found"}
 
 # ★★★ 新增：允许浏览器加载 api_layer.js ★★★
 @app.get("/api_layer.js")
 async def get_api_layer():
-    if os.path.exists("api_layer.js"): 
-        # 防止缓存，方便你调试
-        return FileResponse("api_layer.js", headers={"Cache-Control": "no-cache"}) 
+    if os.path.exists("www/api_layer.js"):  # 指向 www
+        return FileResponse("www/api_layer.js", headers={"Cache-Control": "no-cache"}) 
     return Response(status_code=404)
 
 
 # --- [新增] 地图编辑器路由 ---
 @app.get("/map_editor")
 async def get_map_editor():
-    if not os.path.exists("map_editor.html"): 
+    if not os.path.exists("www/map_editor.html"): 
         return Response(content="<h1>map_editor.html not found</h1>", media_type="text/html")
-    with open("map_editor.html", "r", encoding="utf-8") as f:
+    with open("www/map_editor.html", "r", encoding="utf-8") as f:
         return Response(content=f.read(), media_type="text/html")
 
 if __name__ == "__main__":

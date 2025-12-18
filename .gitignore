@@ -28,3 +28,7 @@ logs/
 # -------------------------
 # 忽略你截图中那个 "Levant Engine 1.0" 文件夹，它看起来像是一个发布包
 Levant Engine/
+
+node_modules/
+
+android/*

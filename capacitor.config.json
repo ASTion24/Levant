@@ -1,0 +1,13 @@
+{
+  "appId": "com.levant.app",
+  "appName": "Levant Mobile",
+  "webDir": "www", 
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    }
+  }
+}
