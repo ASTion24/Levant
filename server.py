@@ -91,8 +91,8 @@ class StatSchema(BaseModel):
 
 class RuleSet(BaseModel):
     id: str
-    name: str
-    fields: List[StatSchema]
+    name: str = "Unnamed Rule Set" # 增加默认值
+    fields: List[StatSchema] = []  # ★★★ 关键修复：增加默认空列表，防止新建空规则集时被后端丢弃
 
 class LoreEntry(BaseModel):
     keys: str = "Unknown" # 以前是必填，现在给默认值
@@ -219,11 +219,10 @@ class Turn(BaseModel):
 class GameState(BaseModel):
     global_vars: List[GlobalVar] = []
     
-    # ★★★ 关键：确保这里叫 rule_sets 且类型为 List[RuleSet]
-    # 这样后端才能正确解析并保存前端发来的多套规则集
+    # ★★★ 确保这里定义正确
     rule_sets: List[RuleSet] = [] 
     
-    # 保留旧字段用于兼容读取（可选，但建议保留以免报错，只是保存时不会用它了）
+    # 兼容性字段，给个默认值防止报错
     stat_schema: List[StatSchema] = [] 
 
     lorebook: List[LoreEntry] = []
@@ -545,7 +544,7 @@ def ai_generate(req: AIRequest):
         if provider == "gemini":
             if not req.apiKey: raise HTTPException(status_code=400, detail="Missing API Key")
             genai.configure(api_key=req.apiKey)
-            model = genai.GenerativeModel(model_name=req.model or "gemini-1.5-flash")
+            model = genai.GenerativeModel(model_name=req.model or "gemini-2.5-flash")
             
             # 允许 Native Doc (PDF) 和 Image
             text_part, media_parts = process_attachments_smart(req.attachments, allow_native_doc=True, allow_image=True)
