@@ -6,7 +6,14 @@ import shutil
 sounds_dir = "www/sounds"
 music_files = []
 if os.path.exists(sounds_dir):
-    music_files = [f for f in os.listdir(sounds_dir) if f.endswith(('.mp3', '.wav', '.ogg', '.flac'))]
+    music_files = sorted(
+        (
+            filename
+            for filename in os.listdir(sounds_dir)
+            if filename.lower().endswith(('.mp3', '.wav', '.ogg', '.flac'))
+        ),
+        key=str.casefold,
+    )
 
 # 2. 写入清单文件到 www 目录
 manifest = {

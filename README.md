@@ -1,4 +1,4 @@
-# LEVANT 自动化推演引擎 (Levant Engine) v1.05
+# LEVANT 自动化推演引擎 (Levant Engine) v1.21
 
 ![Levant Logo](./logo.png)
 
@@ -17,6 +17,17 @@
 Levant 专为充满想象力的创作者——无论是文字游戏、跑团（TRPG）、安科（Anco）还是复杂的战略推演的主持人（GM）——量身打造。它不仅仅是一个记录工具，更是一个智能的创意伙伴，旨在将现代大语言模型（LLM）的无限创造力，与严谨的状态机逻辑无缝结合。
 
 Levant 将帮助您高效地管理宏大的世界观、追踪每个实体的动态变化、构建清晰的时间线，并从繁琐的重复性工作中解放出来，让您能更专注于故事的核心——**创造与抉择**。
+
+## v1.21 更新
+
+*   公式系统改用本地 AST 解释器，仅执行白名单表达式和函数。
+*   新增 Kimi、GLM、Ollama、LM Studio、vLLM、LocalAI 配置预设与模型发现。
+*   本地 OpenAI-compatible 服务可在不填写 API Key 时调用。
+*   分层地图数据统一用于上下文、战斗地点、事件影响和公式聚合。
+*   收紧本机后端 CORS、存档文件名和目录边界。
+*   修正 Native API Base URL、存档参数编码和存储目录一致性。
+*   前端依赖与 Tailwind CSS 改为本地资源和可复现构建。
+*   统一桌面与移动端窗口、指挥台和上帝模式布局。
 
 ## 🌟 核心功能亮点 | Feature Showcase
 
@@ -56,7 +67,7 @@ Levant 将帮助您高效地管理宏大的世界观、追踪每个实体的动�
 
 ### 前提条件
 
-*   一个可用的 AI API Key（支持 Google Gemini 或 OpenAI 兼容的 API 服务）。
+*   一个云端 AI API Key，或一个本机运行的 OpenAI-compatible 模型服务。
 
 ### 安装与运行
 
@@ -64,13 +75,64 @@ Levant 将帮助您高效地管理宏大的世界观、追踪每个实体的动�
 2.  解压到您电脑的任意位置（**建议路径中不要包含中文或特殊字符**）。
 3.  双击运行文件夹内的 **`Levant启动器.exe`**。
 4.  程序会自动启动后台服务，并呼出您的默认浏览器加载操作界面。
-5.  首次使用，请点击右上角的**设置图标 (⚙️)**，填入您的 API Key。
+5.  首次使用，请点击右上角的**设置图标 (⚙️)**，选择云端厂商或本地模型服务。
 
 > **💡 提示**：如果遇到“网络错误”或 AI 无响应，请在设置中开启“本地代理”并检查端口是否正确（默认为 `7890`）。
+>
+> **📦 自包含说明**：发行包和源码仓库均已内置前端运行所需的本地资源。即使没有公网，界面也可以正常打开；只有调用外部 AI 服务时才需要联网。
+
+### 自主推演模式
+
+Levant 默认使用 **自主执行（Autonomous）**：
+
+1. LLM 根据世界状态独立作出决策并生成事件。
+2. 系统自动校验实体 ID、字段权限、数据类型和地图引用。
+3. 可自动修复的结构或语义错误会交给 LLM 修正一次。
+4. 校验通过后立即写入世界、时间线和自动存档，无需逐条人工审核。
+
+设置中也可切换为：
+
+*   **风险暂存（Guarded）**：普通决策自动执行，实体移除等高影响决策自动进入待决序列。
+*   **导演模式（Director）**：校验后载入编辑器，保留原有人工调整流程。
+
+自动校验只保证决策可执行且不会破坏状态结构，不会替代或否决 LLM 的叙事与战略判断。
+
+### 模型目录与实时发现
+
+项目使用统一的能力感知模型目录，模型名称不再散落硬编码在各功能中。当前预设包括：
+
+*   Gemini：`gemini-3.7-flash`
+*   Claude：`claude-sonnet-4-6`
+*   DeepSeek：`deepseek-v4-pro`
+*   Qwen：`qwen3.8-max`
+*   OpenAI：`gpt-5.6-terra`
+*   SiliconFlow：`deepseek-ai/DeepSeek-V4-Pro`
+*   Kimi / Moonshot：`kimi-k2.6`
+*   GLM / 智谱：`glm-5.2`
+*   本地服务：Ollama、LM Studio、vLLM、LocalAI
+
+配置编辑器可从提供商实时刷新可用模型。本地服务不强制填写 API Key；云端服务按厂商要求鉴权。内置预设使用当前默认模型，已有配置中的手动模型 ID 不会被自动改写。模型的图像、原生文档、推理和结构化输出能力由配置显式声明，不再通过名称猜测。
+
+新增服务的官方入口：
+
+| 服务 | 默认 Base URL | 文档 | API Key |
+| --- | --- | --- | --- |
+| Kimi / Moonshot | `https://api.moonshot.cn/v1` | [文档](https://platform.kimi.com/docs/) | [控制台](https://platform.kimi.com/console/api-keys) |
+| GLM / 智谱 | `https://open.bigmodel.cn/api/paas/v4` | [文档](https://docs.bigmodel.cn/) | [控制台](https://bigmodel.cn/usercenter/proj-mgmt/apikeys) |
+| Ollama | `http://localhost:11434/v1` | [文档](https://docs.ollama.com/openai) | 不需要 |
+| LM Studio | `http://localhost:1234/v1` | [文档](https://lmstudio.ai/docs/developer/openai-compat) | 不需要 |
+| vLLM | `http://localhost:8000/v1` | [文档](https://docs.vllm.ai/en/latest/serving/openai_compatible_server/) | 由启动参数决定 |
+| LocalAI | `http://localhost:8080/v1` | [文档](https://localai.io/features/text-generation/) | 由服务配置决定 |
 
 ## 👨‍💻 开发者指南 (从源码运行)
 
 如果您希望修改代码或进行二次开发，请遵循以下步骤：
+
+### 环境要求
+
+*   **Python 3.9+**
+*   建议使用虚拟环境运行，避免污染系统环境。
+*   仅在修改 Tailwind 样式或构建移动端时需要 **Node.js 22+**。
 
 1. **克隆仓库**
 
@@ -94,12 +156,48 @@ Levant 将帮助您高效地管理宏大的世界观、追踪每个实体的动�
 
    ```bash
    pip install -r requirements.txt
+   # 或使用项目元数据安装
+   pip install -e .
    ```
 
 4. **运行程序**
 
    ```bash
    python server.py
+   ```
+
+5. **可选：刷新本地资源清单**
+
+   ```bash
+   python build_assets.py
+   ```
+
+6. **前端样式开发**
+
+   仓库已经提交编译后的 `www/vendor/css/tailwind.css`，普通运行无需 Node.js。修改页面中的 Tailwind 类名后，执行：
+
+   ```bash
+   npm ci
+   npm run build:css
+   ```
+
+   完整刷新样式和静态资源：
+
+   ```bash
+   npm run build
+   ```
+
+7. **运行测试**
+
+   ```bash
+   npm test
+   python tests/ui_regression.py
+   ```
+
+8. **可选：安装桌面打包依赖**
+
+   ```bash
+   pip install ".[build]"
    ```
 
 ## 📬 联系与反馈 | Contact

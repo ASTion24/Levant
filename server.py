@@ -1,56 +1,58 @@
-import uvicorn
-import webbrowser
-from fastapi import FastAPI, HTTPException, Body, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, Response
-from pydantic import BaseModel
-from typing import List, Dict, Any
-import json
-from fastapi.staticfiles import StaticFiles
-import os
-import time
-import logging
-from logging.handlers import RotatingFileHandler
-
-# --- 新增依赖 ---
-import google.generativeai as genai
-from openai import OpenAI  # 用于支持 DeepSeek, Qwen, Yi, Local LLM 等
-import anthropic # 新增 Claude 支持
 import base64
 import io
-import re  # <--- 新增正则模块，用于精准清洗 Base64
-from pypdf import PdfReader  # 用于解析 PDF
-from docx import Document    # 用于解析 Word
+import json
+import logging
+import re
+import webbrowser
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import requests
+import uvicorn
+from docx import Document
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+from pypdf import PdfReader
 
 # --- 0. 目录与日志设置 ---
-SAVES_DIR = "saves"
-LOGS_DIR = "logs"
+APP_VERSION = "1.21"
+ROOT_DIR = Path(__file__).resolve().parent
+WWW_DIR = ROOT_DIR / "www"
+SAVES_DIR = ROOT_DIR / "saves"
+LEGACY_SAVE_PATH = ROOT_DIR / "savegame.json"
+LOGS_DIR = ROOT_DIR / "logs"
+SOUNDS_DIR = WWW_DIR / "sounds"
+VENDOR_DIR = WWW_DIR / "vendor"
+JS_DIR = WWW_DIR / "js"
+REQUEST_TIMEOUT = 120
 
-for d in [SAVES_DIR, LOGS_DIR]:
-    if not os.path.exists(d):
-        os.makedirs(d)
+for directory in [SAVES_DIR, LOGS_DIR, SOUNDS_DIR]:
+    directory.mkdir(parents=True, exist_ok=True)
 
 # 配置日志：同时输出到控制台和文件
-log_file_path = os.path.join(LOGS_DIR, "system.log")
+log_file_path = LOGS_DIR / "system.log"
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
-        RotatingFileHandler(log_file_path, maxBytes=5*1024*1024, backupCount=3, encoding='utf-8'),
+        RotatingFileHandler(str(log_file_path), maxBytes=5*1024*1024, backupCount=3, encoding='utf-8'),
         logging.StreamHandler()
     ]
 )
 logger = logging.getLogger("Levant")
 
-app = FastAPI(title="LevantD Engine Backend")
+app = FastAPI(title=f"Levant Engine Backend v{APP_VERSION}")
 
-# --- ★★★ [新增] 挂载静态音频目录 ★★★ ---
-# 这一步告诉后端：如果有人访问 /sounds/xxx，就去 www/sounds 文件夹找
-if not os.path.exists("www/sounds"):
-    os.makedirs("www/sounds") # 如果没有文件夹，自动创建一个
-
-# 将 /sounds 路径映射到 www/sounds 文件夹
-app.mount("/sounds", StaticFiles(directory="www/sounds"), name="sounds")
+# --- 挂载静态资源 ---
+if VENDOR_DIR.exists():
+    app.mount("/vendor", StaticFiles(directory=str(VENDOR_DIR)), name="vendor")
+if JS_DIR.exists():
+    app.mount("/js", StaticFiles(directory=str(JS_DIR)), name="js")
+app.mount("/sounds", StaticFiles(directory=str(SOUNDS_DIR)), name="sounds")
 
 
 # --- 全局异常捕获中间件 (记录所有未捕获的错误) ---
@@ -65,10 +67,11 @@ async def log_exceptions(request: Request, call_next):
 # --- 2. CORS 设置 ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=["capacitor://localhost"],
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "DELETE"],
+    allow_headers=["Content-Type"],
 )
 
 # --- 数据模型 (全员防爆版) ---
@@ -201,6 +204,7 @@ class EventImpact(BaseModel):
 
 class TimelineEvent(BaseModel):
     factionId: str = "global"
+    factionIds: List[str] = []
     # [新增] 该事件指定的立绘标签 (例如 "angry")，为空则使用默认
     avatarTag: str = "" 
     timeStart: str = "?"
@@ -210,6 +214,10 @@ class TimelineEvent(BaseModel):
     impacts: List[EventImpact] = []
     isOpen: bool = False
     options: List[Any] = []
+    reasoningSummary: str = ""
+    worldObservations: List[str] = []
+    futureIntentions: List[str] = []
+    decisionMeta: Dict[str, Any] = {}
 
 class Turn(BaseModel):
     id: int
@@ -241,35 +249,229 @@ class AIRequest(BaseModel):
     context: str
     history: str = ""
     userPrompt: str
+    responseFormat: str = ""
     useProxy: bool = False
     proxyPort: str = "7890"
+    capabilities: Dict[str, bool] = {}
     # 新增: 附件列表，格式为 [{"type": "image/png", "data": "base64..."}, {"type": "text/plain", "data": "文本内容..."}]
     attachments: List[Dict[str, str]] = [] 
+
+
+class ModelListRequest(BaseModel):
+    provider: str
+    apiKey: str
+    baseUrl: str = ""
+    useProxy: bool = False
+    proxyPort: str = "7890"
+
+
+def validate_save_filename(filename: str) -> str:
+    candidate = (filename or "").strip()
+    if not candidate:
+        raise HTTPException(status_code=400, detail="Filename is required.")
+    if Path(candidate).name != candidate:
+        raise HTTPException(status_code=400, detail="Invalid filename.")
+    if not candidate.lower().endswith(".json"):
+        raise HTTPException(status_code=400, detail="Only .json save files are supported.")
+    return candidate
+
+
+def resolve_save_path(filename: str, *, allow_legacy_root: bool = False) -> Path:
+    safe_name = validate_save_filename(filename)
+    target = (SAVES_DIR / safe_name).resolve()
+    if target.parent != SAVES_DIR.resolve():
+        raise HTTPException(status_code=400, detail="Invalid filename.")
+    if allow_legacy_root and safe_name == "savegame.json" and not target.exists() and LEGACY_SAVE_PATH.exists():
+        return LEGACY_SAVE_PATH
+    return target
+
+
+def build_proxy_url(req: Any) -> Optional[str]:
+    if req.useProxy and req.proxyPort:
+        return f"http://127.0.0.1:{req.proxyPort}"
+    return None
+
+
+def build_request_options(req: Any) -> Dict[str, Any]:
+    options: Dict[str, Any] = {"timeout": REQUEST_TIMEOUT}
+    proxy_url = build_proxy_url(req)
+    if proxy_url:
+        options["proxies"] = {"http": proxy_url, "https": proxy_url}
+    return options
+
+
+def normalize_openai_chat_url(base_url: str) -> str:
+    base = normalize_openai_base_url(base_url)
+    if not base.endswith("/chat/completions"):
+        base = f"{base}/chat/completions"
+    return base
+
+
+def normalize_openai_base_url(base_url: str) -> str:
+    base = (base_url.strip() or "https://api.openai.com/v1").rstrip("/")
+    for suffix in ("/chat/completions", "/responses", "/models"):
+        if base.endswith(suffix):
+            base = base[:-len(suffix)]
+            break
+    return base.rstrip("/")
+
+
+def build_openai_headers(api_key: str, include_json: bool = False) -> Dict[str, str]:
+    headers: Dict[str, str] = {}
+    if api_key.strip():
+        headers["Authorization"] = f"Bearer {api_key.strip()}"
+    if include_json:
+        headers["Content-Type"] = "application/json"
+    return headers
+
+
+def extract_openai_message_text(content: Any) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for item in content:
+            if isinstance(item, dict) and item.get("type") == "text" and item.get("text"):
+                parts.append(item["text"])
+        return "\n".join(parts)
+    return ""
+
+
+def call_gemini_api(req: AIRequest, prompt_full: str, media_parts: List[Dict[str, str]]) -> str:
+    parts: List[Dict[str, Any]] = [{"text": prompt_full}]
+    for media in media_parts:
+        parts.append({
+            "inline_data": {
+                "mime_type": media["mime_type"],
+                "data": media["data"],
+            }
+        })
+
+    request_body: Dict[str, Any] = {"contents": [{"parts": parts}]}
+    if req.responseFormat == "json" and req.capabilities.get("structuredOutput"):
+        request_body["generationConfig"] = {"responseMimeType": "application/json"}
+
+    response = requests.post(
+        f"https://generativelanguage.googleapis.com/v1beta/models/{req.model or 'gemini-3.7-flash'}:generateContent?key={req.apiKey}",
+        json=request_body,
+        **build_request_options(req),
+    )
+    response.raise_for_status()
+    payload = response.json()
+
+    text_parts: List[str] = []
+    for candidate in payload.get("candidates", []):
+        for part in candidate.get("content", {}).get("parts", []):
+            if part.get("text"):
+                text_parts.append(part["text"])
+
+    if text_parts:
+        return "\n".join(text_parts)
+
+    block_reason = payload.get("promptFeedback", {}).get("blockReason")
+    if block_reason:
+        raise HTTPException(status_code=502, detail=f"Gemini blocked the request: {block_reason}")
+    raise HTTPException(status_code=502, detail="Gemini returned an empty response.")
+
+
+def call_claude_api(req: AIRequest, final_text: str, media_parts: List[Dict[str, str]]) -> str:
+    content_blocks: List[Dict[str, Any]] = []
+    for media in media_parts:
+        mime = media["mime_type"]
+        if mime not in ["image/jpeg", "image/png", "image/gif", "image/webp"]:
+            mime = "image/jpeg"
+        content_blocks.append({
+            "type": "image",
+            "source": {"type": "base64", "media_type": mime, "data": media["data"]},
+        })
+    content_blocks.append({"type": "text", "text": final_text})
+
+    response = requests.post(
+        "https://api.anthropic.com/v1/messages",
+        headers={
+            "x-api-key": req.apiKey,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        },
+        json={
+            "model": req.model or "claude-sonnet-4-6",
+            "max_tokens": 4096,
+            "system": req.systemPrompt,
+            "messages": [{"role": "user", "content": content_blocks}],
+        },
+        **build_request_options(req),
+    )
+    response.raise_for_status()
+    payload = response.json()
+
+    text_parts = [item.get("text", "") for item in payload.get("content", []) if item.get("type") == "text"]
+    result = "\n".join(part for part in text_parts if part).strip()
+    if result:
+        return result
+    raise HTTPException(status_code=502, detail="Claude returned an empty response.")
+
+
+def call_openai_compatible_api(req: AIRequest, final_text: str, media_parts: List[Dict[str, str]]) -> str:
+    messages: List[Dict[str, Any]] = [{"role": "system", "content": req.systemPrompt}]
+
+    if media_parts:
+        user_content: List[Dict[str, Any]] = [{"type": "text", "text": final_text}]
+        for media in media_parts:
+            user_content.append({
+                "type": "image_url",
+                "image_url": {"url": f"data:{media['mime_type']};base64,{media['data']}"},
+            })
+        messages.append({"role": "user", "content": user_content})
+    else:
+        messages.append({"role": "user", "content": final_text})
+
+    request_body: Dict[str, Any] = {
+        "model": req.model,
+        "messages": messages,
+    }
+    if req.responseFormat == "json" and req.capabilities.get("structuredOutput"):
+        request_body["response_format"] = {"type": "json_object"}
+
+    response = requests.post(
+        normalize_openai_chat_url(req.baseUrl),
+        headers=build_openai_headers(req.apiKey, include_json=True),
+        json=request_body,
+        **build_request_options(req),
+    )
+    response.raise_for_status()
+    payload = response.json()
+
+    choices = payload.get("choices", [])
+    if not choices:
+        raise HTTPException(status_code=502, detail="OpenAI-compatible provider returned no choices.")
+
+    result = extract_openai_message_text(choices[0].get("message", {}).get("content"))
+    if result:
+        return result
+    raise HTTPException(status_code=502, detail="OpenAI-compatible provider returned an empty response.")
 
 # --- API 路由 ---
 
 @app.get("/api/saves")
 def get_saves_list():
     try:
-        files = [f for f in os.listdir(SAVES_DIR) if f.endswith('.json')]
+        files = sorted(path.name for path in SAVES_DIR.iterdir() if path.is_file() and path.suffix.lower() == ".json")
         logger.info(f"Loaded save list: {len(files)} files found.")
-        return {"files": sorted(files)}
+        return {"files": files}
     except Exception as e:
         logger.error(f"Error fetching save list: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/state", response_model=GameState)
 def get_state(filename: str):
-    filepath = os.path.join(SAVES_DIR, filename)
-    if filename == 'savegame.json' and not os.path.exists(filepath) and os.path.exists("savegame.json"):
-        filepath = "savegame.json"
+    filepath = resolve_save_path(filename, allow_legacy_root=True)
     
-    if not os.path.exists(filepath):
+    if not filepath.exists():
         logger.warning(f"Save file not found: {filename}")
         raise HTTPException(status_code=404, detail=f"Save file not found: {filename}")
     
     try:
-        with open(filepath, "r", encoding="utf-8") as f:
+        with filepath.open("r", encoding="utf-8") as f:
             data = json.load(f)
             
             # --- 【强力兼容补丁】 ---
@@ -313,12 +515,9 @@ def get_state(filename: str):
 
 @app.post("/api/state")
 def save_state(filename: str, state: GameState):
-    if ".." in filename or "/" in filename or "\\" in filename:
-        raise HTTPException(status_code=400, detail="Invalid filename.")
-    
-    filepath = os.path.join(SAVES_DIR, filename)
+    filepath = resolve_save_path(filename)
     try:
-        with open(filepath, "w", encoding="utf-8") as f:
+        with filepath.open("w", encoding="utf-8") as f:
             f.write(state.model_dump_json(indent=2))
         logger.info(f"Game state saved: {filename}")
         return {"status": "saved", "filename": filename}
@@ -328,12 +527,10 @@ def save_state(filename: str, state: GameState):
 
 @app.delete("/api/saves/{filename}")
 def delete_save(filename: str):
-    if ".." in filename or "/" in filename or "\\" in filename:
-        raise HTTPException(status_code=400, detail="Invalid filename.")
-    filepath = os.path.join(SAVES_DIR, filename)
-    if os.path.exists(filepath):
+    filepath = resolve_save_path(filename)
+    if filepath.exists():
         try:
-            os.remove(filepath)
+            filepath.unlink()
             logger.info(f"Deleted save file: {filename}")
             return {"status": "deleted", "filename": filename}
         except Exception as e:
@@ -345,16 +542,15 @@ def delete_save(filename: str):
 # ★★★ [新增] 获取背景音乐列表接口 ★★★
 @app.get("/api/music-list")
 def get_music_list():
-    folder = "www/sounds"  # <--- 修正指向 www
-    if not os.path.exists(folder):
+    folder = SOUNDS_DIR
+    if not folder.exists():
         print(f"!!! [Backend] Folder '{folder}' not found!")
         return {"files": []}
     
-    # 扫描文件
-    music_files = [
-        f for f in os.listdir(folder)
-        if f.lower().endswith(('.mp3', '.wav', '.ogg', '.flac'))
-    ]
+    music_files = sorted(
+        path.name for path in folder.iterdir()
+        if path.is_file() and path.suffix.lower() in {'.mp3', '.wav', '.ogg', '.flac'}
+    )
     
     # ★★★ [新增] 打印日志到后台黑框 ★★★
     print(f"--- [Music Scan] Found {len(music_files)} files: {music_files}")
@@ -395,23 +591,6 @@ def smart_clean_payload(obj):
         return [smart_clean_payload(i) for i in obj]
     
     return obj
-
-# --- 辅助函数：判断模型是否支持视觉 ---
-def is_vision_model(provider: str, model_name: str) -> bool:
-    """根据模型名称和提供商，启发式判断是否支持图片输入"""
-    model = model_name.lower()
-    # 1. 明确支持视觉的系列
-    if "gemini" in model: return True
-    if "claude" in model: return True
-    if "gpt-4" in model and ("vision" in model or "o" in model): return True # gpt-4o, gpt-4-turbo
-    if "qwen-vl" in model: return True
-    if "llava" in model: return True
-    
-    # 2. 明确不支持视觉的系列 (DeepSeek V3/R1 目前仅文本)
-    if "deepseek" in model: return False 
-    
-    # 3. 兜底策略：默认视为不支持，防止报错
-    return False 
 
 # --- 核心：智能附件处理器 (ETL) ---
 def process_attachments_smart(attachments, allow_native_doc=False, allow_image=False):
@@ -518,121 +697,142 @@ def process_attachments_smart(attachments, allow_native_doc=False, allow_image=F
 
     return text_to_append, media_parts
 
+
+def list_provider_models(req: ModelListRequest) -> List[Dict[str, str]]:
+    provider = req.provider.lower()
+    request_options = build_request_options(req)
+
+    if provider == "gemini":
+        response = requests.get(
+            "https://generativelanguage.googleapis.com/v1beta/models",
+            params={"key": req.apiKey, "pageSize": 1000},
+            **request_options,
+        )
+        response.raise_for_status()
+        models = []
+        for item in response.json().get("models", []):
+            methods = item.get("supportedGenerationMethods", [])
+            if "generateContent" not in methods:
+                continue
+            model_id = item.get("name", "").removeprefix("models/")
+            if model_id:
+                models.append({
+                    "id": model_id,
+                    "displayName": item.get("displayName") or model_id,
+                })
+        return models
+
+    if provider == "claude":
+        response = requests.get(
+            "https://api.anthropic.com/v1/models",
+            headers={
+                "x-api-key": req.apiKey,
+                "anthropic-version": "2023-06-01",
+            },
+            params={"limit": 1000},
+            **request_options,
+        )
+        response.raise_for_status()
+        return [
+            {
+                "id": item["id"],
+                "displayName": item.get("display_name") or item["id"],
+            }
+            for item in response.json().get("data", [])
+            if item.get("id")
+        ]
+
+    response = requests.get(
+        f"{normalize_openai_base_url(req.baseUrl)}/models",
+        headers=build_openai_headers(req.apiKey),
+        **request_options,
+    )
+    response.raise_for_status()
+    return [
+        {
+            "id": item["id"],
+            "displayName": item.get("display_name") or item.get("name") or item["id"],
+        }
+        for item in response.json().get("data", [])
+        if item.get("id")
+    ]
+
+
+@app.post("/api/ai/models")
+def get_ai_models(req: ModelListRequest):
+    if req.provider.lower() in {"gemini", "claude"} and not req.apiKey:
+        raise HTTPException(status_code=400, detail="Missing API Key")
+    try:
+        return {"models": list_provider_models(req), "source": "provider"}
+    except requests.RequestException as error:
+        logger.warning("Model discovery failed for provider %s: %s", req.provider, error)
+        raise HTTPException(status_code=502, detail=f"Model Discovery Failed: {error}")
+
+
 @app.post("/api/ai/generate")
 def ai_generate(req: AIRequest):
     # 1. 日志记录
     raw_dump = req.model_dump()
     safe_log_req = smart_clean_payload(raw_dump)
     logger.info(f"AI Request Received. Payload:\n{json.dumps(safe_log_req, indent=2, ensure_ascii=False)}")
-    
-    # 2. 代理设置
-    if req.useProxy and req.proxyPort:
-        os.environ["HTTP_PROXY"] = f"http://127.0.0.1:{req.proxyPort}"
-        os.environ["HTTPS_PROXY"] = f"http://127.0.0.1:{req.proxyPort}"
-    else:
-        os.environ.pop("HTTP_PROXY", None)
-        os.environ.pop("HTTPS_PROXY", None)
 
     try:
         provider = req.provider.lower()
-        model_name = req.model.lower()
-        
-        # 判断模型能力
-        can_see_image = is_vision_model(provider, model_name)
+        can_see_image = req.capabilities.get("vision", provider in {"gemini", "claude"})
+        can_read_native_documents = req.capabilities.get("nativeDocuments", provider == "gemini")
         
         # === A. Gemini (原生支持 PDF 和 图片) ===
         if provider == "gemini":
-            if not req.apiKey: raise HTTPException(status_code=400, detail="Missing API Key")
-            genai.configure(api_key=req.apiKey)
-            model = genai.GenerativeModel(model_name=req.model or "gemini-2.5-flash")
+            if not req.apiKey:
+                raise HTTPException(status_code=400, detail="Missing API Key")
             
             # 允许 Native Doc (PDF) 和 Image
-            text_part, media_parts = process_attachments_smart(req.attachments, allow_native_doc=True, allow_image=True)
+            text_part, media_parts = process_attachments_smart(
+                req.attachments,
+                allow_native_doc=can_read_native_documents,
+                allow_image=can_see_image,
+            )
             
             # 拼接文本上下文
             prompt_full = req.systemPrompt + "\n\n=== CONTEXT ===\n" + req.context + text_part + "\n\n=== INSTRUCTION ===\n" + req.userPrompt
             
-            # 构造 Gemini 请求部分
-            content_list = [prompt_full]
-            for m in media_parts:
-                content_list.append({"mime_type": m["mime_type"], "data": m["data"]})
-            
-            response = model.generate_content(content_list)
-            result_text = response.text if response.text else "Blocked."
+            result_text = call_gemini_api(req, prompt_full, media_parts)
             logger.info(f"AI Response (Gemini): {result_text}")
             return {"result": result_text}
 
         # === B. Claude (支持图片，但不支持原生 PDF 文件流，需转文本) ===
         elif provider == "claude":
-            if not req.apiKey: raise HTTPException(status_code=400, detail="Missing API Key")
-            client = anthropic.Anthropic(api_key=req.apiKey)
+            if not req.apiKey:
+                raise HTTPException(status_code=400, detail="Missing API Key")
             
             # 不允许 Native Doc (转文本)，允许 Image
-            text_part, media_parts = process_attachments_smart(req.attachments, allow_native_doc=False, allow_image=True)
+            text_part, media_parts = process_attachments_smart(
+                req.attachments,
+                allow_native_doc=False,
+                allow_image=can_see_image,
+            )
             
             final_text = f"=== CONTEXT ===\n{req.context}\n{text_part}\n=== INSTRUCTION ===\n{req.userPrompt}"
-            
-            content_blocks = []
-            # 添加图片
-            for m in media_parts:
-                mime = m["mime_type"]
-                # Claude 严格的 mime 校验
-                if mime not in ["image/jpeg", "image/png", "image/gif", "image/webp"]:
-                    mime = "image/jpeg"
-                content_blocks.append({
-                    "type": "image",
-                    "source": {"type": "base64", "media_type": mime, "data": m["data"]}
-                })
-            
-            # 添加文本
-            content_blocks.append({"type": "text", "text": final_text})
-
-            message = client.messages.create(
-                model=req.model or "claude-3-5-sonnet-20240620",
-                max_tokens=4096,
-                system=req.systemPrompt,
-                messages=[{"role": "user", "content": content_blocks}]
-            )
-            result_text = message.content[0].text
+            result_text = call_claude_api(req, final_text, media_parts)
             logger.info(f"AI Response (Claude): {result_text}")
             return {"result": result_text}
 
         # === C. OpenAI Compatible (DeepSeek, GPT, Qwen, etc) ===
         else:
-            if not req.apiKey: raise HTTPException(status_code=400, detail="Missing API Key")
-            base_url = req.baseUrl.strip() or "https://api.openai.com/v1"
-            client = OpenAI(api_key=req.apiKey, base_url=base_url)
-            
             # 根据模型能力决定是否允许图片
             # 不允许 Native Doc (OpenAI API 不支持直接传 PDF)，根据 can_see_image 决定是否允许 Image
             text_part, media_parts = process_attachments_smart(req.attachments, allow_native_doc=False, allow_image=can_see_image)
 
             final_text = f"=== CONTEXT ===\n{req.context}\n{text_part}\n=== INSTRUCTION ===\n{req.userPrompt}"
-            
-            messages = [{"role": "system", "content": req.systemPrompt}]
-            
-            # 如果有媒体文件 (图片)，必须使用 content 数组格式
-            if len(media_parts) > 0:
-                user_content = [{"type": "text", "text": final_text}]
-                for m in media_parts:
-                    user_content.append({
-                        "type": "image_url",
-                        "image_url": {"url": f"data:{m['mime_type']};base64,{m['data']}"}
-                    })
-                messages.append({"role": "user", "content": user_content})
-            else:
-                # 只有文本，直接发字符串 (DeepSeek 最兼容的格式)
-                messages.append({"role": "user", "content": final_text})
-
-            completion = client.chat.completions.create(
-                model=req.model,
-                messages=messages,
-                temperature=0.7,
-            )
-            result_text = completion.choices[0].message.content
+            result_text = call_openai_compatible_api(req, final_text, media_parts)
             logger.info(f"AI Response (OpenAI/Compatible): {result_text}")
             return {"result": result_text}
 
+    except HTTPException:
+        raise
+    except requests.RequestException as e:
+        logger.error(f"AI provider request failed: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=502, detail=f"AI Provider Request Failed: {str(e)}")
     except Exception as e:
         logger.error(f"AI Generation Failed: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"AI Error: {str(e)}")
@@ -640,10 +840,11 @@ def ai_generate(req: AIRequest):
 # --- 托管网页 ---
 @app.get("/")
 async def read_index():
-    if not os.path.exists("www/index.html"): # 指向 www
+    index_path = WWW_DIR / "index.html"
+    if not index_path.exists():
         return JSONResponse(status_code=404, content={"error": "www/index.html not found"})
     try:
-        with open("www/index.html", "r", encoding="utf-8") as f: # 指向 www
+        with index_path.open("r", encoding="utf-8") as f:
             html_content = f.read()
         return Response(content=html_content, media_type="text/html", headers={"Cache-Control": "no-cache"})
     except Exception as e:
@@ -652,23 +853,35 @@ async def read_index():
 
 @app.get("/logo.png")
 async def get_logo():
-    if os.path.exists("www/logo.png"): return FileResponse("www/logo.png")
+    logo_path = WWW_DIR / "logo.png"
+    if logo_path.exists():
+        return FileResponse(str(logo_path))
     return {"error": "Logo not found"}
 
 # ★★★ 新增：允许浏览器加载 api_layer.js ★★★
 @app.get("/api_layer.js")
 async def get_api_layer():
-    if os.path.exists("www/api_layer.js"):  # 指向 www
-        return FileResponse("www/api_layer.js", headers={"Cache-Control": "no-cache"}) 
+    script_path = WWW_DIR / "api_layer.js"
+    if script_path.exists():
+        return FileResponse(str(script_path), headers={"Cache-Control": "no-cache"})
+    return Response(status_code=404)
+
+
+@app.get("/capacitor-filesystem.js")
+async def get_capacitor_filesystem():
+    script_path = WWW_DIR / "capacitor-filesystem.js"
+    if script_path.exists():
+        return FileResponse(str(script_path), headers={"Cache-Control": "no-cache"})
     return Response(status_code=404)
 
 
 # --- [新增] 地图编辑器路由 ---
 @app.get("/map_editor")
 async def get_map_editor():
-    if not os.path.exists("www/map_editor.html"): 
+    editor_path = WWW_DIR / "map_editor.html"
+    if not editor_path.exists():
         return Response(content="<h1>map_editor.html not found</h1>", media_type="text/html")
-    with open("www/map_editor.html", "r", encoding="utf-8") as f:
+    with editor_path.open("r", encoding="utf-8") as f:
         return Response(content=f.read(), media_type="text/html")
 
 if __name__ == "__main__":

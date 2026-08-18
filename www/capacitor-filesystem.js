@@ -1,4 +1,9 @@
 (function () {
+  if (!window.Capacitor || typeof window.Capacitor.nativePromise !== 'function') {
+    console.info('[Levant] Capacitor bridge unavailable; Filesystem plugin registration skipped.');
+    return;
+  }
+
   var Filesystem = {
     readFile: function (options) { return window.Capacitor.nativePromise('Filesystem', 'readFile', options); },
     writeFile: function (options) { return window.Capacitor.nativePromise('Filesystem', 'writeFile', options); },
@@ -15,8 +20,6 @@
     checkPermissions: function () { return window.Capacitor.nativePromise('Filesystem', 'checkPermissions', {}); }
   };
 
-  // 确保全局对象存在
-  window.Capacitor = window.Capacitor || {};
   window.Capacitor.Plugins = window.Capacitor.Plugins || {};
   window.Capacitor.Plugins.Filesystem = Filesystem;
   

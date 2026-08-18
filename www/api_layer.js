@@ -2,14 +2,22 @@
 
 // 1. 环境检测
 // IS_CAPACITOR: 明确是否在 Capacitor 容器中 (安卓/iOS)
-window.IS_CAPACITOR = window.Capacitor !== undefined;
+window.IS_CAPACITOR = !!(
+    window.Capacitor &&
+    (
+        (typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()) ||
+        typeof window.Capacitor.nativePromise === 'function'
+    )
+);
 
 // IS_NATIVE_APP: 只有在 Capacitor 中，才视为纯原生App模式
 // 如果在桌面浏览器打开，即使引入了 Capacitor 库，只要有 Python 后端，依然优先用 Python
 window.IS_NATIVE_APP = window.IS_CAPACITOR;
 
-// Python 后端地址 (桌面调试用)
-const PYTHON_API_BASE = "http://127.0.0.1:8000";
+// 桌面/Web 模式始终请求当前页面同源后端，支持任意运行端口。
+const PYTHON_API_BASE = /^https?:$/.test(window.location.protocol)
+    ? window.location.origin
+    : "http://127.0.0.1:8000";
 
 console.log(`%c[Levant Kernel] Env: ${window.IS_NATIVE_APP ? 'Native App (Filesystem Mode)' : 'Desktop/Web (Python Mode)'}`, "color: #10b981; font-weight: bold; font-size: 14px;");
 
@@ -56,19 +64,46 @@ const Utils = {
     }
 };
 
+function normalizeOpenAIBaseUrl(baseUrl) {
+    let normalized = String(baseUrl || "https://api.openai.com/v1").replace(/\/+$/, '');
+    for (const suffix of ['/chat/completions', '/responses', '/models']) {
+        if (normalized.endsWith(suffix)) {
+            normalized = normalized.slice(0, -suffix.length);
+            break;
+        }
+    }
+    return normalized.replace(/\/+$/, '');
+}
+
+function normalizeSaveFilename(filename) {
+    const candidate = String(filename || '').trim();
+    if (
+        !candidate
+        || candidate !== candidate.split(/[\\/]/).pop()
+        || !candidate.toLowerCase().endsWith('.json')
+    ) {
+        throw new Error('Invalid save filename.');
+    }
+    return candidate;
+}
+
 // 3. 原生 AI 实现 (定义在前，防止调用时未初始化)
 const NativeAI = {
     async callGemini(req, promptText, mediaParts) {
         const apiKey = req.apiKey;
-        const model = req.model || "gemini-2.5-flash";
+        const model = req.model || "gemini-3.7-flash";
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
         const parts = [{ text: req.systemPrompt + "\n\n" + promptText }]; 
         mediaParts.forEach(m => {
             parts.push({ inline_data: { mime_type: m.mime_type, data: m.data } });
         });
+        const requestBody = { contents: [{ parts: parts }] };
+        if (req.responseFormat === 'json' && req.capabilities?.structuredOutput) {
+            requestBody.generationConfig = { responseMimeType: 'application/json' };
+        }
         const response = await fetch(url, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contents: [{ parts: parts }] })
+            body: JSON.stringify(requestBody)
         });
         if (!response.ok) throw new Error(`Gemini Error ${response.status}: ${await response.text()}`);
         const json = await response.json();
@@ -103,7 +138,7 @@ const NativeAI = {
                 'anthropic-dangerous-direct-browser-access': 'true' 
             },
             body: JSON.stringify({
-                model: req.model || "claude-3-5-sonnet-20240620", max_tokens: 4096,
+                model: req.model || "claude-sonnet-4-6", max_tokens: 4096,
                 system: req.systemPrompt, messages: [{ role: "user", content: contentArr }]
             })
         });
@@ -113,9 +148,7 @@ const NativeAI = {
     },
 
     async callOpenAICompatible(req, promptText, mediaParts) {
-        let baseUrl = req.baseUrl || "https://api.openai.com/v1";
-        if (baseUrl.endsWith('/')) baseUrl = baseUrl.slice(0, -1);
-        if (!baseUrl.includes('/chat/completions')) baseUrl += '/chat/completions';
+        const chatUrl = `${normalizeOpenAIBaseUrl(req.baseUrl)}/chat/completions`;
 
         const messages = [{ role: "system", content: req.systemPrompt }];
         if (mediaParts.length > 0) {
@@ -128,10 +161,18 @@ const NativeAI = {
             messages.push({ role: "user", content: promptText });
         }
 
-        const response = await fetch(baseUrl, {
+        const requestBody = { model: req.model, messages: messages };
+        if (req.responseFormat === 'json' && req.capabilities?.structuredOutput) {
+            requestBody.response_format = { type: 'json_object' };
+        }
+        const headers = { 'Content-Type': 'application/json' };
+        if (String(req.apiKey || '').trim()) {
+            headers.Authorization = `Bearer ${req.apiKey.trim()}`;
+        }
+        const response = await fetch(chatUrl, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${req.apiKey}` },
-            body: JSON.stringify({ model: req.model, messages: messages, temperature: 0.7 })
+            headers,
+            body: JSON.stringify(requestBody)
         });
         if (!response.ok) throw new Error(`API Error ${response.status}: ${await response.text()}`);
         const json = await response.json();
@@ -141,6 +182,29 @@ const NativeAI = {
 
 // 4. 核心 API 适配层 (挂载到 window)
 window.LevantAPI = {
+    _enrichModelRequest(req) {
+        const active = window.LevantActiveModelProfile;
+        const matchesActive = active
+            && active.provider === req.provider
+            && active.baseUrl === (req.baseUrl || '')
+            && active.model === req.model;
+        const candidate = matchesActive && !req.capabilities
+            ? {
+                ...req,
+                presetId: active.presetId,
+                capabilities: active.capabilities
+            }
+            : req;
+        if (window.LevantModelCatalog) {
+            return window.LevantModelCatalog.enrichRequest(candidate);
+        }
+        return { ...candidate, capabilities: candidate.capabilities || {} };
+    },
+
+    _normalizeOpenAIBaseUrl(baseUrl) {
+        return normalizeOpenAIBaseUrl(baseUrl);
+    },
+
     // --- 内部辅助：动态加载 Capacitor Filesystem 插件 ---
     // 这是为了防止在没有安装插件的普通浏览器环境中报错
     async _getCapacitorFs() {
@@ -199,18 +263,18 @@ window.LevantAPI = {
         
         // 安卓模式：读取文档目录下的 sounds 文件夹
         try {
-            const { Filesystem, Directory } = await this._getCapacitorFs();
+            const { Filesystem } = await this._getCapacitorFs();
+            const dir = await this._getStorageDir();
             
             // 尝试创建 sounds 目录 (如果不存在)，防止读取报错
             try {
                 await Filesystem.mkdir({
                     path: 'sounds',
-                    directory: Directory.Data,
+                    directory: dir,
                     recursive: true
                 });
             } catch (e) {}
 
-            const dir = await this._getStorageDir(); // 获取动态目录
             const ret = await Filesystem.readdir({
                 path: 'sounds',
                 directory: dir
@@ -238,18 +302,18 @@ window.LevantAPI = {
 
         // 2. 安卓模式：读取 Documents/saves 目录
         try {
-            const { Filesystem, Directory } = await this._getCapacitorFs();
+            const { Filesystem } = await this._getCapacitorFs();
+            const dirSave = await this._getStorageDir();
             
             // 确保目录存在
             try {
                 await Filesystem.mkdir({
                     path: 'saves',
-                    directory: Directory.Data,
+                    directory: dirSave,
                     recursive: true
                 });
             } catch(e) {}
 
-            const dirSave = await this._getStorageDir(); // 获取动态目录
             const ret = await Filesystem.readdir({
                 path: 'saves',
                 directory: dirSave
@@ -267,8 +331,11 @@ window.LevantAPI = {
     },
 
     async loadGame(filename) {
+        filename = normalizeSaveFilename(filename);
         if (!window.IS_NATIVE_APP) {
-            return (await axios.get(`${PYTHON_API_BASE}/api/state?filename=${filename}`)).data;
+            return (await axios.get(`${PYTHON_API_BASE}/api/state`, {
+                params: { filename }
+            })).data;
         }
 
         const { Filesystem, Encoding } = await this._getCapacitorFs();
@@ -287,8 +354,11 @@ window.LevantAPI = {
     },
 
     async saveGame(filename, data) {
+        filename = normalizeSaveFilename(filename);
         if (!window.IS_NATIVE_APP) {
-            return await axios.post(`${PYTHON_API_BASE}/api/state?filename=${filename}`, data);
+            return await axios.post(`${PYTHON_API_BASE}/api/state`, data, {
+                params: { filename }
+            });
         }
 
         const { Filesystem, Encoding } = await this._getCapacitorFs();
@@ -318,8 +388,11 @@ window.LevantAPI = {
     },
 
     async deleteSave(filename) {
+        filename = normalizeSaveFilename(filename);
         if (!window.IS_NATIVE_APP) {
-            return await axios.delete(`${PYTHON_API_BASE}/api/saves/${filename}`);
+            return await axios.delete(
+                `${PYTHON_API_BASE}/api/saves/${encodeURIComponent(filename)}`
+            );
         }
 
         const { Filesystem } = await this._getCapacitorFs();
@@ -334,6 +407,8 @@ window.LevantAPI = {
 
     // --- B. AI 接口 ---
     async generateAI(req) {
+        req = this._enrichModelRequest(req);
+
         // 1. 桌面模式：依然优先走 Python (支持 PDF 解析和日志)
         if (!window.IS_NATIVE_APP) {
             return (await axios.post(`${PYTHON_API_BASE}/api/ai/generate`, req)).data;
@@ -342,8 +417,7 @@ window.LevantAPI = {
         // 2. 安卓模式：直接在前端调用 AI API
         console.log(`[Mobile AI] Direct Call: ${req.provider} / ${req.model}`);
         
-        const m = req.model.toLowerCase();
-        const canSee = m.includes('gpt-4') || m.includes('claude') || m.includes('gemini') || m.includes('vision');
+        const canSee = Boolean(req.capabilities?.vision);
 
         // 使用前端工具函数处理附件
         const { textPart, mediaParts } = Utils.processAttachments(req.attachments, canSee);
@@ -361,6 +435,68 @@ window.LevantAPI = {
             // OpenAI / DeepSeek / Compatible
             return await NativeAI.callOpenAICompatible(req, fullContext, mediaParts);
         }
+    },
+
+    async listModels(profile) {
+        const request = {
+            provider: profile.provider,
+            apiKey: profile.key,
+            baseUrl: profile.baseUrl || '',
+            useProxy: Boolean(profile.useProxy),
+            proxyPort: profile.proxyPort || '7890'
+        };
+
+        if (!window.IS_NATIVE_APP) {
+            return (await axios.post(`${PYTHON_API_BASE}/api/ai/models`, request)).data;
+        }
+
+        const provider = request.provider.toLowerCase();
+        let response;
+        if (provider === 'gemini') {
+            response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(request.apiKey)}&pageSize=1000`);
+        } else if (provider === 'claude') {
+            response = await fetch('https://api.anthropic.com/v1/models?limit=1000', {
+                headers: {
+                    'x-api-key': request.apiKey,
+                    'anthropic-version': '2023-06-01',
+                    'anthropic-dangerous-direct-browser-access': 'true'
+                }
+            });
+        } else {
+            const headers = {};
+            if (String(request.apiKey || '').trim()) {
+                headers.Authorization = `Bearer ${request.apiKey.trim()}`;
+            }
+            response = await fetch(`${normalizeOpenAIBaseUrl(request.baseUrl)}/models`, {
+                headers
+            });
+        }
+
+        if (!response.ok) {
+            throw new Error(`Model discovery failed (${response.status}): ${await response.text()}`);
+        }
+
+        const payload = await response.json();
+        let models;
+        if (provider === 'gemini') {
+            models = (payload.models || [])
+                .filter(item => (item.supportedGenerationMethods || []).includes('generateContent'))
+                .map(item => ({
+                    id: String(item.name || '').replace(/^models\//, ''),
+                    displayName: item.displayName || String(item.name || '').replace(/^models\//, '')
+                }));
+        } else if (provider === 'claude') {
+            models = (payload.data || []).map(item => ({
+                id: item.id,
+                displayName: item.display_name || item.id
+            }));
+        } else {
+            models = (payload.data || []).map(item => ({
+                id: item.id,
+                displayName: item.display_name || item.name || item.id
+            }));
+        }
+        return { models: models.filter(item => item.id), source: 'provider' };
     }
 };
 /* --- END OF FILE api_layer.js --- */

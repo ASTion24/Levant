@@ -1,21 +1,26 @@
 {
   "name": "levant_engine",
-  "version": "1.0.0",
-  "description": "![Levant Logo](./logo.png)",
-  "main": "api_layer.js",
+  "version": "1.21.0",
+  "description": "Levant Engine frontend shell and Capacitor bridge",
+  "private": true,
+  "main": "www/api_layer.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build:assets": "python3 build_assets.py",
+    "build:css": "tailwindcss -c tailwind.config.cjs -i www/styles/tailwind.css -o www/vendor/css/tailwind.css --minify",
+    "build": "npm run build:css && npm run build:assets",
+    "test:formula": "node tests/formula_engine_regression.js",
+    "test": "python3 -m unittest tests.test_server && npm run test:formula"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@capacitor/android": "^8.0.0",
-    "@capacitor/cli": "^8.0.0",
-    "@capacitor/core": "^8.0.0",
-    "@capacitor/filesystem": "^8.0.0"
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/core": "^8.5.0",
+    "@capacitor/filesystem": "^8.1.2"
   },
   "devDependencies": {
-    "@capacitor/assets": "^3.0.5"
+    "@capacitor/cli": "^8.5.0",
+    "tailwindcss": "3.4.17"
   }
 }
