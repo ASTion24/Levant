@@ -23,7 +23,7 @@ manifest = {
 with open("www/assets_manifest.json", "w", encoding="utf-8") as f:
     json.dump(manifest, f)
 
-print(f"✅ 资源清单已生成！包含 {len(music_files)} 首音乐。")
+print(f"[OK] Asset manifest generated with {len(music_files)} tracks.")
 
 # 3. 复制初始存档
 source_save = "saves/savegame.json"
@@ -31,6 +31,6 @@ target_save = "www/savegame.json"
 
 if os.path.exists(source_save):
     shutil.copy2(source_save, target_save)
-    print(f"✅ 初始存档已复制到: {target_save}")
+    print(f"[OK] Initial save copied to: {target_save}")
 else:
-    print(f"⚠️ 警告: 未找到 {source_save}，请确认你有初始存档！")
+    print(f"[WARN] Initial save not found: {source_save}")
