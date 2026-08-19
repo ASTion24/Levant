@@ -194,6 +194,12 @@ Levant 默认使用 **自主执行（Autonomous）**：
    python tests/ui_regression.py
    ```
 
+   干净环境运行后端测试前，可安装测试依赖：
+
+   ```bash
+   pip install -e ".[test]"
+   ```
+
 8. **可选：安装桌面打包依赖**
 
    ```bash
