@@ -3,6 +3,7 @@ import io
 import json
 import logging
 import re
+import sys
 import webbrowser
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -20,7 +21,15 @@ from pypdf import PdfReader
 
 # --- 0. 目录与日志设置 ---
 APP_VERSION = "1.21"
-ROOT_DIR = Path(__file__).resolve().parent
+
+
+def get_runtime_root() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent
+
+
+ROOT_DIR = get_runtime_root()
 WWW_DIR = ROOT_DIR / "www"
 SAVES_DIR = ROOT_DIR / "saves"
 LEGACY_SAVE_PATH = ROOT_DIR / "savegame.json"

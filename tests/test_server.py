@@ -1,14 +1,17 @@
 import unittest
 from unittest.mock import Mock, patch
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+import server
 from server import (
     AIRequest,
     GameState,
     ModelListRequest,
     app,
     call_openai_compatible_api,
+    get_runtime_root,
     list_provider_models,
 )
 
@@ -21,6 +24,17 @@ class ServerRegressionTests(unittest.TestCase):
     def test_path_traversal_is_rejected(self):
         response = self.client.get("/api/state", params={"filename": "../capacitor.config.json"})
         self.assertEqual(response.status_code, 400)
+
+    def test_frozen_runtime_uses_executable_directory(self):
+        executable = "/opt/Levant Engine/Levant.exe"
+        with (
+            patch.object(server.sys, "frozen", True, create=True),
+            patch.object(server.sys, "executable", executable),
+        ):
+            self.assertEqual(
+                get_runtime_root(),
+                Path(executable).resolve().parent,
+            )
 
     def test_vendor_assets_are_served(self):
         for path in [

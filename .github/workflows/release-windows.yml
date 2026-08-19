@@ -1,0 +1,157 @@
+name: Build Windows Release
+
+run-name: Build Windows release ${{ inputs.release_tag }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing tag to package and publish
+        required: true
+        default: "1.21"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag }}
+      ARCHIVE_NAME: Levant.Engine.v${{ inputs.release_tag }}.zip
+
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install build dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pyinstaller==6.17.0
+
+      - name: Run backend tests
+        shell: pwsh
+        run: python -m unittest tests.test_server
+
+      - name: Refresh packaged assets
+        shell: pwsh
+        run: python build_assets.py
+
+      - name: Build Windows launcher
+        shell: pwsh
+        run: |
+          pyinstaller `
+            --noconfirm `
+            --clean `
+            --onefile `
+            --icon logo.ico `
+            --name "Levant启动器v$env:RELEASE_TAG" `
+            server.py
+
+      - name: Assemble release archive
+        shell: pwsh
+        run: |
+          $releaseRoot = Join-Path $PWD "release"
+          $packageRoot = Join-Path $releaseRoot "Levant Engine"
+          New-Item -ItemType Directory -Force -Path $packageRoot | Out-Null
+          New-Item -ItemType Directory -Force -Path (Join-Path $packageRoot "logs") | Out-Null
+          New-Item -ItemType Directory -Force -Path (Join-Path $packageRoot "saves") | Out-Null
+
+          Copy-Item "dist/Levant启动器v$env:RELEASE_TAG.exe" $packageRoot
+          Copy-Item "www" (Join-Path $packageRoot "www") -Recurse
+          Copy-Item "saves/savegame.json" (Join-Path $packageRoot "saves/savegame.json")
+
+          Compress-Archive `
+            -Path $packageRoot `
+            -DestinationPath $env:ARCHIVE_NAME `
+            -CompressionLevel Optimal
+
+          $hash = (Get-FileHash $env:ARCHIVE_NAME -Algorithm SHA256).Hash.ToLower()
+          "$hash  $env:ARCHIVE_NAME" | Set-Content "$env:ARCHIVE_NAME.sha256" -Encoding ascii
+
+      - name: Verify release archive
+        shell: pwsh
+        run: |
+          @'
+          import os
+          import zipfile
+
+          archive = os.environ["ARCHIVE_NAME"]
+          tag = os.environ["RELEASE_TAG"]
+          with zipfile.ZipFile(archive) as bundle:
+              names = set(bundle.namelist())
+              required = {
+                  "Levant Engine/www/index.html",
+                  "Levant Engine/www/js/app.js",
+                  "Levant Engine/www/js/formula-engine.js",
+                  "Levant Engine/www/vendor/css/tailwind.css",
+                  "Levant Engine/saves/savegame.json",
+              }
+              missing = sorted(required - names)
+              if missing:
+                  raise SystemExit(f"Missing archive files: {missing}")
+              launchers = [
+                  name for name in names
+                  if name.startswith("Levant Engine/Levant")
+                  and name.endswith(".exe")
+              ]
+              if len(launchers) != 1:
+                  raise SystemExit(f"Expected one launcher, found: {launchers}")
+              app_source = bundle.read("Levant Engine/www/js/app.js").decode("utf-8")
+              if f"APP_VERSION: '{tag}'" not in app_source:
+                  raise SystemExit("Packaged frontend version does not match release tag")
+          print(f"Verified {archive}")
+          '@ | python -
+
+      - name: Preserve workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Levant.Engine.v${{ inputs.release_tag }}
+          path: |
+            ${{ env.ARCHIVE_NAME }}
+            ${{ env.ARCHIVE_NAME }}.sha256
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          @"
+          ## Levant Engine v$env:RELEASE_TAG
+
+          - 公式系统改用受限 AST 解释器，阻止任意 JavaScript 执行。
+          - 新增 Kimi、GLM、Ollama、LM Studio、vLLM 与 LocalAI。
+          - 支持本地 OpenAI-compatible 服务空 API Key 调用。
+          - 完成分层地图兼容、Native 存储修复与本机后端安全收紧。
+          - 重构桌面和移动端界面，并改用本地前端资源与静态 Tailwind 构建。
+          - 自治提交在存档失败时自动回滚，已有手动模型 ID 保持不变。
+
+          下载 ZIP 后解压，运行 ``Levant启动器v$env:RELEASE_TAG.exe``。
+          "@ | Set-Content release-notes.md -Encoding utf8
+
+          if (gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY 2>$null) {
+            gh release upload $env:RELEASE_TAG `
+              $env:ARCHIVE_NAME `
+              "$env:ARCHIVE_NAME.sha256" `
+              --clobber `
+              --repo $env:GITHUB_REPOSITORY
+          } else {
+            gh release create $env:RELEASE_TAG `
+              $env:ARCHIVE_NAME `
+              "$env:ARCHIVE_NAME.sha256" `
+              --verify-tag `
+              --title "Levant Engine v$env:RELEASE_TAG" `
+              --notes-file release-notes.md `
+              --repo $env:GITHUB_REPOSITORY
+          }
